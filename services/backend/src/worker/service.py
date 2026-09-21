@@ -11,6 +11,7 @@ import asyncio
 import time
 from contextlib import suppress
 
+from src.application.interfaces.history import HistoryRepository
 from src.application.interfaces.jobs import JobRecord, JobRepository, WorkerStateRepository
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
 from src.core.logging import get_logger
@@ -29,6 +30,10 @@ HEARTBEAT_INTERVAL = 5.0
 # between polls, and a brief stall is not worth reporting as dead.
 WORKER_STALE_AFTER = HEARTBEAT_INTERVAL * 6
 
+# Retention is measured in hours and hundreds of rows, so sweeping on every
+# idle pass would be two pointless DELETEs a second.
+SWEEP_INTERVAL = 60.0
+
 
 class ImportWorker:
     def __init__(
@@ -36,17 +41,22 @@ class ImportWorker:
         *,
         jobs: JobRepository,
         worker_state: WorkerStateRepository,
+        history: HistoryRepository,
         run_job: RunImportJobUseCase,
         max_concurrent_muxes: int = 1,
         job_ttl_seconds: float = 3600.0,
+        history_max_records: int = 200,
     ) -> None:
         self._jobs = jobs
         self._worker_state = worker_state
+        self._history = history
         self._run_job = run_job
         self._max_concurrent = max(1, max_concurrent_muxes)
         self._job_ttl = job_ttl_seconds
+        self._history_max_records = history_max_records
         self._stop = asyncio.Event()
         self._last_heartbeat = 0.0
+        self._last_sweep = 0.0
 
     def stop(self) -> None:
         self._stop.set()
@@ -65,7 +75,7 @@ class ImportWorker:
                 )
             else:
                 await self._idle()
-                await self._jobs.prune(self._job_ttl)
+                await self._sweep()
 
         if running:
             log.info("waiting for in-flight muxes", count=len(running))
@@ -126,3 +136,27 @@ class ImportWorker:
     async def _idle(self) -> None:
         with suppress(TimeoutError):
             await asyncio.wait_for(self._stop.wait(), timeout=IDLE_POLL_INTERVAL)
+
+    async def _sweep(self) -> None:
+        """Evict finished jobs past their TTL and history past its cap.
+
+        Only ever runs between muxes: retention is housekeeping, and a delete
+        contending with a running import for the SQLite writer helps nobody.
+        """
+        now = time.monotonic()
+        if now - self._last_sweep < SWEEP_INTERVAL:
+            return
+        self._last_sweep = now
+
+        try:
+            await self._jobs.prune(self._job_ttl)
+        except Exception:
+            log.exception("could not prune finished jobs")
+
+        try:
+            removed = await self._history.prune(self._history_max_records)
+        except Exception:
+            log.exception("could not trim the history")
+            return
+        if removed:
+            log.info("trimmed history", removed=removed, kept=self._history_max_records)

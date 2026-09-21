@@ -151,6 +151,24 @@ class SqlAlchemyHistoryRepository:
             last_24h=recent,
         )
 
+    async def prune(self, keep_last: int) -> int:
+        if keep_last <= 0:
+            return 0
+        async with self._db.session() as session:
+            # The id of the oldest row worth keeping; ids are monotonic, so
+            # everything below it is older. SQLite has no DELETE ... LIMIT.
+            cutoff = await session.scalar(
+                select(Operation.id).order_by(Operation.id.desc()).offset(keep_last - 1).limit(1)
+            )
+            if cutoff is None:
+                return 0
+            result = cast(
+                "CursorResult[Any]",
+                await session.execute(delete(Operation).where(Operation.id < cutoff)),
+            )
+            await session.commit()
+            return int(result.rowcount or 0)
+
     async def clear(self) -> int:
         async with self._db.session() as session:
             # execute() is typed as Result; a DML statement always yields a CursorResult.

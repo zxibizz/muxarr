@@ -46,6 +46,8 @@ class Settings:
     # Ceiling on a single long-poll hold; keeps requests short enough to survive
     # proxy idle timeouts.
     max_poll_wait_seconds: float = 60.0
+    # The history is a recent-activity log, not an archive; the worker trims it.
+    history_max_records: int = 200
     scratch_dir: Path | None = None
     dedupe: DedupeMode = "language_codec"
     skip_image_subtitles: bool = False
@@ -97,6 +99,7 @@ class Settings:
             max_concurrent_muxes=max(1, _parse_int(source, "MUXARR_MAX_CONCURRENT", 1)),
             job_ttl_seconds=_parse_float(source, "MUXARR_JOB_TTL", 60 * 60.0),
             max_poll_wait_seconds=_parse_float(source, "MUXARR_MAX_POLL_WAIT", 60.0),
+            history_max_records=max(1, _parse_int(source, "MUXARR_HISTORY_MAX_RECORDS", 200)),
             scratch_dir=Path(scratch) if scratch else None,
             dedupe=dedupe,  # type: ignore[arg-type]
             skip_image_subtitles=_parse_bool(source, "MUXARR_SKIP_IMAGE_SUBTITLES"),

@@ -55,6 +55,11 @@ def test_defaults() -> None:
     assert settings.scratch_dir is None
     assert settings.dedupe == "language_codec"
     assert settings.preserve_ownership is True
+    assert settings.history_max_records == 200
+
+
+def test_history_cap_is_at_least_one() -> None:
+    assert Settings.from_env(env(MUXARR_HISTORY_MAX_RECORDS="0")).history_max_records == 1
 
 
 @pytest.mark.parametrize("raw", ["1", "true", "TRUE", "yes", "on"])
