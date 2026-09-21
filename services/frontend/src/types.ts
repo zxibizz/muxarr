@@ -48,6 +48,26 @@ export interface Health {
   auth_required: boolean;
 }
 
+export interface WorkerStatus {
+  alive: boolean;
+  last_seen_at: string | null;
+  stale_after_seconds: number;
+  max_concurrent_muxes: number;
+}
+
+export interface QueueStatus {
+  pending: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+}
+
+export interface SystemStatus {
+  version: string;
+  worker: WorkerStatus;
+  queue: QueueStatus;
+}
+
 export interface HistoryFilters {
   status: MoveStatus | null;
   app: string | null;

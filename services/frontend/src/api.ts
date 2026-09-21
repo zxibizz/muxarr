@@ -1,4 +1,11 @@
-import type { Health, HistoryFilters, HistoryPage, Operation, Stats } from './types';
+import type {
+  Health,
+  HistoryFilters,
+  HistoryPage,
+  Operation,
+  Stats,
+  SystemStatus,
+} from './types';
 
 const TOKEN_KEY = 'muxarr.token';
 
@@ -62,6 +69,8 @@ async function describe(response: Response): Promise<string> {
 
 export const api = {
   health: () => request<Health>('/healthz'),
+
+  system: () => request<SystemStatus>('/v1/system'),
 
   stats: () => request<Stats>('/v1/stats'),
 

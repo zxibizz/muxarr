@@ -2,6 +2,7 @@ import {
   Alert,
   AppShell,
   Badge,
+  Button,
   Container,
   Group,
   Pagination,
@@ -15,8 +16,9 @@ import { Filters } from './components/Filters';
 import { HistoryTable } from './components/HistoryTable';
 import { OperationDetail } from './components/OperationDetail';
 import { StatsCards } from './components/StatsCards';
+import { SystemDrawer } from './components/SystemDrawer';
 import { TokenPrompt } from './components/TokenPrompt';
-import type { Health, HistoryFilters, Operation, Stats } from './types';
+import type { Health, HistoryFilters, Operation, Stats, SystemStatus } from './types';
 
 const PAGE_SIZE = 25;
 const POLL_INTERVAL_MS = 10_000;
@@ -33,6 +35,8 @@ export function App() {
     query: '',
   });
   const [selected, setSelected] = useState<Operation | null>(null);
+  const [system, setSystem] = useState<SystemStatus | null>(null);
+  const [systemOpen, setSystemOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [needsToken, setNeedsToken] = useState(false);
@@ -44,13 +48,15 @@ export function App() {
   const refresh = useCallback(async () => {
     const { filters: active, page: activePage } = requestRef.current;
     try {
-      const [historyPage, nextStats] = await Promise.all([
+      const [historyPage, nextStats, nextSystem] = await Promise.all([
         api.history(active, PAGE_SIZE, (activePage - 1) * PAGE_SIZE),
         api.stats(),
+        api.system(),
       ]);
       setOperations(historyPage.items);
       setTotal(historyPage.total);
       setStats(nextStats);
+      setSystem(nextSystem);
       setError(null);
       setNeedsToken(false);
     } catch (caught) {
@@ -104,16 +110,21 @@ export function App() {
               import history
             </Text>
           </Group>
-          {health && (
-            <Group gap="xs">
-              <Badge color="yellow" variant="light">
-                history not persisted
+          <Group gap="xs">
+            {system && !system.worker.alive && (
+              <Badge color="red" variant="filled">
+                worker offline
               </Badge>
+            )}
+            <Button variant="subtle" size="compact-sm" onClick={() => setSystemOpen(true)}>
+              System
+            </Button>
+            {health && (
               <Text size="xs" c="dimmed">
                 v{health.version}
               </Text>
-            </Group>
-          )}
+            )}
+          </Group>
         </Group>
       </AppShell.Header>
 
@@ -121,10 +132,6 @@ export function App() {
         <Container size="xl">
           <Stack gap="lg">
             <StatsCards stats={stats} />
-
-            <Alert color="yellow" title="History is in memory">
-              Everything here is lost when the container restarts.
-            </Alert>
 
             {error && (
               <Alert color="red" title="Could not load history">
@@ -158,6 +165,12 @@ export function App() {
       </AppShell.Main>
 
       <OperationDetail operation={selected} onClose={() => setSelected(null)} />
+
+      <SystemDrawer
+        system={system}
+        opened={systemOpen}
+        onClose={() => setSystemOpen(false)}
+      />
 
       <TokenPrompt
         opened={needsToken}

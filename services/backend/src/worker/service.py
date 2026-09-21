@@ -25,6 +25,10 @@ IDLE_POLL_INTERVAL = 0.5
 # Writing the heartbeat on every pass would be a needless write per poll.
 HEARTBEAT_INTERVAL = 5.0
 
+# Generous next to HEARTBEAT_INTERVAL: a worker busy with a mux still beats
+# between polls, and a brief stall is not worth reporting as dead.
+WORKER_STALE_AFTER = HEARTBEAT_INTERVAL * 6
+
 
 class ImportWorker:
     def __init__(
