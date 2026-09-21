@@ -41,8 +41,10 @@ def select(
     """Filter and order ``candidates`` against what ``existing`` already contains."""
     policy = policy or SelectionPolicy()
 
-    seen = {_signature(t.kind, t.language, t.codec_family, t.forced, t.hearing_impaired, policy)
-            for t in existing.tracks}
+    seen = {
+        _signature(t.kind, t.language, t.codec_family, t.forced, t.hearing_impaired, None, policy)
+        for t in existing.tracks
+    }
 
     accepted: list[ExternalTrack] = []
     rejected: list[tuple[ExternalTrack, str]] = []
@@ -59,6 +61,7 @@ def select(
             candidate.codec_family,
             candidate.forced,
             candidate.hearing_impaired,
+            candidate.variant,
             policy,
         )
         if signature is not None and signature in seen:
@@ -108,11 +111,17 @@ def _signature(
     codec_family: str,
     forced: bool,
     hearing_impaired: bool,
+    variant: str | None,
     policy: SelectionPolicy,
 ) -> tuple[object, ...] | None:
-    """Identity used for de-duplication, or ``None`` when deduping is disabled."""
+    """Identity used for de-duplication, or ``None`` when deduping is disabled.
+
+    ``variant`` keeps two different fansub/dub groups from collapsing into one
+    track; a sidecar with no group tag still de-duplicates against the container.
+    """
     if policy.dedupe == "off":
         return None
+    tag = (variant or "").lower()
     if policy.dedupe == "language":
-        return (kind, language, forced, hearing_impaired)
-    return (kind, language, codec_family, forced, hearing_impaired)
+        return (kind, language, forced, hearing_impaired, tag)
+    return (kind, language, codec_family, forced, hearing_impaired, tag)

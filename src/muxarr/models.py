@@ -72,6 +72,8 @@ class ExternalTrack:
     name: str | None = None
     forced: bool = False
     hearing_impaired: bool = False
+    # Release-group tag ("RHS", "Dublyajnaya") that distinguishes same-language dubs.
+    variant: str | None = None
     # VobSub ships as a .sub/.idx pair; mkvmerge is handed the .idx and reads both.
     companion: Path | None = None
 
