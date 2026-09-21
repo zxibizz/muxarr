@@ -16,7 +16,9 @@ scattered as sidecars, and the filename reflects the tracks actually in the file
   anything on the source side, in any transfer mode. Cleanup of the original
   stays with your download client's Completed Download Handling.
 - **Fail safe.** Any error degrades to `DeferMove`, and Radarr/Sonarr perform a
-  completely normal import. The shim always exits 0.
+  completely normal import. The shim exits 0 on every path up to the point a
+  remux is queued — after that, a lost result exits non-zero and fails the
+  import, because deferring would race a mux that may still be running.
 - **Staging lives in the destination directory**, so the final step is an atomic
   rename rather than a cross-device copy.
 
@@ -28,6 +30,12 @@ Radarr/Sonarr  --exec-->  muxarr-import-*.sh  --HTTP-->  muxarr daemon
       ^                                                        |
       +---------- [MoveStatus] RenameRequested <---------------+
 ```
+
+The shim queues the remux and then long-polls for the result: each request is
+held open by the daemon until the job changes state, so the shim learns about
+completion within a second while no single request lives long enough for a
+reverse proxy to time it out. A dropped connection is simply retried against the
+same job id, which the daemon treats idempotently.
 
 There is one shim per app — `muxarr-import-radarr.sh` and
 `muxarr-import-sonarr.sh` — because each reads a different set of \*arr
@@ -56,9 +64,9 @@ local storage.
    > containers and in muxarr. Radarr/Sonarr pass absolute paths; if they mean
    > different things in each container, muxarr rejects them and defers.
 
-2. **Mount the shim** into the \*arr container (the example compose does this)
-   and make sure it is executable. Radarr gets `muxarr-import-radarr.sh`,
-   Sonarr gets `muxarr-import-sonarr.sh`.
+2. **Share the shims.** They ship inside the muxarr image; the example compose
+   republishes them into a `muxarr-shims` volume that the \*arr containers mount
+   read-only at `/config/scripts`. Nothing needs a checkout of this repo.
 
 3. **Configure Radarr/Sonarr.** Settings → Media Management → *show Advanced* →
    Importing:
@@ -81,6 +89,8 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_TOKEN` | *unset* | Bearer token; unauthenticated if unset |
 | `MUXARR_HOST` / `MUXARR_PORT` | `0.0.0.0` / `8710` | Bind address |
 | `MUXARR_MAX_CONCURRENT` | `1` | Simultaneous remuxes |
+| `MUXARR_JOB_TTL` | `3600` | Seconds a finished job stays readable |
+| `MUXARR_MAX_POLL_WAIT` | `60` | Ceiling on how long one poll is held open |
 | `MUXARR_SCRATCH_DIR` | destination dir | Only change for NFS/SMB/union FS |
 | `MUXARR_DEDUPE` | `language_codec` | `off`, `language`, `language_codec` |
 | `MUXARR_SKIP_IMAGE_SUBTITLES` | `false` | Exclude PGS/VobSub |
@@ -90,7 +100,16 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_WEB_DIR` | `/app/web` | Built UI to serve; skipped if absent |
 | `MUXARR_LOG_LEVEL` | `INFO` | |
 
-And on the **shim**: `MUXARR_URL`, `MUXARR_TOKEN`, `MUXARR_TIMEOUT`.
+And on the **shim**:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MUXARR_URL` | `http://muxarr:8710` | Daemon address |
+| `MUXARR_TOKEN` | *unset* | Bearer token, if the daemon requires one |
+| `MUXARR_TIMEOUT` | `14400` | Total seconds to wait for a remux |
+| `MUXARR_POLL_WAIT` | `25` | Seconds the daemon holds each poll open |
+| `MUXARR_POLL_INTERVAL` | `5` | Back-off after a failed request |
+| `MUXARR_MAX_RETRIES` | `10` | Consecutive request failures tolerated |
 
 ## CLI
 

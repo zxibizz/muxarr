@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -40,16 +42,38 @@ def store() -> HistoryStore:
 
 
 @pytest.fixture
-def client(tmp_path: Path, store: HistoryStore) -> TestClient:
+def client(tmp_path: Path, store: HistoryStore) -> Iterator[TestClient]:
     settings = Settings(
         read_roots=(tmp_path / "downloads", tmp_path / "library"),
         auth_token=TOKEN,
     )
-    return TestClient(server.create_app(settings, store))
+    # Context-managed so the background job task survives the request that
+    # queued it.
+    with TestClient(server.create_app(settings, store)) as test_client:
+        yield test_client
 
 
 def auth() -> dict[str, str]:
     return {"Authorization": f"Bearer {TOKEN}"}
+
+
+def run_import(client: TestClient, layout: dict[str, Path]) -> dict[str, Any]:
+    """Queue an import and block until it settles."""
+    job_id = uuid.uuid4().hex
+    client.post(
+        "/v1/import",
+        json={
+            "job_id": job_id,
+            "app": "radarr",
+            "source_path": str(layout["source"]),
+            "destination_path": str(layout["destination"]),
+        },
+        headers=auth(),
+    )
+    response = client.get(f"/v1/jobs/{job_id}", params={"wait": 10}, headers=auth())
+    body: dict[str, Any] = response.json()
+    assert body["state"] in {"succeeded", "failed"}, f"job never settled: {body}"
+    return body
 
 
 def seed(store: HistoryStore, **overrides: Any) -> int:
@@ -163,15 +187,7 @@ class TestRecording:
         """Deferrals are the common outcome and the main thing the UI explains."""
         monkeypatch.setattr(probe, "probe", lambda _p: VIDEO_ONLY)
 
-        client.post(
-            "/v1/import",
-            json={
-                "app": "radarr",
-                "source_path": str(layout["source"]),
-                "destination_path": str(layout["destination"]),
-            },
-            headers=auth(),
-        )
+        run_import(client, layout)
 
         page = store.list()
         assert page.total == 1
@@ -188,20 +204,12 @@ class TestRecording:
     ) -> None:
         monkeypatch.setattr(probe, "probe", lambda _p: VIDEO_ONLY)
 
-        client.post(
-            "/v1/import",
-            json={
-                "app": "radarr",
-                "source_path": str(layout["source"]),
-                "destination_path": str(layout["destination"]),
-            },
-            headers=auth(),
-        )
+        run_import(client, layout)
 
         assert store.list().items[0].duration_ms >= 0
         assert store.list().items[0].source_bytes == len(b"video")
 
-    def test_protocol_endpoint_also_records(
+    def test_a_completed_job_reports_its_history_row(
         self,
         client: TestClient,
         store: HistoryStore,
@@ -210,17 +218,9 @@ class TestRecording:
     ) -> None:
         monkeypatch.setattr(probe, "probe", lambda _p: VIDEO_ONLY)
 
-        client.post(
-            "/v1/import/protocol",
-            json={
-                "app": "radarr",
-                "source_path": str(layout["source"]),
-                "destination_path": str(layout["destination"]),
-            },
-            headers=auth(),
-        )
+        job = run_import(client, layout)
 
-        assert store.list().total == 1
+        assert job["history_id"] == store.list().items[0].id
 
     def test_a_failing_history_write_does_not_break_the_import(
         self,
@@ -237,18 +237,11 @@ class TestRecording:
 
         monkeypatch.setattr(store, "record", boom)
 
-        response = client.post(
-            "/v1/import/protocol",
-            json={
-                "app": "radarr",
-                "source_path": str(layout["source"]),
-                "destination_path": str(layout["destination"]),
-            },
-            headers=auth(),
-        )
+        job = run_import(client, layout)
 
-        assert response.status_code == 200
-        assert response.text.strip() == "[MoveStatus] DeferMove"
+        assert job["state"] == "succeeded"
+        assert job["result"]["move_status"] == "DeferMove"
+        assert job["history_id"] is None
 
 
 def test_healthz_reports_auth_state(client: TestClient) -> None:

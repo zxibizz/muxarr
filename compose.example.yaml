@@ -4,13 +4,24 @@
 # *arr containers and inside muxarr. Radarr/Sonarr hand muxarr absolute paths;
 # if /media means something different in each container, muxarr will reject them
 # as outside its read roots and silently defer every import.
+#
+# The anchors below are how that rule is enforced: edit a path once and all
+# three services follow. Inlining one of them into a single service is how the
+# two sides drift apart.
+
+x-media:
+  downloads: &downloads /srv/downloads:/downloads
+  media: &media /srv/media:/media
+
+x-muxarr-image: &muxarr-image
+  build:
+    context: .
+    target: runtime
+  image: muxarr:latest
 
 services:
   muxarr:
-    build:
-      context: .
-      target: runtime
-    image: muxarr:latest
+    <<: *muxarr-image
     container_name: muxarr
     restart: unless-stopped
     # Match the uid/gid that owns your library, the same value as the *arr
@@ -25,18 +36,36 @@ services:
       # Staging elsewhere costs an extra full copy and loses atomicity.
       # MUXARR_SCRATCH_DIR: /scratch
     volumes:
-      - /srv/downloads:/downloads
-      - /srv/media:/media
+      - *downloads
+      - *media
     networks: [arr]
     ports:
       # The web UI. Drop this if you only want the *arr containers to reach it.
       - "8710:8710"
 
+  # The shims ship inside the muxarr image, so nothing here needs a checkout of
+  # the source. Mounting the volume straight onto /app/scripts would not do:
+  # docker seeds a named volume from the image only while it is still empty, so
+  # the *arr containers would keep the shims of whichever release created it.
+  muxarr-shims:
+    <<: *muxarr-image
+    container_name: muxarr-shims
+    restart: "no"
+    # No `user:` -- a freshly created named volume is owned by root.
+    command: sh -c 'cp /app/scripts/muxarr-import-*.sh /shims/ && chmod 0755 /shims/*.sh'
+    volumes:
+      - shims:/shims
+    networks: [arr]
+
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
     restart: unless-stopped
-    depends_on: [muxarr]
+    depends_on:
+      muxarr:
+        condition: service_started
+      muxarr-shims:
+        condition: service_completed_successfully
     environment:
       PUID: 1000
       PGID: 1000
@@ -46,9 +75,9 @@ services:
       MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
     volumes:
       - ./sonarr-config:/config
-      - /srv/downloads:/downloads
-      - /srv/media:/media
-      - ./scripts/muxarr-import-sonarr.sh:/config/scripts/muxarr-import-sonarr.sh:ro
+      - *downloads
+      - *media
+      - shims:/config/scripts:ro
     ports:
       - "8989:8989"
     networks: [arr]
@@ -57,7 +86,11 @@ services:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
     restart: unless-stopped
-    depends_on: [muxarr]
+    depends_on:
+      muxarr:
+        condition: service_started
+      muxarr-shims:
+        condition: service_completed_successfully
     environment:
       PUID: 1000
       PGID: 1000
@@ -66,13 +99,51 @@ services:
       MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
     volumes:
       - ./radarr-config:/config
-      - /srv/downloads:/downloads
-      - /srv/media:/media
-      - ./scripts/muxarr-import-radarr.sh:/config/scripts/muxarr-import-radarr.sh:ro
+      - *downloads
+      - *media
+      - shims:/config/scripts:ro
     ports:
       - "7878:7878"
     networks: [arr]
 
+volumes:
+  shims:
+    # Named explicitly so the other stack can find it; compose would otherwise
+    # prefix it with the project directory's name.
+    name: muxarr-shims
+
 networks:
   arr:
     driver: bridge
+
+# ---------------------------------------------------------------------------
+# If the *arr containers live in their own compose stack
+#
+# 1. DNS. Each project gets its own bridge network, so http://muxarr:8710 stops
+#    resolving and the shim quietly defers every import. Share a network:
+#
+#        docker network create arr-shared
+#
+#    then in BOTH projects, replacing the `arr` network above:
+#
+#        networks:
+#          arr-shared:
+#            external: true
+#
+# 2. The shims. Keep muxarr and muxarr-shims here; the other stack only mounts
+#    the volume, which it must declare as external because compose will not
+#    create a volume it does not own:
+#
+#        volumes:
+#          shims:
+#            external: true
+#            name: muxarr-shims
+#
+#    depends_on cannot reach across projects, so `up` the muxarr stack first
+#    after an upgrade -- otherwise the *arr containers run the previous shims
+#    until muxarr-shims next completes.
+#
+# MUXARR_TOKEN is read from the *arr container's own environment, so it has to
+# be repeated in that stack's .env. THE ONE RULE still applies across the two
+# files, and nothing enforces it for you once the anchors are split.
+# ---------------------------------------------------------------------------

@@ -36,6 +36,12 @@ class Settings:
     # Serialised by default: two concurrent remuxes on one spindle is worse than
     # either of them running alone.
     max_concurrent_muxes: int = 1
+    # How long a finished job stays readable. The shim fails the import if its
+    # job has already been evicted, so this must outlast any plausible poll gap.
+    job_ttl_seconds: float = 60 * 60.0
+    # Ceiling on a single long-poll hold; keeps requests short enough to survive
+    # proxy idle timeouts.
+    max_poll_wait_seconds: float = 60.0
     scratch_dir: Path | None = None
     dedupe: DedupeMode = "language_codec"
     skip_image_subtitles: bool = False
@@ -84,6 +90,8 @@ class Settings:
             host=source.get("MUXARR_HOST", DEFAULT_HOST),
             port=_parse_int(source, "MUXARR_PORT", DEFAULT_PORT),
             max_concurrent_muxes=max(1, _parse_int(source, "MUXARR_MAX_CONCURRENT", 1)),
+            job_ttl_seconds=_parse_float(source, "MUXARR_JOB_TTL", 60 * 60.0),
+            max_poll_wait_seconds=_parse_float(source, "MUXARR_MAX_POLL_WAIT", 60.0),
             scratch_dir=Path(scratch) if scratch else None,
             dedupe=dedupe,  # type: ignore[arg-type]
             skip_image_subtitles=_parse_bool(source, "MUXARR_SKIP_IMAGE_SUBTITLES"),
