@@ -9,7 +9,6 @@ services:
   muxarr:
     build:
       context: .
-      dockerfile: docker/Dockerfile
       target: runtime
     image: muxarr:latest
     container_name: muxarr

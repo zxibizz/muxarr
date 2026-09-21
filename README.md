@@ -114,7 +114,7 @@ Tests needing real `mkvmerge`/`ffmpeg` are marked and skipped when those tools
 are absent. The container has them, so the full suite runs there:
 
 ```sh
-docker build --target test -t muxarr:test -f docker/Dockerfile .
+docker build --target test -t muxarr:test .
 docker run --rm muxarr:test
 ```
 
