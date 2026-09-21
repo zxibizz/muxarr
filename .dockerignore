@@ -11,5 +11,7 @@ dist/
 build/
 *.egg-info/
 .DS_Store
-docker/
-compose*.yaml
+
+
+web/node_modules/
+web/dist/

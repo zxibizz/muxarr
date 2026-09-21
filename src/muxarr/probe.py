@@ -56,16 +56,26 @@ def probe(path: Path) -> MediaInfo:
     if not path.is_file():
         raise ProbeError(f"not a file: {path}")
 
+    failures: list[str] = []
+
     if has_tool("mkvmerge"):
         try:
             return probe_with_mkvmerge(path)
         except ProbeError as exc:
             log.debug("mkvmerge could not probe %s (%s); trying ffprobe", path, exc)
+            failures.append(f"mkvmerge: {exc}")
 
     if has_tool("ffprobe"):
-        return probe_with_ffprobe(path)
+        try:
+            return probe_with_ffprobe(path)
+        except ProbeError as exc:
+            failures.append(f"ffprobe: {exc}")
 
-    raise ProbeError(f"no usable probe backend for {path}: install mkvtoolnix or ffmpeg")
+    # Distinguish "the tools are missing" from "the tools rejected this file";
+    # conflating them sends people installing software they already have.
+    if failures:
+        raise ProbeError("; ".join(failures))
+    raise ProbeError(f"no probe backend available for {path}: install mkvtoolnix or ffmpeg")
 
 
 def probe_with_mkvmerge(path: Path) -> MediaInfo:
