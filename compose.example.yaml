@@ -1,0 +1,79 @@
+# Example deployment. Copy to compose.yaml and adjust paths.
+#
+# THE ONE RULE: every media path must be mounted at the SAME path inside the
+# *arr containers and inside muxarr. Radarr/Sonarr hand muxarr absolute paths;
+# if /media means something different in each container, muxarr will reject them
+# as outside its read roots and silently defer every import.
+
+services:
+  muxarr:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+    image: muxarr:latest
+    container_name: muxarr
+    restart: unless-stopped
+    # Match the uid/gid that owns your library, the same value as the *arr
+    # containers' PUID/PGID. muxarr creates the final file, so it needs to.
+    user: "1000:1000"
+    environment:
+      # Colon-separated. Must cover both download and library paths.
+      MUXARR_READ_ROOTS: /downloads:/media
+      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
+      MUXARR_LOG_LEVEL: INFO
+      # Uncomment only if the library is on NFS/SMB or a union filesystem.
+      # Staging elsewhere costs an extra full copy and loses atomicity.
+      # MUXARR_SCRATCH_DIR: /scratch
+    volumes:
+      - /srv/downloads:/downloads
+      - /srv/media:/media
+    networks: [arr]
+    # Not published to the host: only the *arr containers need to reach it.
+    expose:
+      - "8710"
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    depends_on: [muxarr]
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Etc/UTC
+      # Read by the shim, not by Sonarr itself.
+      MUXARR_URL: http://muxarr:8710
+      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
+    volumes:
+      - ./sonarr-config:/config
+      - /srv/downloads:/downloads
+      - /srv/media:/media
+      - ./scripts/muxarr-import.sh:/config/scripts/muxarr-import.sh:ro
+    ports:
+      - "8989:8989"
+    networks: [arr]
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    depends_on: [muxarr]
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Etc/UTC
+      MUXARR_URL: http://muxarr:8710
+      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
+    volumes:
+      - ./radarr-config:/config
+      - /srv/downloads:/downloads
+      - /srv/media:/media
+      - ./scripts/muxarr-import.sh:/config/scripts/muxarr-import.sh:ro
+    ports:
+      - "7878:7878"
+    networks: [arr]
+
+networks:
+  arr:
+    driver: bridge
