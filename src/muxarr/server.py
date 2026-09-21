@@ -37,10 +37,7 @@ class ImportPayload(BaseModel):
     app: Literal["radarr", "sonarr"]
     source_path: str
     destination_path: str
-    library_path: str
     transfer_mode: str = "Move"
-    season: int | None = None
-    episodes: list[int] = Field(default_factory=list)
     dry_run: bool = False
 
     def to_request(self) -> ImportRequest:
@@ -48,10 +45,7 @@ class ImportPayload(BaseModel):
             app=self.app,
             source_path=Path(self.source_path),
             destination_path=Path(self.destination_path),
-            library_path=Path(self.library_path),
             transfer_mode=self.transfer_mode,
-            season=self.season,
-            episodes=tuple(self.episodes),
             dry_run=self.dry_run,
         )
 
@@ -80,7 +74,6 @@ class Health(BaseModel):
     status: Literal["ok"] = "ok"
     version: str
     read_roots: list[str]
-    history_ephemeral: bool = False
     auth_required: bool = False
 
 
@@ -93,7 +86,6 @@ class OperationModel(BaseModel):
     reason: str
     source_path: str
     destination_path: str
-    library_path: str
     media_file: str | None = None
     transfer_mode: str = ""
     season: int | None = None
@@ -129,8 +121,7 @@ def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI
     app = FastAPI(title="muxarr", version=__version__)
     guard = PathGuard.from_roots(settings.read_roots)
     semaphore = asyncio.Semaphore(settings.max_concurrent_muxes)
-    history_store = store or history.open_store(settings.data_dir)
-    history_store.prune(settings.history_retention_days)
+    history_store = store or history.HistoryStore()
 
     def authorise(authorization: Annotated[str | None, Header()] = None) -> None:
         if settings.auth_token is None:
@@ -149,7 +140,6 @@ def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI
         return Health(
             version=__version__,
             read_roots=[str(r) for r in guard.read_roots],
-            history_ephemeral=history_store.ephemeral,
             auth_required=settings.auth_token is not None,
         )
 
@@ -233,6 +223,7 @@ def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI
         return outcome
 
     def _record(request: ImportRequest, outcome: ImportOutcome) -> None:
+        episode = request.episode_ref
         try:
             history_store.record(
                 app=request.app,
@@ -241,11 +232,10 @@ def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI
                 reason=outcome.reason,
                 source_path=str(request.source_path),
                 destination_path=str(request.destination_path),
-                library_path=str(request.library_path),
                 media_file=str(outcome.media_file) if outcome.media_file else None,
                 transfer_mode=request.transfer_mode,
-                season=request.season,
-                episodes=request.episodes,
+                season=episode.season if episode else None,
+                episodes=episode.episodes if episode else (),
                 added_tracks=outcome.added_tracks,
                 rejected_tracks=outcome.rejected_tracks,
                 duration_ms=outcome.duration_ms,

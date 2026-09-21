@@ -18,11 +18,11 @@ from typing import Literal
 
 from muxarr import discovery, probe, selection
 from muxarr.config import Settings
-from muxarr.discovery import EpisodeRef
+from muxarr.discovery import EpisodeRef, parse_episode_marker
 from muxarr.errors import MuxarrError
 from muxarr.models import ExternalTrack, MediaInfo
 from muxarr.mux import MuxPlan, run_mux
-from muxarr.paths import PathGuard, is_within, resolve
+from muxarr.paths import PathGuard, resolve
 from muxarr.placement import (
     PlacementPolicy,
     copy_attributes,
@@ -44,18 +44,23 @@ class ImportRequest:
     app: App
     source_path: Path
     destination_path: Path
-    # Radarr_Movie_Path / Sonarr_Series_Path. Used for the re-entrancy guard.
-    library_path: Path
     transfer_mode: str = "Move"
-    season: int | None = None
-    episodes: tuple[int, ...] = ()
     dry_run: bool = False
 
     @property
     def episode_ref(self) -> EpisodeRef | None:
-        if self.season is None:
+        """Which episode this import is for, read off the filenames.
+
+        The release name is the more reliable of the two: *arr's rename may drop
+        the marker entirely under a custom naming format.
+        """
+        if self.app != "sonarr":
             return None
-        return EpisodeRef(season=self.season, episodes=self.episodes)
+        for name in (Path(self.source_path).name, Path(self.destination_path).name):
+            marker = parse_episode_marker(name)
+            if marker is not None:
+                return marker
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,15 +125,9 @@ def _decide(
 
     try:
         source = guard.check_read(request.source_path)
-        library = guard.check_read(request.library_path)
         destination = guard.check_destination(request.destination_path)
     except MuxarrError as exc:
         return _defer(f"path rejected: {exc}")
-
-    # Second invocation: RenameRequested makes *arr call the script again with our
-    # own output as the source. Without this the mux would recurse.
-    if is_within(source, library):
-        return _defer("source is already inside the library; nothing to do")
 
     if not source.is_file():
         return _defer(f"source does not exist: {source}")

@@ -44,7 +44,6 @@ COPY --from=web /web/dist ./web
 EXPOSE 8710
 ENV MUXARR_HOST=0.0.0.0 \
     MUXARR_PORT=8710 \
-    MUXARR_DATA_DIR=/data \
     MUXARR_WEB_DIR=/app/web
 
 # No USER directive on purpose: set `user: "1000:1000"` in compose to match the

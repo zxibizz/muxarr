@@ -46,9 +46,6 @@ class Settings:
     preserve_ownership: bool = True
     sub_charset: str | None = None
     log_level: str = "INFO"
-    # Unset means the history lives in memory and dies with the process.
-    data_dir: Path | None = None
-    history_retention_days: int = 90
     web_dir: Path | None = None
     extra: Mapping[str, str] = field(default_factory=dict)
 
@@ -79,7 +76,6 @@ class Settings:
             )
 
         scratch = source.get("MUXARR_SCRATCH_DIR", "").strip()
-        data_dir = source.get("MUXARR_DATA_DIR", "").strip()
         web_dir = source.get("MUXARR_WEB_DIR", "").strip()
 
         return cls(
@@ -98,8 +94,6 @@ class Settings:
             preserve_ownership=_parse_bool(source, "MUXARR_PRESERVE_OWNERSHIP", default=True),
             sub_charset=source.get("MUXARR_SUB_CHARSET") or None,
             log_level=source.get("MUXARR_LOG_LEVEL", "INFO").upper(),
-            data_dir=Path(data_dir).expanduser() if data_dir else None,
-            history_retention_days=_parse_int(source, "MUXARR_HISTORY_RETENTION_DAYS", 90),
             web_dir=Path(web_dir).expanduser() if web_dir else None,
         )
 

@@ -4,26 +4,21 @@ Every import decision is recorded, including the ones that deferred -- "why was
 this release *not* muxed?" is the main question a history has to answer, and with
 muxarr's fail-safe design deferring is the common outcome.
 
-SQLite via the stdlib: one file, no server, a handful of rows per import. A single
+The log lives in an in-memory SQLite database and dies with the process. A single
 connection guarded by a lock is plenty at this write volume, and it is also what
-makes an in-memory store usable from more than one thread.
+makes the store usable from more than one thread.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import sqlite3
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
-log = logging.getLogger(__name__)
-
-MEMORY = ":memory:"
 MAX_PAGE_SIZE = 500
 
 _SCHEMA = """
@@ -36,7 +31,6 @@ CREATE TABLE IF NOT EXISTS operations (
     reason           TEXT    NOT NULL,
     source_path      TEXT    NOT NULL,
     destination_path TEXT    NOT NULL,
-    library_path     TEXT    NOT NULL,
     media_file       TEXT,
     transfer_mode    TEXT    NOT NULL DEFAULT '',
     season           INTEGER,
@@ -64,7 +58,6 @@ class Operation:
     reason: str
     source_path: str
     destination_path: str
-    library_path: str
     media_file: str | None
     transfer_mode: str
     season: int | None
@@ -101,27 +94,13 @@ class Page:
 class HistoryStore:
     """Append-only log of import decisions."""
 
-    def __init__(self, path: Path | str = MEMORY) -> None:
-        self._path = str(path)
+    def __init__(self) -> None:
         self._lock = threading.Lock()
-        if self._path != MEMORY:
-            Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self._path, check_same_thread=False)
+        self._conn = sqlite3.connect(":memory:", check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
-            if self._path != MEMORY:
-                self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.execute("PRAGMA busy_timeout=5000")
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
-
-    @property
-    def path(self) -> str:
-        return self._path
-
-    @property
-    def ephemeral(self) -> bool:
-        return self._path == MEMORY
 
     def close(self) -> None:
         with self._lock:
@@ -136,7 +115,6 @@ class HistoryStore:
         reason: str,
         source_path: str,
         destination_path: str,
-        library_path: str,
         media_file: str | None = None,
         transfer_mode: str = "",
         season: int | None = None,
@@ -154,10 +132,10 @@ class HistoryStore:
                 """
                 INSERT INTO operations (
                     created_at, app, title, move_status, reason, source_path,
-                    destination_path, library_path, media_file, transfer_mode,
+                    destination_path, media_file, transfer_mode,
                     season, episodes, added_tracks, rejected_tracks, duration_ms,
                     source_bytes, output_bytes, dry_run
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     _now(),
@@ -167,7 +145,6 @@ class HistoryStore:
                     reason,
                     source_path,
                     destination_path,
-                    library_path,
                     media_file,
                     transfer_mode,
                     season,
@@ -267,32 +244,11 @@ class HistoryStore:
             last_24h=int(recent),
         )
 
-    def prune(self, retention_days: int) -> int:
-        """Delete records older than ``retention_days``. 0 keeps everything."""
-        if retention_days <= 0:
-            return 0
-        cutoff = _iso(datetime.now(UTC) - timedelta(days=retention_days))
-        with self._lock:
-            cursor = self._conn.execute("DELETE FROM operations WHERE created_at < ?", (cutoff,))
-            self._conn.commit()
-            return cursor.rowcount
-
     def clear(self) -> int:
         with self._lock:
             cursor = self._conn.execute("DELETE FROM operations")
             self._conn.commit()
             return cursor.rowcount
-
-
-def open_store(data_dir: Path | None) -> HistoryStore:
-    """Open the history DB under ``data_dir``, or an ephemeral one if unset."""
-    if data_dir is None:
-        log.warning(
-            "MUXARR_DATA_DIR is not set; history is in-memory and will be lost on "
-            "restart. Mount a volume and set MUXARR_DATA_DIR to keep it."
-        )
-        return HistoryStore(MEMORY)
-    return HistoryStore(Path(data_dir) / "history.db")
 
 
 def _now() -> str:
@@ -318,7 +274,6 @@ def _to_operation(row: sqlite3.Row) -> Operation:
         reason=str(row["reason"]),
         source_path=str(row["source_path"]),
         destination_path=str(row["destination_path"]),
-        library_path=str(row["library_path"]),
         media_file=row["media_file"],
         transfer_mode=str(row["transfer_mode"]),
         season=row["season"],

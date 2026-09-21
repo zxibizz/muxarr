@@ -23,14 +23,16 @@ scattered as sidecars, and the filename reflects the tracks actually in the file
 ## How it fits together
 
 ```
-Radarr/Sonarr  --exec-->  muxarr-import.sh  --HTTP-->  muxarr daemon
- (import)                 (in *arr container)          (owns mkvmerge)
-      ^                                                      |
-      +---------- [MoveStatus] RenameRequested <-------------+
+Radarr/Sonarr  --exec-->  muxarr-import-*.sh  --HTTP-->  muxarr daemon
+ (import)                 (in *arr container)            (owns mkvmerge)
+      ^                                                        |
+      +---------- [MoveStatus] RenameRequested <---------------+
 ```
 
-The shim is dependency-free POSIX `sh` (needs only `curl` or `wget`). All the
-heavy dependencies live in the muxarr container.
+There is one shim per app — `muxarr-import-radarr.sh` and
+`muxarr-import-sonarr.sh` — because each reads a different set of \*arr
+environment variables. Both are dependency-free POSIX `sh` (needs only `curl` or
+`wget`). All the heavy dependencies live in the muxarr container.
 
 ## Web UI
 
@@ -39,9 +41,8 @@ The daemon serves a React/Mantine UI on the same port (default
 ones it skipped, which is usually the question you actually have.
 
 Each row expands into the full decision: the paths involved, which tracks were
-embedded, and which sidecars were passed over *and why*. Set `MUXARR_DATA_DIR`
-to a mounted volume or the history is in memory and dies with the container; the
-UI shows a warning banner when that is the case.
+embedded, and which sidecars were passed over *and why*. The history lives in
+memory and dies with the container; the UI says so in a banner.
 
 If `MUXARR_TOKEN` is set, the UI asks for it once and keeps it in the browser's
 local storage.
@@ -56,12 +57,14 @@ local storage.
    > different things in each container, muxarr rejects them and defers.
 
 2. **Mount the shim** into the \*arr container (the example compose does this)
-   and make sure it is executable.
+   and make sure it is executable. Radarr gets `muxarr-import-radarr.sh`,
+   Sonarr gets `muxarr-import-sonarr.sh`.
 
 3. **Configure Radarr/Sonarr.** Settings → Media Management → *show Advanced* →
    Importing:
    - tick **Import Using Script**
-   - set **Import Script Path** to `/config/scripts/muxarr-import.sh`
+   - set **Import Script Path** to `/config/scripts/muxarr-import-radarr.sh` in
+     Radarr, or `/config/scripts/muxarr-import-sonarr.sh` in Sonarr
    - leave **Import Extra Files** as you had it; muxarr suppresses the duplicate
      sidecar copy only for imports it actually muxed
 
@@ -84,8 +87,6 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_SKIP_UNDETERMINED` | `false` | Exclude tracks with unknown language |
 | `MUXARR_MAX_TRACKS` | `24` | Cap on embedded tracks |
 | `MUXARR_PRESERVE_OWNERSHIP` | `true` | chown output to match the source |
-| `MUXARR_DATA_DIR` | *unset* | Where `history.db` lives; unset = in-memory |
-| `MUXARR_HISTORY_RETENTION_DAYS` | `90` | Pruned on startup; `0` keeps everything |
 | `MUXARR_WEB_DIR` | `/app/web` | Built UI to serve; skipped if absent |
 | `MUXARR_LOG_LEVEL` | `INFO` | |
 

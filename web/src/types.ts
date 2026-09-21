@@ -14,7 +14,6 @@ export interface Operation {
   reason: string;
   source_path: string;
   destination_path: string;
-  library_path: string;
   media_file: string | null;
   transfer_mode: string;
   season: number | null;
@@ -46,7 +45,6 @@ export interface Health {
   status: string;
   version: string;
   read_roots: string[];
-  history_ephemeral: boolean;
   auth_required: boolean;
 }
 

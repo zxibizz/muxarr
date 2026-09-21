@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from muxarr import probe, server
 from muxarr.config import Settings
-from muxarr.history import MEMORY, HistoryStore
+from muxarr.history import HistoryStore
 from muxarr.models import MediaInfo, Track
 from tests.conftest import touch
 
@@ -36,7 +36,7 @@ def layout(tmp_path: Path) -> dict[str, Path]:
 
 @pytest.fixture
 def store() -> HistoryStore:
-    return HistoryStore(MEMORY)
+    return HistoryStore()
 
 
 @pytest.fixture
@@ -60,7 +60,6 @@ def seed(store: HistoryStore, **overrides: Any) -> int:
         "reason": "embedded 1 external track(s)",
         "source_path": "/downloads/x.mkv",
         "destination_path": "/library/x.mkv",
-        "library_path": "/library",
     }
     payload.update(overrides)
     return store.record(**payload)
@@ -170,7 +169,6 @@ class TestRecording:
                 "app": "radarr",
                 "source_path": str(layout["source"]),
                 "destination_path": str(layout["destination"]),
-                "library_path": str(layout["movie"]),
             },
             headers=auth(),
         )
@@ -196,7 +194,6 @@ class TestRecording:
                 "app": "radarr",
                 "source_path": str(layout["source"]),
                 "destination_path": str(layout["destination"]),
-                "library_path": str(layout["movie"]),
             },
             headers=auth(),
         )
@@ -219,7 +216,6 @@ class TestRecording:
                 "app": "radarr",
                 "source_path": str(layout["source"]),
                 "destination_path": str(layout["destination"]),
-                "library_path": str(layout["movie"]),
             },
             headers=auth(),
         )
@@ -247,7 +243,6 @@ class TestRecording:
                 "app": "radarr",
                 "source_path": str(layout["source"]),
                 "destination_path": str(layout["destination"]),
-                "library_path": str(layout["movie"]),
             },
             headers=auth(),
         )
@@ -256,8 +251,7 @@ class TestRecording:
         assert response.text.strip() == "[MoveStatus] DeferMove"
 
 
-def test_healthz_reports_history_and_auth_state(client: TestClient) -> None:
+def test_healthz_reports_auth_state(client: TestClient) -> None:
     body = client.get("/healthz").json()
 
-    assert body["history_ephemeral"] is True
     assert body["auth_required"] is True

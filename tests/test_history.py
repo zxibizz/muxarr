@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from muxarr.history import MEMORY, HistoryStore, open_store
+from muxarr.history import HistoryStore
 
 
 @pytest.fixture
 def store() -> HistoryStore:
-    return HistoryStore(MEMORY)
+    return HistoryStore()
 
 
 def add(store: HistoryStore, **overrides: object) -> int:
@@ -20,7 +18,6 @@ def add(store: HistoryStore, **overrides: object) -> int:
         "reason": "embedded 1 external track(s)",
         "source_path": "/downloads/Movie.2024-GRP/Movie.2024-GRP.mkv",
         "destination_path": "/library/Movie (2024)/Movie (2024).mkv",
-        "library_path": "/library/Movie (2024)",
     }
     payload.update(overrides)
     return store.record(**payload)  # type: ignore[arg-type]
@@ -174,52 +171,3 @@ class TestMaintenance:
 
         assert store.clear() == 2
         assert store.list().total == 0
-
-    def test_prune_keeps_recent_rows(self, store: HistoryStore) -> None:
-        add(store)
-
-        assert store.prune(30) == 0
-        assert store.list().total == 1
-
-    def test_prune_zero_is_a_noop(self, store: HistoryStore) -> None:
-        add(store)
-
-        assert store.prune(0) == 0
-        assert store.list().total == 1
-
-    def test_prune_removes_old_rows(self, store: HistoryStore) -> None:
-        add(store)
-        # Backdate the row rather than waiting 91 days.
-        store._conn.execute("UPDATE operations SET created_at = '2020-01-01T00:00:00Z'")  # noqa: SLF001
-        store._conn.commit()  # noqa: SLF001
-
-        assert store.prune(90) == 1
-        assert store.list().total == 0
-
-
-class TestPersistence:
-    def test_file_backed_store_survives_reopen(self, tmp_path: Path) -> None:
-        first = HistoryStore(tmp_path / "history.db")
-        add(first, title="persisted.mkv")
-        first.close()
-
-        second = HistoryStore(tmp_path / "history.db")
-        try:
-            assert second.list().items[0].title == "persisted.mkv"
-        finally:
-            second.close()
-
-    def test_open_store_creates_missing_directories(self, tmp_path: Path) -> None:
-        opened = open_store(tmp_path / "nested" / "data")
-        try:
-            assert Path(opened.path).is_file()
-            assert opened.ephemeral is False
-        finally:
-            opened.close()
-
-    def test_open_store_without_data_dir_is_ephemeral(self) -> None:
-        opened = open_store(None)
-        try:
-            assert opened.ephemeral is True
-        finally:
-            opened.close()
