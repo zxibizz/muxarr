@@ -10,10 +10,9 @@ rewrite the file too, and a source mkvmerge rejects is usually damaged.
 
 from __future__ import annotations
 
-import logging
-
 from src.application.interfaces.muxer import MuxPlan
-from src.domain.enums import TrackKind
+from src.core.logging import get_logger
+from src.domain.enums import LogComponent, TrackKind
 from src.domain.errors import MuxError
 from src.domain.media import ExternalTrack, MediaInfo
 from src.infrastructure.mkvtoolnix.probe import (
@@ -23,7 +22,7 @@ from src.infrastructure.mkvtoolnix.probe import (
 )
 from src.infrastructure.process.runner import resolve_tool, run
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.INFRA_MUX)
 
 # A remux is IO-bound on the file size; 4 hours is a generous ceiling for a
 # large remux on slow storage while still bounding a hung process.
@@ -90,7 +89,7 @@ def run_mux(
     result = run(argv, timeout=timeout, deprioritise=True)
 
     if result.returncode == MKVMERGE_WARNING_EXIT:
-        log.warning("mkvmerge completed with warnings: %s", result.tail(5))
+        log.warning("mkvmerge completed with warnings", output=plan.output, tail=result.tail(5))
     elif not result.ok:
         raise MuxError(f"mkvmerge failed (exit {result.returncode}): {result.tail()}")
 

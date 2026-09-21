@@ -9,16 +9,17 @@ Every external command in muxarr goes through :func:`run`. Two invariants:
 
 from __future__ import annotations
 
-import logging
 import shutil
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.core.logging import get_logger
+from src.domain.enums import LogComponent
 from src.domain.errors import ToolNotFoundError
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.INFRA_PROCESS)
 
 DEFAULT_TIMEOUT = 60.0
 
@@ -76,7 +77,7 @@ def run(
     Never raises on a non-zero exit; callers decide what a failure means.
     """
     full: list[str] = [*deprioritise_prefix(), *argv] if deprioritise else list(argv)
-    log.debug("exec: %s", full)
+    log.debug("running external command", argv=full)
     try:
         completed = subprocess.run(  # noqa: S603
             full,

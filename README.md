@@ -104,6 +104,7 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_PRESERVE_OWNERSHIP` | `true` | chown output to match the source |
 | `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | Where the history lives |
 | `MUXARR_LOG_LEVEL` | `INFO` | |
+| `MUXARR_LOG_JSON` | `false` | One JSON object per record, for log shippers |
 | `PUID` / `PGID` | `1000` / `1000` | uid/gid the services drop to |
 
 And on the **shim**:

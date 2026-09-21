@@ -56,6 +56,8 @@ class Settings:
     preserve_ownership: bool = True
     sub_charset: str | None = None
     log_level: str = "INFO"
+    # Emit one JSON object per record instead of the human-readable console line.
+    log_json: bool = False
     db_url: str = DEFAULT_DB_URL
     extra: Mapping[str, str] = field(default_factory=dict)
 
@@ -105,6 +107,7 @@ class Settings:
             preserve_ownership=_parse_bool(source, "MUXARR_PRESERVE_OWNERSHIP", default=True),
             sub_charset=source.get("MUXARR_SUB_CHARSET") or None,
             log_level=source.get("MUXARR_LOG_LEVEL", "INFO").upper(),
+            log_json=_parse_bool(source, "MUXARR_LOG_JSON"),
             db_url=source.get("MUXARR_DB_URL", "").strip() or DEFAULT_DB_URL,
         )
 

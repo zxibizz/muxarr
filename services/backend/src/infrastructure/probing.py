@@ -6,16 +6,17 @@ mkvmerge first and falling back to ffprobe.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
+from src.core.logging import get_logger
+from src.domain.enums import LogComponent
 from src.domain.errors import ProbeError
 from src.domain.media import MediaInfo
 from src.infrastructure.ffmpeg.probe import probe_with_ffprobe
 from src.infrastructure.mkvtoolnix.probe import probe_with_mkvmerge
 from src.infrastructure.process.runner import has_tool
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.INFRA_PROBE)
 
 
 def probe(path: Path) -> MediaInfo:
@@ -29,7 +30,7 @@ def probe(path: Path) -> MediaInfo:
         try:
             return probe_with_mkvmerge(path)
         except ProbeError as exc:
-            log.debug("mkvmerge could not probe %s (%s); trying ffprobe", path, exc)
+            log.debug("mkvmerge could not probe; trying ffprobe", path=path, error=str(exc))
             failures.append(f"mkvmerge: {exc}")
 
     if has_tool("ffprobe"):

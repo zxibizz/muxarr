@@ -12,7 +12,6 @@ runs it on a worker thread rather than blocking the event loop.
 
 from __future__ import annotations
 
-import logging
 import time
 from collections.abc import Sequence
 from dataclasses import replace
@@ -23,17 +22,19 @@ from src.application.interfaces.placement import Placement, PlacementPolicy
 from src.application.interfaces.prober import MediaProber
 from src.application.interfaces.track_source import TrackDiscovery
 from src.application.use_cases.imports.dto import OUTPUT_SUFFIX, ImportOutcome, ImportRequest
+from src.core.logging import get_logger
 from src.domain import selection
+from src.domain.enums import LogComponent
 from src.domain.errors import MuxarrError
 from src.domain.media import ExternalTrack, MediaInfo
 from src.domain.paths import PathGuard, resolve
 from src.settings.config import Settings
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.USECASE_IMPORT)
 
 
 def _defer(reason: str, **extra: object) -> ImportOutcome:
-    log.info("deferring to native import: %s", reason)
+    log.info("deferring to native import", reason=reason)
     return ImportOutcome(move_status="DeferMove", reason=reason, **extra)  # type: ignore[arg-type]
 
 
@@ -133,7 +134,7 @@ class HandleImportUseCase:
                 rejected_tracks=rejections,
             )
 
-        log.info("embedded %d track(s) into %s", len(descriptions), output)
+        log.info("embedded external tracks", count=len(descriptions), output=output)
         return ImportOutcome(
             move_status="RenameRequested",
             reason=f"embedded {len(descriptions)} external track(s)",
