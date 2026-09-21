@@ -11,12 +11,12 @@ import logging
 import sys
 from pathlib import Path
 
-from muxerr import discovery, probe, selection
-from muxerr.discovery import EpisodeRef
-from muxerr.errors import MuxerrError
-from muxerr.models import ExternalTrack, MediaInfo, Track
-from muxerr.mux import MuxPlan, run_mux
-from muxerr.placement import (
+from muxarr import discovery, probe, selection
+from muxarr.discovery import EpisodeRef
+from muxarr.errors import MuxarrError
+from muxarr.models import ExternalTrack, MediaInfo, Track
+from muxarr.mux import MuxPlan, run_mux
+from muxarr.placement import (
     PlacementPolicy,
     copy_attributes,
     ensure_free_space,
@@ -24,7 +24,7 @@ from muxerr.placement import (
     staged_output,
 )
 
-log = logging.getLogger("muxerr")
+log = logging.getLogger("muxarr")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,13 +39,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         handler = {"inspect": _cmd_inspect, "plan": _cmd_plan, "mux": _cmd_mux}[args.command]
         return handler(args)
-    except MuxerrError as exc:
+    except MuxarrError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="muxerr", description=__doc__)
+    parser = argparse.ArgumentParser(prog="muxarr", description=__doc__)
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 

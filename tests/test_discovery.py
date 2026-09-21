@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from muxerr.discovery import EpisodeRef, discover, parse_episode_marker
+from muxarr.discovery import EpisodeRef, discover, parse_episode_marker
 from tests.conftest import touch
 
 

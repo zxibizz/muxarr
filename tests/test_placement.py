@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from muxerr.errors import InsufficientSpaceError, PlacementError
-from muxerr.placement import (
+from muxarr.errors import InsufficientSpaceError, PlacementError
+from muxarr.placement import (
     PlacementPolicy,
     copy_attributes,
     ensure_free_space,
@@ -32,7 +32,7 @@ def test_staging_path_is_hidden_and_unique(tmp_path: Path) -> None:
     first = staging_path_for(destination)
     second = staging_path_for(destination)
 
-    assert first.name.startswith(".muxerr-")
+    assert first.name.startswith(".muxarr-")
     assert first.name.endswith(".part")
     assert first != second
 

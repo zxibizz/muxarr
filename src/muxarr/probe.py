@@ -1,6 +1,6 @@
 """Container inspection.
 
-``mkvmerge -J`` is preferred because it reports exactly the properties muxerr
+``mkvmerge -J`` is preferred because it reports exactly the properties muxarr
 sets back (``forced_track``, ``flag_hearing_impaired``) and because a file it
 cannot parse is a file it cannot mux either. ``ffprobe`` is the fallback for the
 odd container mkvmerge refuses.
@@ -14,9 +14,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from muxerr.errors import ProbeError
-from muxerr.models import UNDETERMINED, MediaInfo, Track, TrackKind
-from muxerr.proc import has_tool, resolve_tool, run
+from muxarr.errors import ProbeError
+from muxarr.models import UNDETERMINED, MediaInfo, Track, TrackKind
+from muxarr.proc import has_tool, resolve_tool, run
 
 log = logging.getLogger(__name__)
 

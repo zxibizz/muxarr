@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from muxerr.errors import ProbeError
-from muxerr.probe import (
+from muxarr.errors import ProbeError
+from muxarr.probe import (
     MODERN_FLAG_SYNTAX_MIN_VERSION,
     parse_ffprobe_json,
     parse_mkvmerge_json,
@@ -77,7 +77,7 @@ def test_parse_mkvmerge_json() -> None:
     info = parse_mkvmerge_json(Path("/x.mkv"), MKVMERGE_SAMPLE)
 
     assert info.container == "Matroska"
-    # The "buttons" track is not something muxerr models.
+    # The "buttons" track is not something muxarr models.
     assert len(info.tracks) == 3
     assert info.audio[0].language == "eng"
     assert info.audio[0].codec_family == "ac3"

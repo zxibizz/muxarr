@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from muxerr.language import build_title, infer, normalise_language, tokenise
+from muxarr.language import build_title, infer, normalise_language, tokenise
 
 
 @pytest.mark.parametrize(

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from muxerr.discovery import EpisodeRef, discover
+from muxarr.discovery import EpisodeRef, discover
 from tests.conftest import touch
 
 SHOW = "Hanaori-san Still Wants to Fight in the Next Life"

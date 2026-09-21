@@ -14,10 +14,10 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from muxerr.errors import MuxError
-from muxerr.models import ExternalTrack, MediaInfo, TrackKind
-from muxerr.probe import probe_with_mkvmerge
-from muxerr.proc import resolve_tool, run
+from muxarr.errors import MuxError
+from muxarr.models import ExternalTrack, MediaInfo, TrackKind
+from muxarr.probe import probe_with_mkvmerge
+from muxarr.proc import resolve_tool, run
 
 log = logging.getLogger(__name__)
 

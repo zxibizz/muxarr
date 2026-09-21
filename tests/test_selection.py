@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from muxerr.models import ExternalTrack, MediaInfo, Track
-from muxerr.selection import SelectionPolicy, select
+from muxarr.models import ExternalTrack, MediaInfo, Track
+from muxarr.selection import SelectionPolicy, select
 from tests.conftest import touch
 
 
