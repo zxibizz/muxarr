@@ -16,7 +16,7 @@ x-media:
 x-muxarr-image: &muxarr-image
   build:
     context: .
-    target: runtime
+    dockerfile: Dockerfile.all-in-one
   image: muxarr:latest
 
 services:
@@ -24,10 +24,11 @@ services:
     <<: *muxarr-image
     container_name: muxarr
     restart: unless-stopped
-    # Match the uid/gid that owns your library, the same value as the *arr
-    # containers' PUID/PGID. muxarr creates the final file, so it needs to.
-    user: "1000:1000"
     environment:
+      # s6 starts as root and drops to these before running anything. Match the
+      # uid/gid that owns your library -- the *arr containers' PUID/PGID.
+      PUID: 1000
+      PGID: 1000
       # Colon-separated. Must cover both download and library paths.
       MUXARR_READ_ROOTS: /downloads:/media
       MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
@@ -36,11 +37,15 @@ services:
       # Staging elsewhere costs an extra full copy and loses atomicity.
       # MUXARR_SCRATCH_DIR: /scratch
     volumes:
+      # The operation history lives here and is migrated on every start.
+      # Drop this and every restart begins with an empty history.
+      - ./muxarr-config:/config
       - *downloads
       - *media
     networks: [arr]
     ports:
-      # The web UI. Drop this if you only want the *arr containers to reach it.
+      # nginx serves the web UI and proxies /v1 to the API behind it. Drop this
+      # if you only want the *arr containers to reach it.
       - "8710:8710"
 
   # The shims ship inside the muxarr image, so nothing here needs a checkout of
@@ -51,8 +56,9 @@ services:
     <<: *muxarr-image
     container_name: muxarr-shims
     restart: "no"
-    # No `user:` -- a freshly created named volume is owned by root.
-    command: sh -c 'cp /app/scripts/muxarr-import-*.sh /shims/ && chmod 0755 /shims/*.sh'
+    # No PUID/PGID -- a freshly created named volume is owned by root.
+    entrypoint: ["/bin/sh", "-c"]
+    command: 'cp /app/scripts/muxarr-import-*.sh /shims/ && chmod 0755 /shims/*.sh'
     volumes:
       - shims:/shims
     networks: [arr]

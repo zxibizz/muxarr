@@ -1,0 +1,12 @@
+#!/command/with-contenv sh
+# The library is owned by the *arr uid, and muxarr creates the final file, so it
+# has to run as that uid too. /config holds the history database.
+set -e
+
+PUID="${PUID:-1000}"
+PGID="${PGID:-1000}"
+
+mkdir -p /config
+chown "${PUID}:${PGID}" /config
+
+echo "muxarr running as ${PUID}:${PGID}"

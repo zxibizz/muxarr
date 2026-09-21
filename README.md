@@ -44,13 +44,15 @@ environment variables. Both are dependency-free POSIX `sh` (needs only `curl` or
 
 ## Web UI
 
-The daemon serves a React/Mantine UI on the same port (default
-<http://localhost:8710>) showing every import it has been handed — including the
-ones it skipped, which is usually the question you actually have.
+nginx inside the container serves a React/Mantine UI on the same port (default
+<http://localhost:8710>) and reverse-proxies the API behind it, showing every
+import it has been handed — including the ones it skipped, which is usually the
+question you actually have.
 
 Each row expands into the full decision: the paths involved, which tracks were
-embedded, and which sidecars were passed over *and why*. The history lives in
-memory and dies with the container; the UI says so in a banner.
+embedded, and which sidecars were passed over *and why*. The history is stored
+in SQLite under `/config`, so it survives restarts — mount that volume or you
+will lose it.
 
 If `MUXARR_TOKEN` is set, the UI asks for it once and keeps it in the browser's
 local storage.
@@ -58,11 +60,14 @@ local storage.
 ## Setup
 
 1. **Deploy.** Copy `compose.example.yaml` to `compose.yaml`, set `MUXARR_TOKEN`
-   in a `.env` file, and adjust the volume paths.
+   in a `.env` file, and adjust the volume paths. Set `PUID`/`PGID` to the uid
+   that owns your library — muxarr creates the final file, so it must match.
 
    > Every media path must be mounted at the **same path** in the \*arr
    > containers and in muxarr. Radarr/Sonarr pass absolute paths; if they mean
    > different things in each container, muxarr rejects them and defers.
+
+   > `/config` holds the operation history. Migrations run on every start.
 
 2. **Share the shims.** They ship inside the muxarr image; the example compose
    republishes them into a `muxarr-shims` volume that the \*arr containers mount
@@ -97,8 +102,9 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_SKIP_UNDETERMINED` | `false` | Exclude tracks with unknown language |
 | `MUXARR_MAX_TRACKS` | `24` | Cap on embedded tracks |
 | `MUXARR_PRESERVE_OWNERSHIP` | `true` | chown output to match the source |
-| `MUXARR_WEB_DIR` | `/app/web` | Built UI to serve; skipped if absent |
+| `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | Where the history lives |
 | `MUXARR_LOG_LEVEL` | `INFO` | |
+| `PUID` / `PGID` | `1000` / `1000` | uid/gid the services drop to |
 
 And on the **shim**:
 
@@ -111,44 +117,71 @@ And on the **shim**:
 | `MUXARR_POLL_INTERVAL` | `5` | Back-off after a failed request |
 | `MUXARR_MAX_RETRIES` | `10` | Consecutive request failures tolerated |
 
+## Repository layout
+
+```
+services/backend    FastAPI daemon: api | application | domain | infrastructure
+services/frontend   React + Vite SPA
+scripts/            the *arr-side shims
+cicd/containers/    s6-overlay service definitions for the production image
+```
+
+The backend follows a layered architecture — dependencies point inward, and a
+test enforces it. See [AGENTS.md](AGENTS.md) for the rules.
+
 ## CLI
 
 ```sh
-muxarr inspect video.mkv          # list tracks in a container
-muxarr plan   video.mkv           # show what would be embedded, writes nothing
-muxarr mux    video.mkv --out out.mkv
-muxarr serve                      # run the daemon
+cd services/backend
+uv run python -m src.cli inspect video.mkv    # list tracks in a container
+uv run python -m src.cli plan    video.mkv    # show what would be embedded
+uv run python -m src.cli mux     video.mkv --out out.mkv
+uv run python -m src.cli serve                # run the daemon
 ```
 
 ## Development
 
 ```sh
-uv venv --python 3.11 .venv
-uv pip install -e '.[dev]'
-.venv/bin/ruff check .
-.venv/bin/mypy
-.venv/bin/python -m pytest
+cd services/backend
+uv sync
+uv run ruff check .
+uv run python -m mypy
+uv run pytest -q
+uv run alembic upgrade head
+```
+
+```sh
+cd services/frontend
+npm install
+npm run dev
+```
+
+Or the whole stack with hot reload on both sides:
+
+```sh
+docker compose -f docker-compose.dev.yaml up --build
 ```
 
 Tests needing real `mkvmerge`/`ffmpeg` are marked and skipped when those tools
-are absent. The container has them, so the full suite runs there:
+are absent. The dev image has them, so the full suite runs there:
 
 ```sh
-docker build --target test -t muxarr:test .
-docker run --rm muxarr:test
+docker compose -f docker-compose.dev.yaml run --rm backend pytest -q
 ```
 
 ### Frontend
 
-The UI lives in `web/` (React 18, Mantine 7, Vite) and is built automatically by
-the Docker image. For a local dev loop you need Node 18+:
+The UI lives in `services/frontend/` (React 18, Mantine 7, Vite) and is built
+into the image by `Dockerfile.all-in-one`, where nginx serves it. For a local
+dev loop you need Node 20+:
 
 ```sh
-muxarr serve &          # API on :8710
-cd web && npm install && npm run dev
+cd services/backend && uv run python -m src.cli serve &   # API on :8710
+cd services/frontend && npm install && npm run dev
 ```
 
-`vite.config.ts` proxies `/v1` and `/healthz` to the daemon.
+`vite.config.ts` proxies `/v1` and `/healthz` to the daemon, or to
+`VITE_API_PROXY_TARGET` when set.
 
 ## Requirements
 

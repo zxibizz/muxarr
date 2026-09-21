@@ -12,6 +12,12 @@ htmlcov/
 .DS_Store
 
 # generated media fixtures; rebuilt by tests/fixtures/build_fixtures.py
-tests/fixtures/generated/
+services/backend/tests/fixtures/generated/
 
 **/node_modules/
+
+# local runtime state
+.env
+dev-media/
+muxarr-config/
+*.db
