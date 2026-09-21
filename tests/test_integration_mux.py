@@ -3,7 +3,7 @@
 Skipped unless mkvtoolnix/ffmpeg are on PATH. They always run inside the Docker
 image, which is where the mux path is actually exercised:
 
-    docker build --target test -t muxarr:test -f docker/Dockerfile .
+    docker build --target test -t muxarr:test .
     docker run --rm muxarr:test
 
 Fixtures are generated with ffmpeg's synthetic sources, so no real media is
