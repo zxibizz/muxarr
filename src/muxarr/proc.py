@@ -1,6 +1,6 @@
 """Subprocess helper.
 
-Every external command in muxerr goes through :func:`run`. Two invariants:
+Every external command in muxarr goes through :func:`run`. Two invariants:
 
 * commands are always argv lists, never shell strings (no ``shell=True`` anywhere);
 * long-running media tools get de-prioritised so a remux cannot starve a Plex
@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from muxerr.errors import ToolNotFoundError
+from muxarr.errors import ToolNotFoundError
 
 log = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from muxerr.models import ExternalTrack
-from muxerr.mux import MuxPlan, build_argv
+from muxarr.models import ExternalTrack
+from muxarr.mux import MuxPlan, build_argv
 
 
 def plan_for(tmp_path: Path, *tracks: ExternalTrack, modern: bool = True) -> MuxPlan:

@@ -1,10 +1,10 @@
-# muxerr
+# muxarr
 
 Embeds external audio and subtitle tracks into video containers at the moment
 Radarr/Sonarr import a download, using the **Import Using Script** hook.
 
 When a release ships `Subs/2_English.srt` or a separate `.ac3` dub alongside the
-video, muxerr remuxes them into a single MKV as the file lands in your library —
+video, muxarr remuxes them into a single MKV as the file lands in your library —
 so the tracks are embedded rather than scattered as sidecars, and the filename
 reflects the tracks that are actually in the file.
 
@@ -12,7 +12,7 @@ reflects the tracks that are actually in the file.
 
 - **Stream-copy only.** No transcoding, ever. A mux costs one sequential read
   and one sequential write.
-- **The download folder is read-only.** muxerr never writes, renames or deletes
+- **The download folder is read-only.** muxarr never writes, renames or deletes
   anything on the source side, in any transfer mode. Cleanup of the original
   stays with your download client's Completed Download Handling.
 - **Fail safe.** Any error at all degrades to `DeferMove`, and Radarr/Sonarr
@@ -24,13 +24,13 @@ reflects the tracks that are actually in the file.
 
 | Path | Role |
 | --- | --- |
-| `src/muxerr/probe.py` | container inspection via `mkvmerge -J`, `ffprobe` fallback |
-| `src/muxerr/discovery.py` | find sidecar files next to the download |
-| `src/muxerr/language.py` | infer language + forced/SDH flags from filenames |
-| `src/muxerr/selection.py` | drop tracks already present, order the rest |
-| `src/muxerr/mux.py` | build and run the `mkvmerge` command |
-| `src/muxerr/placement.py` | free-space check, atomic placement, permissions |
-| `src/muxerr/cli.py` | `muxerr inspect` / `plan` / `mux` |
+| `src/muxarr/probe.py` | container inspection via `mkvmerge -J`, `ffprobe` fallback |
+| `src/muxarr/discovery.py` | find sidecar files next to the download |
+| `src/muxarr/language.py` | infer language + forced/SDH flags from filenames |
+| `src/muxarr/selection.py` | drop tracks already present, order the rest |
+| `src/muxarr/mux.py` | build and run the `mkvmerge` command |
+| `src/muxarr/placement.py` | free-space check, atomic placement, permissions |
+| `src/muxarr/cli.py` | `muxarr inspect` / `plan` / `mux` |
 
 ## Development
 

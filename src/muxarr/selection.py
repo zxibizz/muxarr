@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from muxerr.models import IMAGE_SUBTITLE_FAMILIES, ExternalTrack, MediaInfo, TrackKind
+from muxarr.models import IMAGE_SUBTITLE_FAMILIES, ExternalTrack, MediaInfo, TrackKind
 
 DedupeMode = Literal["off", "language", "language_codec"]
 

@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from muxerr.errors import InsufficientSpaceError, PlacementError
+from muxarr.errors import InsufficientSpaceError, PlacementError
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ def staging_path_for(destination: Path, scratch_dir: Path | None = None) -> Path
     """Unique staging path; keeps the real extension so mkvmerge picks the format."""
     directory = scratch_dir or destination.parent
     token = secrets.token_hex(4)
-    return directory / f".muxerr-{os.getpid()}{token}-{destination.name}{STAGING_SUFFIX}"
+    return directory / f".muxarr-{os.getpid()}{token}-{destination.name}{STAGING_SUFFIX}"
 
 
 @contextmanager
@@ -119,7 +119,7 @@ def copy_attributes(reference: Path, target: Path, policy: PlacementPolicy | Non
     """Mirror permissions (and ownership, if permitted) from the source file.
 
     *arr applies its own chmod/chown to the path it originally chose, which is not
-    the path we produce when the extension changes -- so muxerr has to do it.
+    the path we produce when the extension changes -- so muxarr has to do it.
     """
     policy = policy or PlacementPolicy()
     try:
@@ -138,7 +138,7 @@ def copy_attributes(reference: Path, target: Path, policy: PlacementPolicy | Non
     try:
         os.chown(target, stat.st_uid, stat.st_gid)
     except (OSError, AttributeError) as exc:
-        # Expected whenever muxerr is not root and does not own the target.
+        # Expected whenever muxarr is not root and does not own the target.
         log.debug("could not chown %s: %s", target, exc)
 
 

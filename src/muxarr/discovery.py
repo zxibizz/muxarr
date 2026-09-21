@@ -14,8 +14,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from muxerr import language
-from muxerr.models import (
+from muxarr import language
+from muxarr.models import (
     AUDIO_EXTENSIONS,
     SUBTITLE_EXTENSIONS,
     VIDEO_EXTENSIONS,

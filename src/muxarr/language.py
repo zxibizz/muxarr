@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from muxerr.models import UNDETERMINED
+from muxarr.models import UNDETERMINED
 
 # (ISO 639-2/B code, display name, aliases)
 # Aliases include the ISO 639-1 pair and, where they differ, the ISO 639-2/T code,
