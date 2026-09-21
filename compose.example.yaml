@@ -13,15 +13,12 @@ x-media:
   downloads: &downloads /srv/downloads:/downloads
   media: &media /srv/media:/media
 
-x-muxarr-image: &muxarr-image
-  build:
-    context: .
-    dockerfile: Dockerfile.all-in-one
-  image: muxarr:latest
-
 services:
   muxarr:
-    <<: *muxarr-image
+    build:
+      context: .
+      dockerfile: Dockerfile.all-in-one
+    image: muxarr:latest
     container_name: muxarr
     restart: unless-stopped
     environment:
@@ -40,6 +37,11 @@ services:
       # The operation history lives here and is migrated on every start.
       # Drop this and every restart begins with an empty history.
       - ./muxarr-config:/config
+      # muxarr copies the shims it ships with into here on every start, so
+      # nothing needs a checkout of the source. Do not mount this over
+      # /app/scripts instead: that hides the image's own copy behind whatever
+      # the volume already holds, which is the staleness this is fixing.
+      - shims:/shims
       - *downloads
       - *media
     networks: [arr]
@@ -48,30 +50,15 @@ services:
       # if you only want the *arr containers to reach it.
       - "8710:8710"
 
-  # The shims ship inside the muxarr image, so nothing here needs a checkout of
-  # the source. Mounting the volume straight onto /app/scripts would not do:
-  # docker seeds a named volume from the image only while it is still empty, so
-  # the *arr containers would keep the shims of whichever release created it.
-  muxarr-shims:
-    <<: *muxarr-image
-    container_name: muxarr-shims
-    restart: "no"
-    # No PUID/PGID -- a freshly created named volume is owned by root.
-    entrypoint: ["/bin/sh", "-c"]
-    command: 'cp /app/scripts/muxarr-import-*.sh /shims/ && chmod 0755 /shims/*.sh'
-    volumes:
-      - shims:/shims
-    networks: [arr]
-
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
     restart: unless-stopped
     depends_on:
       muxarr:
-        condition: service_started
-      muxarr-shims:
-        condition: service_completed_successfully
+        # Healthy, not started: the shims are published during muxarr's init,
+        # and /healthz only answers once that has finished.
+        condition: service_healthy
     environment:
       PUID: 1000
       PGID: 1000
@@ -94,9 +81,7 @@ services:
     restart: unless-stopped
     depends_on:
       muxarr:
-        condition: service_started
-      muxarr-shims:
-        condition: service_completed_successfully
+        condition: service_healthy
     environment:
       PUID: 1000
       PGID: 1000
@@ -136,8 +121,8 @@ networks:
 #          arr-shared:
 #            external: true
 #
-# 2. The shims. Keep muxarr and muxarr-shims here; the other stack only mounts
-#    the volume, which it must declare as external because compose will not
+# 2. The shims. Keep the shims volume attached to muxarr here; the other stack
+#    only mounts it, and must declare it external because compose will not
 #    create a volume it does not own:
 #
 #        volumes:
@@ -147,7 +132,7 @@ networks:
 #
 #    depends_on cannot reach across projects, so `up` the muxarr stack first
 #    after an upgrade -- otherwise the *arr containers run the previous shims
-#    until muxarr-shims next completes.
+#    until muxarr has restarted.
 #
 # MUXARR_TOKEN is read from the *arr container's own environment, so it has to
 # be repeated in that stack's .env. THE ONE RULE still applies across the two

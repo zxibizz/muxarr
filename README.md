@@ -78,9 +78,11 @@ local storage.
 
    > `/config` holds the operation history. Migrations run on every start.
 
-2. **Share the shims.** They ship inside the muxarr image; the example compose
-   republishes them into a `muxarr-shims` volume that the \*arr containers mount
-   read-only at `/config/scripts`. Nothing needs a checkout of this repo.
+2. **Share the shims.** They ship inside the muxarr image, which copies them
+   into a `muxarr-shims` volume on every start; the \*arr containers mount it
+   read-only at `/config/scripts`. Nothing needs a checkout of this repo, and an
+   upgraded image republishes them. Depend on muxarr being *healthy*, not
+   merely started, or the \*arr containers can come up before the copy.
 
 3. **Configure Radarr/Sonarr.** Settings → Media Management → *show Advanced* →
    Importing:
