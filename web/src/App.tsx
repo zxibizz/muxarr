@@ -106,11 +106,9 @@ export function App() {
           </Group>
           {health && (
             <Group gap="xs">
-              {health.history_ephemeral && (
-                <Badge color="yellow" variant="light">
-                  history not persisted
-                </Badge>
-              )}
+              <Badge color="yellow" variant="light">
+                history not persisted
+              </Badge>
               <Text size="xs" c="dimmed">
                 v{health.version}
               </Text>
@@ -124,12 +122,9 @@ export function App() {
           <Stack gap="lg">
             <StatsCards stats={stats} />
 
-            {health?.history_ephemeral && (
-              <Alert color="yellow" title="History is in memory">
-                MUXARR_DATA_DIR is not set, so everything here is lost when the container
-                restarts. Mount a volume and set it to keep the history.
-              </Alert>
-            )}
+            <Alert color="yellow" title="History is in memory">
+              Everything here is lost when the container restarts.
+            </Alert>
 
             {error && (
               <Alert color="red" title="Could not load history">

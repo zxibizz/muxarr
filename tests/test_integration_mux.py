@@ -102,7 +102,6 @@ def import_request(release: dict[str, Path], **overrides: object) -> ImportReque
         "app": "radarr",
         "source_path": release["video"],
         "destination_path": release["destination"],
-        "library_path": release["destination"].parent,
     }
     base.update(overrides)
     return ImportRequest(**base)  # type: ignore[arg-type]
@@ -182,7 +181,6 @@ def test_mp4_source_is_remuxed_to_mkv(tmp_path: Path, settings: Settings) -> Non
             source_path=video,
             # *arr derives the destination extension from the source, so it asks for .mp4.
             destination_path=library / "Movie (2024).mp4",
-            library_path=library,
         ),
         settings,
     )
@@ -209,9 +207,6 @@ def test_multiple_same_language_dubs_both_survive(
             app="sonarr",
             source_path=video,
             destination_path=library / "Show - S01E01.mkv",
-            library_path=library,
-            season=1,
-            episodes=(1,),
         ),
         settings,
     )
@@ -263,7 +258,7 @@ def test_reimport_of_the_result_is_a_noop(
     )
 
     assert second.move_status == "DeferMove"
-    assert "already inside the library" in second.reason
+    assert "no external tracks" in second.reason
 
 
 def _snapshot(root: Path) -> dict[str, tuple[str, int]]:

@@ -19,7 +19,11 @@ import pytest
 
 from tests.test_protocol import ARR_OUTPUT_REGEX
 
-SHIM = Path(__file__).resolve().parent.parent / "scripts" / "muxarr-import.sh"
+SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+SHIMS = {
+    "radarr": SCRIPTS / "muxarr-import-radarr.sh",
+    "sonarr": SCRIPTS / "muxarr-import-sonarr.sh",
+}
 
 pytestmark = pytest.mark.skipif(
     shutil.which("curl") is None and shutil.which("wget") is None,
@@ -76,25 +80,13 @@ def run_shim(
 ) -> subprocess.CompletedProcess[str]:
     env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "MUXARR_URL": url, "MUXARR_TIMEOUT": "10"}
     if app == "radarr":
-        env |= {
-            "Radarr_SourcePath": source,
-            "Radarr_DestinationPath": destination,
-            "Radarr_Movie_Path": "/library/Movie (2024)",
-            "Radarr_TransferMode": "Move",
-        }
+        env |= {"Radarr_TransferMode": "Move"}
     elif app == "sonarr":
-        env |= {
-            "Sonarr_SourcePath": source,
-            "Sonarr_DestinationPath": destination,
-            "Sonarr_Series_Path": "/library/Show",
-            "Sonarr_TransferMode": "HardLinkOrCopy",
-            "Sonarr_EpisodeFile_SeasonNumber": "1",
-            "Sonarr_EpisodeFile_EpisodeNumbers": "2,3",
-        }
+        env |= {"Sonarr_TransferMode": "HardLinkOrCopy"}
     env |= extra_env or {}
 
     return subprocess.run(
-        ["/bin/sh", str(SHIM), source, destination],
+        ["/bin/sh", str(SHIMS[app]), source, destination],
         capture_output=True,
         text=True,
         env=env,
@@ -196,9 +188,10 @@ def test_empty_response_defers(daemon: type[_Handler]) -> None:
     assert assert_valid_protocol(run_shim(url_for(daemon))) == ["[MoveStatus] DeferMove"]
 
 
-def test_no_arr_environment_defers(daemon: type[_Handler]) -> None:
+@pytest.mark.parametrize("app", ["radarr", "sonarr"])
+def test_missing_arguments_defer(daemon: type[_Handler], app: str) -> None:
     result = subprocess.run(
-        ["/bin/sh", str(SHIM), "/a.mkv", "/b.mkv"],
+        ["/bin/sh", str(SHIMS[app])],
         capture_output=True,
         text=True,
         env={"PATH": "/usr/bin:/bin", "MUXARR_URL": url_for(daemon)},
@@ -207,6 +200,7 @@ def test_no_arr_environment_defers(daemon: type[_Handler]) -> None:
     )
 
     assert assert_valid_protocol(result) == ["[MoveStatus] DeferMove"]
+    assert daemon.received == []
 
 
 class TestPayload:
@@ -215,17 +209,14 @@ class TestPayload:
 
         sent = daemon.received[0]
         assert sent["app"] == "radarr"
-        assert sent["library_path"] == "/library/Movie (2024)"
-        assert sent["season"] is None
-        assert sent["episodes"] == []
+        assert sent["source_path"] == "/downloads/rel/video.mkv"
+        assert sent["destination_path"] == "/library/Movie (2024)/Movie (2024).mkv"
 
-    def test_sonarr_payload_carries_episode_numbers(self, daemon: type[_Handler]) -> None:
+    def test_sonarr_payload(self, daemon: type[_Handler]) -> None:
         run_shim(url_for(daemon), app="sonarr")
 
         sent = daemon.received[0]
         assert sent["app"] == "sonarr"
-        assert sent["season"] == 1
-        assert sent["episodes"] == [2, 3]
         assert sent["transfer_mode"] == "HardLinkOrCopy"
 
     def test_paths_with_quotes_and_backslashes_survive_json_encoding(
@@ -244,26 +235,18 @@ class TestPayload:
 
         assert daemon.received[0]["source_path"] == cyrillic
 
-    def test_malicious_episode_numbers_are_sanitised(self, daemon: type[_Handler]) -> None:
-        """Episode numbers are interpolated into JSON, so they must be digits only."""
+    def test_a_malicious_transfer_mode_cannot_inject_keys(
+        self, daemon: type[_Handler]
+    ) -> None:
         run_shim(
             url_for(daemon),
             app="sonarr",
-            extra_env={"Sonarr_EpisodeFile_EpisodeNumbers": '2],"app":"evil","x":[3'},
+            extra_env={"Sonarr_TransferMode": '","app":"evil'},
         )
 
         sent = daemon.received[0]
         assert sent["app"] == "sonarr"
-        assert sent["episodes"] == [2, 3]
-
-    def test_malicious_season_is_sanitised(self, daemon: type[_Handler]) -> None:
-        run_shim(
-            url_for(daemon),
-            app="sonarr",
-            extra_env={"Sonarr_EpisodeFile_SeasonNumber": '1,"app":"evil"'},
-        )
-
-        assert daemon.received[0]["season"] == 1
+        assert sent["transfer_mode"] == '","app":"evil'
 
 
 def test_token_is_sent_when_configured(daemon: type[_Handler]) -> None:
@@ -286,8 +269,9 @@ def test_token_is_sent_when_configured(daemon: type[_Handler]) -> None:
 
 def test_shim_has_no_bashisms() -> None:
     """The *arr containers ship dash/busybox sh, not bash."""
-    text = SHIM.read_text(encoding="utf-8")
+    for shim in SHIMS.values():
+        text = shim.read_text(encoding="utf-8")
 
-    assert text.startswith("#!/bin/sh")
-    for bashism in (r"\[\[", r"\bfunction\s+\w+\s*\(", r"\$\(\(", r"\blocal\b"):
-        assert re.search(bashism, text) is None, f"bashism found: {bashism}"
+        assert text.startswith("#!/bin/sh")
+        for bashism in (r"\[\[", r"\bfunction\s+\w+\s*\(", r"\$\(\(", r"\blocal\b"):
+            assert re.search(bashism, text) is None, f"bashism in {shim.name}: {bashism}"

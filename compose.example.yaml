@@ -21,14 +21,10 @@ services:
       MUXARR_READ_ROOTS: /downloads:/media
       MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
       MUXARR_LOG_LEVEL: INFO
-      # Where the operation history lives. Without it history is in-memory only.
-      MUXARR_DATA_DIR: /data
-      MUXARR_HISTORY_RETENTION_DAYS: 90
       # Uncomment only if the library is on NFS/SMB or a union filesystem.
       # Staging elsewhere costs an extra full copy and loses atomicity.
       # MUXARR_SCRATCH_DIR: /scratch
     volumes:
-      - muxarr-data:/data
       - /srv/downloads:/downloads
       - /srv/media:/media
     networks: [arr]
@@ -52,7 +48,7 @@ services:
       - ./sonarr-config:/config
       - /srv/downloads:/downloads
       - /srv/media:/media
-      - ./scripts/muxarr-import.sh:/config/scripts/muxarr-import.sh:ro
+      - ./scripts/muxarr-import-sonarr.sh:/config/scripts/muxarr-import-sonarr.sh:ro
     ports:
       - "8989:8989"
     networks: [arr]
@@ -72,7 +68,7 @@ services:
       - ./radarr-config:/config
       - /srv/downloads:/downloads
       - /srv/media:/media
-      - ./scripts/muxarr-import.sh:/config/scripts/muxarr-import.sh:ro
+      - ./scripts/muxarr-import-radarr.sh:/config/scripts/muxarr-import-radarr.sh:ro
     ports:
       - "7878:7878"
     networks: [arr]
@@ -80,6 +76,3 @@ services:
 networks:
   arr:
     driver: bridge
-
-volumes:
-  muxarr-data:

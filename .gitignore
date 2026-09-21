@@ -13,3 +13,5 @@ htmlcov/
 
 # generated media fixtures; rebuilt by tests/fixtures/build_fixtures.py
 tests/fixtures/generated/
+
+**/node_modules/

@@ -8,6 +8,7 @@ import pytest
 
 from muxarr import pipeline, probe
 from muxarr.config import Settings
+from muxarr.discovery import EpisodeRef
 from muxarr.errors import MuxError, ProbeError
 from muxarr.models import MediaInfo, Track
 from muxarr.pipeline import ImportRequest, handle_import
@@ -43,12 +44,51 @@ def settings(tmp_path: Path) -> Settings:
     return Settings(read_roots=(tmp_path / "downloads", tmp_path / "library"))
 
 
+class TestEpisodeRef:
+    """Sonarr's numbers are not sent any more; they come off the filenames."""
+
+    def test_marker_is_read_from_the_release_name(self) -> None:
+        request = ImportRequest(
+            app="sonarr",
+            source_path=Path("/downloads/Show.S01E02E03.1080p-GRP.mkv"),
+            destination_path=Path("/library/Show/Season 01/Show - S01E02-E03.mkv"),
+        )
+
+        assert request.episode_ref == EpisodeRef(season=1, episodes=(2, 3))
+
+    def test_destination_is_the_fallback(self) -> None:
+        request = ImportRequest(
+            app="sonarr",
+            source_path=Path("/downloads/unparseable-release.mkv"),
+            destination_path=Path("/library/Show/Season 01/Show - S01E02.mkv"),
+        )
+
+        assert request.episode_ref == EpisodeRef(season=1, episodes=(2,))
+
+    def test_unmarked_names_give_none(self) -> None:
+        request = ImportRequest(
+            app="sonarr",
+            source_path=Path("/downloads/Show.2024-01-15.mkv"),
+            destination_path=Path("/library/Show/Show - 2024-01-15.mkv"),
+        )
+
+        assert request.episode_ref is None
+
+    def test_radarr_never_looks_for_an_episode(self) -> None:
+        request = ImportRequest(
+            app="radarr",
+            source_path=Path("/downloads/Movie.S01E02.mkv"),
+            destination_path=Path("/library/Movie (2024)/Movie (2024).mkv"),
+        )
+
+        assert request.episode_ref is None
+
+
 def request_for(layout: dict[str, Path], **overrides: Any) -> ImportRequest:
     base: dict[str, Any] = {
         "app": "radarr",
         "source_path": layout["source"],
         "destination_path": layout["destination"],
-        "library_path": layout["movie"],
     }
     base.update(overrides)
     return ImportRequest(**base)
@@ -92,15 +132,15 @@ class TestDeferPaths:
 
         assert outcome.move_status == "DeferMove"
 
-    def test_reentrancy_guard_when_source_is_inside_the_library(
-        self, layout: dict[str, Path], settings: Settings
+    def test_reimporting_our_own_output_finds_nothing_to_embed(
+        self, layout: dict[str, Path], settings: Settings, stub_probe: None
     ) -> None:
         """RenameRequested makes *arr re-invoke the script with our own output."""
         already = touch(layout["movie"] / "Some Movie (2024).mkv", b"muxed")
         outcome = handle_import(request_for(layout, source_path=already), settings)
 
         assert outcome.move_status == "DeferMove"
-        assert "already inside the library" in outcome.reason
+        assert "no external tracks" in outcome.reason
 
     def test_missing_source(self, layout: dict[str, Path], settings: Settings) -> None:
         outcome = handle_import(

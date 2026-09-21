@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from muxarr import pipeline, probe, server
 from muxarr.config import Settings
+from muxarr.discovery import EpisodeRef
 from muxarr.models import MediaInfo, Track
 from muxarr.pipeline import ImportOutcome
 from tests.conftest import touch
@@ -53,7 +54,6 @@ def payload(layout: dict[str, Path], **overrides: Any) -> dict[str, Any]:
         "app": "radarr",
         "source_path": str(layout["source"]),
         "destination_path": str(layout["destination"]),
-        "library_path": str(layout["movie"]),
     }
     body.update(overrides)
     return body
@@ -180,22 +180,25 @@ class TestImportEndpoint:
         with pytest.raises(RuntimeError):
             client.post("/v1/import", json=payload(layout), headers=auth())
 
-    def test_sonarr_episode_fields_round_trip(
+    def test_sonarr_episode_is_derived_from_the_filename(
         self, client: TestClient, layout: dict[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         seen: dict[str, Any] = {}
 
         def capture(request: Any, *_a: object, **_k: object) -> ImportOutcome:
-            seen["season"] = request.season
-            seen["episodes"] = request.episodes
+            seen["episode"] = request.episode_ref
             return ImportOutcome(move_status="DeferMove", reason="stub")
 
         monkeypatch.setattr(server, "handle_import", capture)
 
         client.post(
             "/v1/import",
-            json=payload(layout, app="sonarr", season=1, episodes=[2, 3]),
+            json=payload(
+                layout,
+                app="sonarr",
+                source_path=str(layout["release"] / "Show.S01E02E03.1080p-GRP.mkv"),
+            ),
             headers=auth(),
         )
 
-        assert seen == {"season": 1, "episodes": (2, 3)}
+        assert seen["episode"] == EpisodeRef(season=1, episodes=(2, 3))
