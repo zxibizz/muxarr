@@ -1,8 +1,12 @@
 """Find sidecar audio/subtitle files next to a downloaded video.
 
-Scanning is deliberately narrow: the video's own directory, plus conventionally
-named subtitle folders (``Subs/``, ``Subtitles/``) and one level beneath them.
-Walking a whole download tree would pull in tracks belonging to other releases.
+Release folders name their track directories arbitrarily -- ``Subs/``, but equally
+``RUS Sound [TO Dublyajnaya]`` or ``Надписи``. So rather than an allowlist of
+known names, every subdirectory two levels deep is scanned except an explicit
+deny-list of folders that hold unrelated media.
+
+The guard against pulling in another release's tracks is the episode marker: in a
+folder holding several videos, a sidecar must carry a matching ``SxxEyy``.
 
 The source folder is only ever read. Nothing here opens a file for writing.
 """
@@ -25,7 +29,30 @@ from muxarr.models import (
 
 log = logging.getLogger(__name__)
 
-SUBTITLE_DIR_NAMES = frozenset({"sub", "subs", "subtitle", "subtitles"})
+# Folders that contain media which is never part of the main video.
+EXCLUDED_DIR_NAMES = frozenset(
+    {
+        "artwork",
+        "bdmv",
+        "certificate",
+        "covers",
+        "extra",
+        "extras",
+        "featurette",
+        "featurettes",
+        "proof",
+        "sample",
+        "samples",
+        "scans",
+        "screens",
+        "screenshot",
+        "screenshots",
+        "trailer",
+        "trailers",
+    }
+)
+
+MAX_SCAN_DEPTH = 2
 
 # Matches S01E02 and multi-episode runs like S01E02E03 / S01E02-E03.
 _SXXEYY_RE = re.compile(r"s(?P<season>\d{1,3})(?P<episodes>(?:[._\- ]?e\d{1,4})+)", re.IGNORECASE)
@@ -52,30 +79,44 @@ def discover(
         return []
 
     sibling_video_count = _count_videos(root)
-    by_stem = _index_candidates(root)
 
     tracks: list[ExternalTrack] = []
-    for path in sorted(by_stem):
+    for path, context in sorted(_index_candidates(root)):
         if path == video_path:
             continue
         if not _belongs_to(path, episode=episode, sibling_video_count=sibling_video_count):
             continue
-        track = _to_external_track(path, video_stem=video_path.stem)
+        track = _to_external_track(path, video_stem=video_path.stem, context=context)
         if track is not None:
             tracks.append(track)
     return tracks
 
 
-def _index_candidates(root: Path) -> list[Path]:
-    """Files in ``root``, plus files in subtitle folders and their immediate children."""
-    candidates = list(_files_in(root))
+def _index_candidates(root: Path) -> list[tuple[Path, tuple[str, ...]]]:
+    """Every file within :data:`MAX_SCAN_DEPTH`, paired with its folder names.
+
+    Folder names are returned nearest-first, since they are what carries the
+    language for multi-dub releases.
+    """
+    candidates: list[tuple[Path, tuple[str, ...]]] = [(p, ()) for p in _files_in(root)]
+
     for child in _dirs_in(root):
-        if child.name.lower() not in SUBTITLE_DIR_NAMES:
+        if _is_excluded(child.name):
             continue
-        candidates.extend(_files_in(child))
+        candidates += [(p, (child.name,)) for p in _files_in(child)]
+
         for grandchild in _dirs_in(child):
-            candidates.extend(_files_in(grandchild))
+            if _is_excluded(grandchild.name):
+                continue
+            candidates += [
+                (p, (grandchild.name, child.name)) for p in _files_in(grandchild)
+            ]
+
     return candidates
+
+
+def _is_excluded(name: str) -> bool:
+    return name.lower().strip() in EXCLUDED_DIR_NAMES
 
 
 def _files_in(directory: Path) -> list[Path]:
@@ -98,7 +139,12 @@ def _count_videos(root: Path) -> int:
     return sum(1 for p in _files_in(root) if p.suffix.lower() in VIDEO_EXTENSIONS)
 
 
-def _to_external_track(path: Path, *, video_stem: str) -> ExternalTrack | None:
+def _to_external_track(
+    path: Path,
+    *,
+    video_stem: str,
+    context: tuple[str, ...] = (),
+) -> ExternalTrack | None:
     suffix = path.suffix.lower()
     kind: TrackKind
     companion: Path | None = None
@@ -118,7 +164,7 @@ def _to_external_track(path: Path, *, video_stem: str) -> ExternalTrack | None:
     else:
         return None
 
-    attrs = language.infer(path, video_stem=video_stem)
+    attrs = language.infer(path, video_stem=video_stem, context=context)
     return ExternalTrack(
         path=path,
         kind=kind,
@@ -126,6 +172,7 @@ def _to_external_track(path: Path, *, video_stem: str) -> ExternalTrack | None:
         name=attrs.title,
         forced=attrs.forced,
         hearing_impaired=attrs.hearing_impaired,
+        variant=attrs.variant,
         companion=companion,
     )
 
