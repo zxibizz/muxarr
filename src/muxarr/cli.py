@@ -37,7 +37,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     try:
-        handler = {"inspect": _cmd_inspect, "plan": _cmd_plan, "mux": _cmd_mux}[args.command]
+        handler = {
+            "inspect": _cmd_inspect,
+            "plan": _cmd_plan,
+            "mux": _cmd_mux,
+            "serve": _cmd_serve,
+        }[args.command]
         return handler(args)
     except MuxarrError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -65,6 +70,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="stage here instead of the destination directory (rarely a good idea)",
     )
 
+    sub.add_parser("serve", help="run the HTTP daemon (configured via MUXARR_* env vars)")
+
     return parser
 
 
@@ -90,6 +97,14 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     print(f"{info.path}  [{info.container}]")
     for track in info.tracks:
         print(f"  {_describe_track(track)}")
+    return 0
+
+
+def _cmd_serve(_args: argparse.Namespace) -> int:
+    # Imported lazily so the CLI still works without the `server` extra installed.
+    from muxarr.server import serve
+
+    serve()
     return 0
 
 
