@@ -1,6 +1,6 @@
 # Local development: API, worker and frontend in separate containers, all hot-reloading.
 #
-#   docker compose -f docker-compose.dev.yaml up --build
+#   docker compose -f compose.dev.yaml up --build
 #
 # UI on http://localhost:5173, API on http://localhost:8000.
 
