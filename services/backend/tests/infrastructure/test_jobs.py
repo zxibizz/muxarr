@@ -215,3 +215,46 @@ class TestPruning:
         await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
         assert await jobs.prune(-1) == 0
+
+
+class TestCounts:
+    async def test_an_empty_queue_reports_every_state(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        """A missing key would make the dashboard render a gap, not a zero."""
+        assert await jobs.counts_by_state() == {
+            "pending": 0,
+            "running": 0,
+            "succeeded": 0,
+            "failed": 0,
+        }
+
+    async def test_counts_follow_a_job_through_its_states(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        assert (await jobs.counts_by_state())["pending"] == 1
+
+        await jobs.claim_next()
+        counts = await jobs.counts_by_state()
+        assert counts["pending"] == 0
+        assert counts["running"] == 1
+
+        await jobs.succeed("job-1", OUTCOME, None)
+        counts = await jobs.counts_by_state()
+        assert counts["running"] == 0
+        assert counts["succeeded"] == 1
+
+    async def test_states_are_counted_independently(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.create_or_get("job-2", OTHER_FINGERPRINT, OTHER_REQUEST)
+        await jobs.fail("job-1", "boom")
+
+        assert await jobs.counts_by_state() == {
+            "pending": 1,
+            "running": 0,
+            "succeeded": 0,
+            "failed": 1,
+        }

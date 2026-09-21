@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, get_args
 
-from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from src.application.interfaces.jobs import JobConflictError, JobRecord
@@ -139,6 +139,15 @@ class SqlAlchemyJobRepository:
             )
             await session.commit()
             return int(result.rowcount or 0)
+
+    async def counts_by_state(self) -> dict[JobState, int]:
+        # Zero-filled from the Literal so the shape stays stable on an empty queue.
+        counts: dict[JobState, int] = dict.fromkeys(get_args(JobState), 0)
+        async with self._db.session() as session:
+            rows = await session.execute(select(Job.state, func.count()).group_by(Job.state))
+            for state, count in rows.all():
+                counts[cast("JobState", state)] = int(count)
+        return counts
 
     async def _finish(
         self,

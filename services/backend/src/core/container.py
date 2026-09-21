@@ -20,6 +20,7 @@ from src.application.use_cases.imports.await_job import AwaitJobUseCase
 from src.application.use_cases.imports.enqueue_import import EnqueueImportUseCase
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
+from src.application.use_cases.system.status import GetSystemStatusUseCase
 from src.db.session import DBManager
 from src.domain.paths import PathGuard
 from src.infrastructure.filesystem.placement import FilesystemPlacement
@@ -30,7 +31,7 @@ from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
 from src.infrastructure.mkvtoolnix.muxer import MkvmergeMuxer
 from src.infrastructure.probing import FallbackMediaProber
 from src.settings.config import Settings
-from src.worker.service import ImportWorker
+from src.worker.service import WORKER_STALE_AFTER, ImportWorker
 
 
 class AppContainer:
@@ -119,6 +120,15 @@ class AppContainer:
     @cached_property
     def clear_history(self) -> ClearHistoryUseCase:
         return ClearHistoryUseCase(self.history)
+
+    @cached_property
+    def system_status(self) -> GetSystemStatusUseCase:
+        return GetSystemStatusUseCase(
+            jobs=self.jobs,
+            worker_state=self.worker_state,
+            stale_after_seconds=WORKER_STALE_AFTER,
+            max_concurrent_muxes=self.settings.max_concurrent_muxes,
+        )
 
     async def shutdown(self) -> None:
         # Only touch the engine if something actually opened it.

@@ -14,6 +14,7 @@ when a mux may have half-written a file.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -76,6 +77,14 @@ class JobRepository(Protocol):
 
     async def prune(self, older_than_seconds: float) -> int:
         """Drop finished jobs past their TTL, returning how many."""
+        ...
+
+    async def counts_by_state(self) -> Mapping[JobState, int]:
+        """How many jobs sit in each state, with every state present.
+
+        Finished jobs are pruned on their TTL, so the terminal counts describe a
+        recent window rather than all time.
+        """
         ...
 
 
