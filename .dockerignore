@@ -13,5 +13,11 @@ build/
 .DS_Store
 
 
-web/node_modules/
-web/dist/
+services/frontend/node_modules/
+services/frontend/dist/
+
+# Never bake local state into an image.
+.env
+dev-media/
+muxarr-config/
+*.db

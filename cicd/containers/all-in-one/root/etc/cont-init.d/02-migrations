@@ -1,0 +1,8 @@
+#!/command/with-contenv sh
+# Runs before any service starts. With S6_BEHAVIOUR_IF_STAGE2_FAILS=2 a failure
+# here aborts the container rather than serving against an unmigrated schema.
+set -e
+
+cd /app
+exec s6-applyuidgid -u "${PUID:-1000}" -g "${PGID:-1000}" \
+    /app/.venv/bin/alembic upgrade head

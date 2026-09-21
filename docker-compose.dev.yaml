@@ -1,0 +1,62 @@
+# Local development: backend and frontend in separate containers, both hot-reloading.
+#
+#   docker compose -f docker-compose.dev.yaml up --build
+#
+# UI on http://localhost:5173, API on http://localhost:8000.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: backend
+    # The whole repo is mounted, not just services/backend: the shim contract
+    # tests reach back up to the repo-root scripts/ directory.
+    working_dir: /repo/services/backend
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn --factory src.api.app:build_app
+             --host 0.0.0.0 --port 8000 --reload --reload-dir src"
+    environment:
+      PYTHONPATH: /repo/services/backend
+      # Both roots must exist inside the container; see ./dev-media below.
+      MUXARR_READ_ROOTS: /downloads:/media
+      MUXARR_DB_URL: sqlite+aiosqlite:////config/muxarr.db
+      MUXARR_TOKEN: ${MUXARR_TOKEN:-dev-token}
+      MUXARR_LOG_LEVEL: DEBUG
+      # macOS/Windows bind mounts do not deliver inotify events.
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - .:/repo
+      - backend-config:/config
+      - ./dev-media/downloads:/downloads
+      - ./dev-media/media:/media
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: frontend
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+      VITE_WATCH_POLLING: "true"
+    volumes:
+      - ./services/frontend:/app
+      - frontend-node-modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-config:
+  frontend-node-modules:
