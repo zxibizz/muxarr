@@ -33,6 +33,19 @@ def test_blank_root_entries_are_ignored() -> None:
     assert settings.read_roots == (Path("/downloads"), Path("/library"))
 
 
+def test_root_entries_are_stripped_of_whitespace_and_quotes() -> None:
+    settings = Settings.from_env(
+        env(MUXARR_READ_ROOTS=f'  /downloads {os.pathsep} "/library"')
+    )
+
+    assert settings.read_roots == (Path("/downloads"), Path("/library"))
+
+
+def test_relative_roots_are_rejected() -> None:
+    with pytest.raises(ConfigError, match="must be absolute paths"):
+        Settings.from_env(env(MUXARR_READ_ROOTS="media"))
+
+
 def test_defaults() -> None:
     settings = Settings.from_env(env())
 
