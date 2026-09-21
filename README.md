@@ -109,6 +109,7 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_HOST` / `MUXARR_PORT` | `0.0.0.0` / `8710` | Bind address |
 | `MUXARR_MAX_CONCURRENT` | `1` | Simultaneous remuxes, in the worker |
 | `MUXARR_JOB_TTL` | `3600` | Seconds a finished job stays readable |
+| `MUXARR_HISTORY_MAX_RECORDS` | `200` | Newest operations kept; older ones are trimmed |
 | `MUXARR_MAX_POLL_WAIT` | `60` | Ceiling on how long one poll is held open |
 | `MUXARR_SCRATCH_DIR` | destination dir | Only change for NFS/SMB/union FS |
 | `MUXARR_DEDUPE` | `language_codec` | `off`, `language`, `language_codec` |

@@ -15,6 +15,7 @@ import pytest
 from src.application.interfaces.jobs import JobRecord
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
 from src.db.session import DBManager
+from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
 from src.worker.service import ImportWorker
@@ -55,12 +56,16 @@ def worker_state(db: DBManager) -> SqlAlchemyWorkerStateRepository:
 def build(
     jobs: SqlAlchemyJobRepository,
     worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
     runner: RecordingRunner,
+    history_max_records: int = 200,
 ) -> ImportWorker:
     return ImportWorker(
         jobs=jobs,
         worker_state=worker_state,
+        history=history,
         run_job=runner,  # type: ignore[arg-type]
+        history_max_records=history_max_records,
     )
 
 
@@ -72,12 +77,14 @@ async def run_briefly(worker: ImportWorker, seconds: float = 0.4) -> None:
 
 
 async def test_a_queued_job_is_picked_up(
-    jobs: SqlAlchemyJobRepository, worker_state: SqlAlchemyWorkerStateRepository
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
 ) -> None:
     await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
     runner = RecordingRunner(jobs)
 
-    await run_briefly(build(jobs, worker_state, runner))
+    await run_briefly(build(jobs, worker_state, history, runner))
 
     assert runner.seen == ["job-1"]
     found = await jobs.get("job-1")
@@ -86,24 +93,28 @@ async def test_a_queued_job_is_picked_up(
 
 
 async def test_the_heartbeat_is_written(
-    jobs: SqlAlchemyJobRepository, worker_state: SqlAlchemyWorkerStateRepository
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
 ) -> None:
     """A dead worker is otherwise indistinguishable from a slow mux."""
     assert await worker_state.last_seen() is None
 
-    await run_briefly(build(jobs, worker_state, RecordingRunner(jobs)))
+    await run_briefly(build(jobs, worker_state, history, RecordingRunner(jobs)))
 
     assert await worker_state.last_seen() is not None
 
 
 async def test_bookkeeping_failure_does_not_leave_a_job_running(
-    jobs: SqlAlchemyJobRepository, worker_state: SqlAlchemyWorkerStateRepository
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
 ) -> None:
     """Otherwise the shim polls a job nothing is working on until it times out."""
     await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
     runner = RecordingRunner(jobs, error=RuntimeError("bookkeeping exploded"))
 
-    await run_briefly(build(jobs, worker_state, runner))
+    await run_briefly(build(jobs, worker_state, history, runner))
 
     found = await jobs.get("job-1")
     assert found is not None
@@ -112,15 +123,41 @@ async def test_bookkeeping_failure_does_not_leave_a_job_running(
 
 
 async def test_startup_fails_jobs_left_behind_by_a_dead_worker(
-    jobs: SqlAlchemyJobRepository, worker_state: SqlAlchemyWorkerStateRepository
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
 ) -> None:
     """The mux may have half-written the destination, so the import must fail."""
     await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
     await jobs.claim_next()
 
-    await build(jobs, worker_state, RecordingRunner(jobs)).reconcile()
+    await build(jobs, worker_state, history, RecordingRunner(jobs)).reconcile()
 
     found = await jobs.get("job-1")
     assert found is not None
     assert found.state == "failed"
     assert "restarted" in (found.error or "")
+
+
+async def test_history_is_trimmed_to_the_cap_while_idle(
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
+) -> None:
+    """Nothing else ever deletes an operation, so the table would grow forever."""
+    for index in range(5):
+        await history.record(
+            app="radarr",
+            title=f"{index}.mkv",
+            move_status="DeferMove",
+            reason="no external tracks",
+            source_path=f"/downloads/{index}.mkv",
+            destination_path=f"/library/{index}.mkv",
+        )
+
+    await run_briefly(
+        build(jobs, worker_state, history, RecordingRunner(jobs), history_max_records=2)
+    )
+
+    page = await history.list()
+    assert [op.title for op in page.items] == ["4.mkv", "3.mkv"]

@@ -100,9 +100,11 @@ class AppContainer:
         return ImportWorker(
             jobs=self.jobs,
             worker_state=self.worker_state,
+            history=self.history,
             run_job=self.run_import_job,
             max_concurrent_muxes=self.settings.max_concurrent_muxes,
             job_ttl_seconds=self.settings.job_ttl_seconds,
+            history_max_records=self.settings.history_max_records,
         )
 
     @cached_property

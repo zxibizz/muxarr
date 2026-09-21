@@ -166,3 +166,19 @@ class TestMaintenance:
 
         assert await history.clear() == 2
         assert (await history.list()).total == 0
+
+    async def test_prune_keeps_the_newest_records(self, history: Store) -> None:
+        for index in range(5):
+            await add(history, title=f"{index}.mkv")
+
+        assert await history.prune(2) == 3
+        assert [op.title for op in (await history.list()).items] == ["4.mkv", "3.mkv"]
+
+    async def test_prune_below_the_cap_removes_nothing(self, history: Store) -> None:
+        await add(history)
+
+        assert await history.prune(200) == 0
+        assert (await history.list()).total == 1
+
+    async def test_prune_of_an_empty_history_is_a_no_op(self, history: Store) -> None:
+        assert await history.prune(200) == 0
