@@ -23,12 +23,14 @@ async def import_media(
     payload: ImportPayload,
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> JobModel:
-    """Queue an import and return immediately; the shim polls for the result.
+    """Queue an import and return immediately; the worker picks it up.
 
     Idempotent on ``job_id`` so the shim can retry a submission whose reply was
-    lost without starting the mux twice.
+    lost without queueing the mux twice.
     """
-    job = container.import_jobs.submit(payload.job_id, payload.fingerprint(), payload.to_request())
+    job = await container.enqueue_import.execute(
+        payload.job_id, payload.fingerprint(), payload.to_request()
+    )
     return JobModel.from_job(job)
 
 
@@ -38,7 +40,7 @@ async def get_job(
     container: Annotated[AppContainer, Depends(get_container)],
     wait: float = Query(0.0, ge=0),
 ) -> JobModel:
-    job = await container.import_jobs.wait(job_id, _clamp_wait(container, wait))
+    job = await container.await_job.execute(job_id, _clamp_wait(container, wait))
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown job")
     return JobModel.from_job(job)
@@ -57,7 +59,7 @@ async def get_job_protocol(
     refused". Encoding state in the body makes a missing state line mean exactly
     one thing -- transport failure, worth retrying.
     """
-    job = await container.import_jobs.wait(job_id, _clamp_wait(container, wait))
+    job = await container.await_job.execute(job_id, _clamp_wait(container, wait))
     if job is None:
         body = protocol.render_poll(protocol.STATE_UNKNOWN)
     elif job.state == "succeeded" and job.outcome is not None:

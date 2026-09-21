@@ -10,11 +10,13 @@ from httpx import AsyncClient
 from src.application.interfaces.history import HistoryRepository
 from src.core.container import AppContainer
 from src.infrastructure import probing
-from tests.api.conftest import VIDEO_ONLY, auth
+from tests.api.conftest import VIDEO_ONLY, auth, drain
 
 
-async def run_import(client: AsyncClient, layout: dict[str, Path]) -> dict[str, Any]:
-    """Queue an import and block until it settles."""
+async def run_import(
+    client: AsyncClient, container: AppContainer, layout: dict[str, Path]
+) -> dict[str, Any]:
+    """Queue an import, run the worker, and read the settled job."""
     job_id = uuid.uuid4().hex
     await client.post(
         "/v1/import",
@@ -26,6 +28,7 @@ async def run_import(client: AsyncClient, layout: dict[str, Path]) -> dict[str, 
         },
         headers=auth(),
     )
+    await drain(container)
     response = await client.get(f"/v1/jobs/{job_id}", params={"wait": 10}, headers=auth())
     body: dict[str, Any] = response.json()
     assert body["state"] in {"succeeded", "failed"}, f"job never settled: {body}"
@@ -153,10 +156,14 @@ class TestRecording:
         monkeypatch.setattr(probing, "probe", lambda _p: VIDEO_ONLY)
 
     async def test_deferred_imports_are_recorded(
-        self, client: AsyncClient, store: HistoryRepository, layout: dict[str, Path]
+        self,
+        client: AsyncClient,
+        container: AppContainer,
+        store: HistoryRepository,
+        layout: dict[str, Path],
     ) -> None:
         """Deferrals are the common outcome and the main thing the UI explains."""
-        await run_import(client, layout)
+        await run_import(client, container, layout)
 
         page = await store.list()
         assert page.total == 1
@@ -165,24 +172,33 @@ class TestRecording:
         assert page.items[0].title == "Movie.2024-GRP.mkv"
 
     async def test_duration_is_captured(
-        self, client: AsyncClient, store: HistoryRepository, layout: dict[str, Path]
+        self,
+        client: AsyncClient,
+        container: AppContainer,
+        store: HistoryRepository,
+        layout: dict[str, Path],
     ) -> None:
-        await run_import(client, layout)
+        await run_import(client, container, layout)
 
         items = (await store.list()).items
         assert items[0].duration_ms >= 0
         assert items[0].source_bytes == len(b"video")
 
     async def test_a_completed_job_reports_its_history_row(
-        self, client: AsyncClient, store: HistoryRepository, layout: dict[str, Path]
+        self,
+        client: AsyncClient,
+        container: AppContainer,
+        store: HistoryRepository,
+        layout: dict[str, Path],
     ) -> None:
-        job = await run_import(client, layout)
+        job = await run_import(client, container, layout)
 
         assert job["history_id"] == (await store.list()).items[0].id
 
     async def test_a_failing_history_write_does_not_break_the_import(
         self,
         client: AsyncClient,
+        container: AppContainer,
         store: HistoryRepository,
         layout: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
@@ -194,7 +210,7 @@ class TestRecording:
 
         monkeypatch.setattr(store, "record", boom)
 
-        job = await run_import(client, layout)
+        job = await run_import(client, container, layout)
 
         assert job["state"] == "succeeded"
         assert job["result"]["move_status"] == "DeferMove"

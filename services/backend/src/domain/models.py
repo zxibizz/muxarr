@@ -9,7 +9,7 @@ port of an existing table.
 
 from __future__ import annotations
 
-from sqlalchemy import Index, Integer, Text
+from sqlalchemy import Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.db import Base
@@ -43,3 +43,41 @@ class Operation(Base):
     source_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     dry_run: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+
+class Job(Base):
+    """One queued or completed import, handed from the API to the worker.
+
+    The id is supplied by the shim so a retried submission re-attaches to the
+    running mux instead of starting a second one.
+    """
+
+    __tablename__ = "jobs"
+    __table_args__ = (Index("idx_jobs_state_created", "state", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    # Digest of the request, so a reused id carrying a different import is a 409.
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+
+    app: Mapped[str] = mapped_column(Text, nullable=False)
+    source_path: Mapped[str] = mapped_column(Text, nullable=False)
+    destination_path: Mapped[str] = mapped_column(Text, nullable=False)
+    transfer_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="Move")
+    dry_run: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    history_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class WorkerState(Base):
+    """Single row; the worker's liveness as seen by the API process."""
+
+    __tablename__ = "worker_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_seen: Mapped[str] = mapped_column(Text, nullable=False)

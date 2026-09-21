@@ -25,17 +25,26 @@ scattered as sidecars, and the filename reflects the tracks actually in the file
 ## How it fits together
 
 ```
-Radarr/Sonarr  --exec-->  muxarr-import-*.sh  --HTTP-->  muxarr daemon
- (import)                 (in *arr container)            (owns mkvmerge)
+Radarr/Sonarr  --exec-->  muxarr-import-*.sh  --HTTP-->  muxarr API
+ (import)                 (in *arr container)            (queues the job)
       ^                                                        |
-      +---------- [MoveStatus] RenameRequested <---------------+
+      |                                                   jobs table
+      |                                                        |
+      |                                                        v
+      +---------- [MoveStatus] RenameRequested <--------  muxarr worker
+                                                          (owns mkvmerge)
 ```
 
+The API and the worker are separate processes. The API only queues work and
+reports on it; the worker claims a job, muxes, and writes the result back. That
+split means a worker crash or restart cannot take the API down with it, and a
+long mux never blocks the shim's polls.
+
 The shim queues the remux and then long-polls for the result: each request is
-held open by the daemon until the job changes state, so the shim learns about
+held open by the API until the job changes state, so the shim learns about
 completion within a second while no single request lives long enough for a
 reverse proxy to time it out. A dropped connection is simply retried against the
-same job id, which the daemon treats idempotently.
+same job id, which the API treats idempotently.
 
 There is one shim per app — `muxarr-import-radarr.sh` and
 `muxarr-import-sonarr.sh` — because each reads a different set of \*arr
@@ -84,6 +93,9 @@ local storage.
 4. **Check it.** `curl http://muxarr:8710/healthz` from inside the \*arr
    container, then import something and watch the muxarr logs.
 
+   > `worker_alive` in that response must be `true`. If it is not, imports will
+   > queue with nothing to run them and every one of them will eventually fail.
+
 ## Configuration
 
 All settings are environment variables on the **daemon**:
@@ -93,7 +105,7 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_READ_ROOTS` | *required* | Colon-separated paths muxarr may read |
 | `MUXARR_TOKEN` | *unset* | Bearer token; unauthenticated if unset |
 | `MUXARR_HOST` / `MUXARR_PORT` | `0.0.0.0` / `8710` | Bind address |
-| `MUXARR_MAX_CONCURRENT` | `1` | Simultaneous remuxes |
+| `MUXARR_MAX_CONCURRENT` | `1` | Simultaneous remuxes, in the worker |
 | `MUXARR_JOB_TTL` | `3600` | Seconds a finished job stays readable |
 | `MUXARR_MAX_POLL_WAIT` | `60` | Ceiling on how long one poll is held open |
 | `MUXARR_SCRATCH_DIR` | destination dir | Only change for NFS/SMB/union FS |
@@ -137,7 +149,8 @@ cd services/backend
 uv run python -m src.cli inspect video.mkv    # list tracks in a container
 uv run python -m src.cli plan    video.mkv    # show what would be embedded
 uv run python -m src.cli mux     video.mkv --out out.mkv
-uv run python -m src.cli serve                # run the daemon
+uv run python -m src.cli serve                # run the API
+uv run python -m src.worker                   # run the worker
 ```
 
 ## Development

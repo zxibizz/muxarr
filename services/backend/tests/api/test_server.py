@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import threading
 import uuid
 from dataclasses import replace
@@ -22,6 +23,7 @@ from tests.api.conftest import (
     _client_for,
     auth,
     await_job,
+    drain,
 )
 from tests.conftest import touch
 
@@ -44,14 +46,19 @@ def stub(container: AppContainer, fn: Any) -> StubHandler:
     return handler
 
 
-async def run_import(client: AsyncClient, body: dict[str, Any]) -> dict[str, Any]:
+async def run_import(
+    client: AsyncClient, container: AppContainer, body: dict[str, Any]
+) -> dict[str, Any]:
     submitted = await client.post("/v1/import", json=body, headers=auth())
     assert submitted.status_code == 202, submitted.text
+    await drain(container)
     return await await_job(client, body["job_id"])
 
 
-async def result_of(client: AsyncClient, body: dict[str, Any]) -> dict[str, Any]:
-    job = await run_import(client, body)
+async def result_of(
+    client: AsyncClient, container: AppContainer, body: dict[str, Any]
+) -> dict[str, Any]:
+    job = await run_import(client, container, body)
     assert job["state"] == "succeeded", job
     outcome: dict[str, Any] = job["result"]
     return outcome
@@ -107,6 +114,8 @@ class TestAuth:
         open_container = AppContainer(
             replace(settings, auth_token=None),
             history=container.history,
+            jobs=container.jobs,
+            worker_state=container.worker_state,
         )
         app = create_app(open_container.settings, open_container)
 
@@ -130,12 +139,13 @@ class TestSubmit:
     async def test_resubmitting_the_same_job_id_does_not_mux_twice(
         self, client: AsyncClient, container: AppContainer, layout: dict[str, Path]
     ) -> None:
-        """A retry after a lost reply must re-attach, not start a second mux."""
+        """A retry after a lost reply must re-attach, not queue a second mux."""
         handler = stub(container, lambda _r: ImportOutcome(move_status="DeferMove", reason="stub"))
         body = payload(layout)
 
         for _ in range(3):
             assert (await client.post("/v1/import", json=body, headers=auth())).status_code == 202
+        await drain(container)
         await await_job(client, body["job_id"])
 
         assert handler.calls == 1
@@ -178,18 +188,28 @@ class TestSubmit:
 
 class TestImportOutcome:
     async def test_defers_when_there_is_nothing_to_embed(
-        self, client: AsyncClient, layout: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+        self,
+        client: AsyncClient,
+        container: AppContainer,
+        layout: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(probing, "probe", lambda _p: VIDEO_ONLY)
 
-        assert (await result_of(client, payload(layout)))["move_status"] == "DeferMove"
+        result = await result_of(client, container, payload(layout))
+
+        assert result["move_status"] == "DeferMove"
 
     async def test_rejects_paths_outside_the_roots(
-        self, client: AsyncClient, layout: dict[str, Path], tmp_path: Path
+        self,
+        client: AsyncClient,
+        container: AppContainer,
+        layout: dict[str, Path],
+        tmp_path: Path,
     ) -> None:
         stray = touch(tmp_path / "elsewhere" / "video.mkv")
 
-        result = await result_of(client, payload(layout, source_path=str(stray)))
+        result = await result_of(client, container, payload(layout, source_path=str(stray)))
 
         assert result["move_status"] == "DeferMove"
         assert "path rejected" in result["reason"]
@@ -207,7 +227,7 @@ class TestImportOutcome:
         )
         stub(container, lambda _r: outcome)
 
-        result = await result_of(client, payload(layout))
+        result = await result_of(client, container, payload(layout))
 
         assert result["move_status"] == "RenameRequested"
         assert result["media_file"] == str(layout["destination"])
@@ -215,12 +235,16 @@ class TestImportOutcome:
         assert result["added_tracks"] == ["subtitles:Russian"]
 
     async def test_a_completed_job_links_to_its_history_row(
-        self, client: AsyncClient, layout: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+        self,
+        client: AsyncClient,
+        container: AppContainer,
+        layout: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(probing, "probe", lambda _p: VIDEO_ONLY)
         body = payload(layout)
 
-        job = await run_import(client, body)
+        job = await run_import(client, container, body)
 
         detail = await client.get(f"/v1/history/{job['history_id']}", headers=auth())
         assert detail.status_code == 200
@@ -236,7 +260,7 @@ class TestImportOutcome:
 
         stub(container, boom)
 
-        job = await run_import(client, payload(layout))
+        job = await run_import(client, container, payload(layout))
 
         assert job["state"] == "failed"
         assert job["result"] is None
@@ -245,12 +269,11 @@ class TestImportOutcome:
     async def test_sonarr_episode_is_derived_from_the_filename(
         self, client: AsyncClient, container: AppContainer, layout: dict[str, Path]
     ) -> None:
-        handler = stub(
-            container, lambda _r: ImportOutcome(move_status="DeferMove", reason="stub")
-        )
+        handler = stub(container, lambda _r: ImportOutcome(move_status="DeferMove", reason="stub"))
 
         await run_import(
             client,
+            container,
             payload(
                 layout,
                 app="sonarr",
@@ -290,6 +313,7 @@ class TestJobPolling:
         stub(container, lambda _r: outcome)
         body = payload(layout)
         await client.post("/v1/import", json=body, headers=auth())
+        await drain(container)
 
         response = await client.get(
             f"/v1/jobs/{body['job_id']}/protocol", params={"wait": 10}, headers=auth()
@@ -311,6 +335,7 @@ class TestJobPolling:
         stub(container, boom)
         body = payload(layout)
         await client.post("/v1/import", json=body, headers=auth())
+        await drain(container)
 
         response = await client.get(
             f"/v1/jobs/{body['job_id']}/protocol", params={"wait": 10}, headers=auth()
@@ -321,9 +346,11 @@ class TestJobPolling:
     async def test_poll_reports_running_while_the_mux_is_in_flight(
         self, client: AsyncClient, container: AppContainer, layout: dict[str, Path]
     ) -> None:
+        started = threading.Event()
         release = threading.Event()
 
         def blocking(_request: ImportRequest) -> ImportOutcome:
+            started.set()
             release.wait(timeout=10)
             return ImportOutcome(move_status="DeferMove", reason="stub")
 
@@ -331,12 +358,30 @@ class TestJobPolling:
         body = payload(layout)
         await client.post("/v1/import", json=body, headers=auth())
 
+        # The worker runs concurrently here, as it does in production; the mux
+        # is on a thread so the event loop keeps serving polls.
+        worker = asyncio.create_task(drain(container))
         try:
+            await asyncio.to_thread(started.wait, 10)
             response = await client.get(
                 f"/v1/jobs/{body['job_id']}/protocol", params={"wait": 0}, headers=auth()
             )
             assert response.text.splitlines() == ["[MuxarrState] running"]
         finally:
             release.set()
+            await worker
 
         await await_job(client, body["job_id"])
+
+    async def test_a_queued_job_polls_as_running(
+        self, client: AsyncClient, layout: dict[str, Path]
+    ) -> None:
+        """Nothing has claimed it yet, but the shim must keep waiting, not fail."""
+        body = payload(layout)
+        await client.post("/v1/import", json=body, headers=auth())
+
+        response = await client.get(
+            f"/v1/jobs/{body['job_id']}/protocol", params={"wait": 0}, headers=auth()
+        )
+
+        assert response.text.splitlines() == ["[MuxarrState] running"]
