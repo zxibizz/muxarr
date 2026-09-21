@@ -173,14 +173,14 @@ npm run dev
 Or the whole stack with hot reload on both sides:
 
 ```sh
-docker compose -f docker-compose.dev.yaml up --build
+docker compose -f compose.dev.yaml up --build
 ```
 
 Tests needing real `mkvmerge`/`ffmpeg` are marked and skipped when those tools
 are absent. The dev image has them, so the full suite runs there:
 
 ```sh
-docker compose -f docker-compose.dev.yaml run --rm backend pytest -q
+docker compose -f compose.dev.yaml run --rm backend pytest -q
 ```
 
 ### Frontend

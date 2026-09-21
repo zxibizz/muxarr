@@ -82,7 +82,7 @@ cd services/frontend
 npm run dev                    # proxies /v1 to VITE_API_PROXY_TARGET
 npm run build
 
-docker compose -f docker-compose.dev.yaml up --build
+docker compose -f compose.dev.yaml up --build
 docker build -f Dockerfile.all-in-one -t muxarr:latest .
 ```
 
@@ -90,7 +90,7 @@ The mux integration tests skip without mkvtoolnix and ffmpeg on PATH. The dev
 image ships both:
 
 ```bash
-docker compose -f docker-compose.dev.yaml run --rm backend pytest -q
+docker compose -f compose.dev.yaml run --rm backend pytest -q
 ```
 
 ## Container
