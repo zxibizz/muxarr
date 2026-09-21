@@ -7,15 +7,16 @@ thread; only the bookkeeping around it is async.
 from __future__ import annotations
 
 import asyncio
-import logging
 from pathlib import Path
 
 from src.application.interfaces.history import HistoryRepository
 from src.application.interfaces.jobs import Job, JobStore
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
+from src.core.logging import get_logger
+from src.domain.enums import LogComponent
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.USECASE_JOBS)
 
 
 class ImportJobService:
@@ -48,13 +49,13 @@ class ImportJobService:
         return self._jobs.get(job_id)
 
     async def _run(self, job: Job, request: ImportRequest) -> None:
-        log.info(
-            "import job=%s app=%s mode=%s source=%s",
-            job.id,
-            request.app,
-            request.transfer_mode,
-            request.source_path,
+        bound = log.bind(
+            job_id=job.id,
+            app=request.app,
+            mode=request.transfer_mode,
+            source=request.source_path,
         )
+        bound.info("import queued")
         try:
             self._jobs.start(job.id)
             async with self._semaphore:
@@ -63,10 +64,10 @@ class ImportJobService:
             # handle_import degrades to DeferMove internally, so reaching here
             # means the daemon itself broke; the shim turns it into a failed
             # import rather than letting *arr move a possibly half-muxed file.
-            log.exception("import job %s failed", job.id)
+            bound.exception("import job failed")
             self._jobs.fail(job.id, f"{type(exc).__name__}: {exc}")
             return
-        log.info("import result status=%s reason=%s", outcome.move_status, outcome.reason)
+        bound.info("import settled", status=outcome.move_status, reason=outcome.reason)
         self._jobs.succeed(job.id, outcome, await self._record(request, outcome))
 
     async def _record(self, request: ImportRequest, outcome: ImportOutcome) -> int | None:
@@ -92,5 +93,5 @@ class ImportJobService:
             )
         except Exception:
             # Losing a history row must never turn a good import into a failure.
-            log.exception("could not record history for %s", request.source_path)
+            log.exception("could not record history", source=request.source_path)
             return None

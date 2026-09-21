@@ -7,12 +7,12 @@
 from __future__ import annotations
 
 import argparse
-import logging
 import sys
 from pathlib import Path
 
 from src.application.interfaces.muxer import MuxPlan
 from src.application.interfaces.placement import PlacementPolicy
+from src.core.logging import configure_logging
 from src.domain import selection
 from src.domain.errors import MuxarrError
 from src.domain.media import ExternalTrack, MediaInfo, Track
@@ -28,17 +28,12 @@ from src.infrastructure.mkvtoolnix.muxer import run_mux
 from src.infrastructure.mkvtoolnix.probe import mkvmerge_version, supports_modern_flag_syntax
 from src.infrastructure.probing import probe
 
-log = logging.getLogger("muxarr")
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)s %(name)s: %(message)s",
-    )
+    configure_logging(level="DEBUG" if args.verbose else "INFO")
 
     try:
         handler = {

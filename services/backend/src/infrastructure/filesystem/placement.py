@@ -10,7 +10,6 @@ Two rules hold this together:
 
 from __future__ import annotations
 
-import logging
 import os
 import secrets
 import shutil
@@ -19,9 +18,11 @@ from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
 from src.application.interfaces.placement import PlacementPolicy
+from src.core.logging import get_logger
+from src.domain.enums import LogComponent
 from src.domain.errors import InsufficientSpaceError, PlacementError
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.INFRA_PLACEMENT)
 
 STAGING_SUFFIX = ".part"
 
@@ -84,10 +85,10 @@ def finalise(staging: Path, destination: Path, policy: PlacementPolicy | None = 
         return destination
 
     log.warning(
-        "scratch dir %s is on a different filesystem to %s; falling back to copy. "
+        "scratch dir is on a different filesystem to the destination; falling back to copy. "
         "This doubles IO and loses atomicity - prefer leaving scratch_dir unset.",
-        staging.parent,
-        destination.parent,
+        scratch=staging.parent,
+        destination=destination.parent,
     )
     _copy_then_replace(staging, destination)
     return destination
@@ -115,13 +116,13 @@ def copy_attributes(reference: Path, target: Path, policy: PlacementPolicy | Non
     try:
         stat = reference.stat()
     except OSError as exc:
-        log.warning("cannot stat %s for attribute copy: %s", reference, exc)
+        log.warning("cannot stat reference for attribute copy", path=reference, error=str(exc))
         return
 
     try:
         target.chmod(stat.st_mode & 0o7777)
     except OSError as exc:
-        log.warning("could not chmod %s: %s", target, exc)
+        log.warning("could not chmod output", path=target, error=str(exc))
 
     if not policy.preserve_ownership:
         return
@@ -129,14 +130,14 @@ def copy_attributes(reference: Path, target: Path, policy: PlacementPolicy | Non
         os.chown(target, stat.st_uid, stat.st_gid)
     except (OSError, AttributeError) as exc:
         # Expected whenever muxarr is not root and does not own the target.
-        log.debug("could not chown %s: %s", target, exc)
+        log.debug("could not chown output", path=target, error=str(exc))
 
 
 def _unlink_quietly(path: Path) -> None:
     try:
         path.unlink(missing_ok=True)
     except OSError as exc:
-        log.warning("could not remove staging file %s: %s", path, exc)
+        log.warning("could not remove staging file", path=path, error=str(exc))
 
 
 class FilesystemPlacement:

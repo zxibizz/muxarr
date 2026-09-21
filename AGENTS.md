@@ -52,7 +52,12 @@ alembic/                 under services/backend/
 12. **The shims must stay POSIX sh.** No `[[`, no `local`, no `function name()`;
     they run under dash and busybox ash. `tests/integration/test_shim.py` greps
     for the banned constructs.
-13. **Comments explain why, not what.**
+13. **Logging is loguru.** `get_logger(LogComponent.X)` at module level, context
+    as keyword arguments (`log.info("import settled", job_id=..., status=...)`),
+    never `%s` interpolation and never `logging.getLogger`. `LogComponent` is a
+    closed enum so a mistyped component fails a type check. stdlib records from
+    uvicorn, alembic and sqlalchemy are rerouted by `InterceptHandler`.
+14. **Comments explain why, not what.**
 
 ## Commands
 

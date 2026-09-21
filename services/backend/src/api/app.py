@@ -15,7 +15,6 @@ The built SPA is served by nginx in front of this process, not from here.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -25,9 +24,11 @@ from src import __version__
 from src.api.errors import register_error_handlers
 from src.api.routes import register_routes
 from src.core.container import AppContainer
+from src.core.logging import configure_logging, get_logger
+from src.domain.enums import LogComponent
 from src.settings.config import Settings
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.API)
 
 
 def create_app(settings: Settings, container: AppContainer | None = None) -> FastAPI:
@@ -54,7 +55,7 @@ def build_app() -> FastAPI:
     make every import of this module depend on a configured environment.
     """
     settings = Settings.from_env()
-    _configure_logging(settings)
+    _start_logging(settings)
     return create_app(settings)
 
 
@@ -62,15 +63,12 @@ def serve(settings: Settings | None = None) -> None:
     import uvicorn
 
     resolved = settings or Settings.from_env()
-    _configure_logging(resolved)
+    _start_logging(resolved)
     uvicorn.run(create_app(resolved), host=resolved.host, port=resolved.port)
 
 
-def _configure_logging(settings: Settings) -> None:
-    logging.basicConfig(
-        level=settings.log_level,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+def _start_logging(settings: Settings) -> None:
+    configure_logging(level=settings.log_level, serialize=settings.log_json)
     if settings.auth_token is None:
         log.warning(
             "MUXARR_TOKEN is not set; the API is unauthenticated. "

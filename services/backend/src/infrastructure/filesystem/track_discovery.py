@@ -13,16 +13,16 @@ The source folder is only ever read. Nothing here opens a file for writing.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
+from src.core.logging import get_logger
 from src.domain import language
 from src.domain.codecs import AUDIO_EXTENSIONS, SUBTITLE_EXTENSIONS, VIDEO_EXTENSIONS
-from src.domain.enums import TrackKind
+from src.domain.enums import LogComponent, TrackKind
 from src.domain.media import ExternalTrack
 from src.domain.naming import EpisodeRef, belongs_to
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.INFRA_DISCOVERY)
 
 # Folders that contain media which is never part of the main video.
 EXCLUDED_DIR_NAMES = frozenset(
@@ -103,7 +103,7 @@ def _files_in(directory: Path) -> list[Path]:
     try:
         return [p for p in directory.iterdir() if p.is_file() and not p.name.startswith(".")]
     except OSError as exc:
-        log.warning("could not list %s: %s", directory, exc)
+        log.warning("could not list directory", path=directory, error=str(exc))
         return []
 
 
@@ -111,7 +111,7 @@ def _dirs_in(directory: Path) -> list[Path]:
     try:
         return [p for p in directory.iterdir() if p.is_dir()]
     except OSError as exc:
-        log.warning("could not list %s: %s", directory, exc)
+        log.warning("could not list directory", path=directory, error=str(exc))
         return []
 
 
@@ -139,7 +139,7 @@ def _to_external_track(
         if suffix == ".idx":
             companion = path.with_suffix(".sub")
             if not companion.is_file():
-                log.debug("skipping %s: no matching .sub", path)
+                log.debug("skipping VobSub index with no matching .sub", path=path)
                 return None
     else:
         return None

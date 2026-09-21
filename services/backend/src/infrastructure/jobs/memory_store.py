@@ -11,13 +11,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import logging
 import time
 
 from src.application.interfaces.jobs import Job, JobConflictError, JobState
 from src.application.use_cases.imports.dto import ImportOutcome
+from src.core.logging import get_logger
+from src.domain.enums import LogComponent
 
-log = logging.getLogger(__name__)
+log = get_logger(LogComponent.INFRA_JOBS)
 
 DEFAULT_TTL_SECONDS = 60 * 60.0
 DEFAULT_MAX_JOBS = 1000
@@ -82,7 +83,7 @@ class InMemoryJobStore:
     ) -> None:
         job = self._jobs.get(job_id)
         if job is None:
-            log.warning("transition to %s for unknown job %s", state, job_id)
+            log.warning("transition for unknown job", job_id=job_id, state=state)
             return
         job.state = state
         job.updated_at = time.monotonic()
