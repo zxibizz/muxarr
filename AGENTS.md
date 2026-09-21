@@ -97,9 +97,11 @@ docker compose -f compose.dev.yaml run --rm backend pytest -q
 
 One image, four processes under s6-overlay: an `01-prepare` init hook that
 chowns `/config` to `PUID:PGID`, an `02-migrations` hook running
-`alembic upgrade head`, then `api` (uvicorn on 127.0.0.1:8000, started via the
-`build_app` ASGI factory), `worker` (`python -m src.worker`) and `nginx`
-(:8710, serving `/static` with SPA fallback and proxying `/v1` and `/healthz`).
+`alembic upgrade head`, an `03-shims` hook that republishes the \*arr shims into
+`/shims` when that volume is mounted, then `api` (uvicorn on 127.0.0.1:8000,
+started via the `build_app` ASGI factory), `worker` (`python -m src.worker`) and
+`nginx` (:8710, serving `/static` with SPA fallback and proxying `/v1` and
+`/healthz`).
 
 There is no module-level `app`: it would call `Settings.from_env()` at import
 time and make merely importing `src.api.app` depend on a configured
