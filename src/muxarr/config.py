@@ -99,7 +99,20 @@ class Settings:
 
 
 def _parse_roots(raw: str) -> tuple[Path, ...]:
-    return tuple(Path(part).expanduser() for part in raw.split(os.pathsep) if part.strip())
+    roots = []
+    for part in raw.split(os.pathsep):
+        # Surrounding whitespace and quotes survive some env_file/shell paths and
+        # would otherwise become a silently unmatchable (or cwd-relative) root.
+        cleaned = part.strip().strip("\"'").strip()
+        if not cleaned:
+            continue
+        root = Path(cleaned).expanduser()
+        if not root.is_absolute():
+            raise ConfigError(
+                f"MUXARR_READ_ROOTS entries must be absolute paths, got {part!r}"
+            )
+        roots.append(root)
+    return tuple(roots)
 
 
 def _parse_bool(source: Mapping[str, str], key: str, *, default: bool = False) -> bool:

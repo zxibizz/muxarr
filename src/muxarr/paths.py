@@ -41,12 +41,16 @@ class PathGuard:
     def from_roots(cls, roots: Sequence[Path]) -> PathGuard:
         return cls(read_roots=tuple(resolve(root) for root in roots))
 
+    def _roots_for_message(self) -> str:
+        return ", ".join(repr(str(root)) for root in self.read_roots) or "(none)"
+
     def check_read(self, path: Path) -> Path:
         """Resolve ``path`` and confirm it is readable, or raise."""
         resolved = resolve(path)
         if not any(is_within(resolved, root) for root in self.read_roots):
             raise PathNotAllowedError(
-                f"{path} resolves to {resolved}, which is outside every configured read root"
+                f"{path} resolves to {resolved}, which is outside every configured "
+                f"read root: {self._roots_for_message()}"
             )
         return resolved
 
@@ -56,7 +60,8 @@ class PathGuard:
         if not any(is_within(resolved, root) for root in self.read_roots):
             raise PathNotAllowedError(
                 f"destination {destination} resolves to {resolved}, "
-                "which is outside every configured read root"
+                "which is outside every configured read root: "
+                f"{self._roots_for_message()}"
             )
         if resolved in self.read_roots:
             raise PathNotAllowedError(f"destination {destination} is a configured root itself")
