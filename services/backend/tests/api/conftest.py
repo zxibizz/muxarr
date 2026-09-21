@@ -21,6 +21,8 @@ from src.core.container import AppContainer
 from src.db.session import DBManager
 from src.domain.media import MediaInfo, Track
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
+from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
+from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
 from src.settings.config import Settings
 from tests.conftest import touch
 
@@ -76,8 +78,27 @@ def settings(tmp_path: Path) -> Settings:
 
 @pytest.fixture
 async def container(settings: Settings, db: DBManager) -> AppContainer:
-    # The history override means the container never opens an engine of its own.
-    return AppContainer(settings, history=SqlAlchemyHistoryRepository(db))
+    # Every repository is pinned to the fixture's engine, so the container never
+    # opens a second (and separate) in-memory database of its own.
+    return AppContainer(
+        settings,
+        history=SqlAlchemyHistoryRepository(db),
+        jobs=SqlAlchemyJobRepository(db),
+        worker_state=SqlAlchemyWorkerStateRepository(db),
+    )
+
+
+async def drain(container: AppContainer) -> int:
+    """Run every queued job, as the worker process would.
+
+    Explicit rather than spawning a real worker: the tests then assert on a
+    settled queue instead of racing a poll interval.
+    """
+    ran = 0
+    while (job := await container.jobs.claim_next()) is not None:
+        await container.run_import_job.execute(job)
+        ran += 1
+    return ran
 
 
 @pytest.fixture
@@ -94,7 +115,7 @@ async def _client_for(app: FastAPI) -> AsyncIterator[AsyncClient]:
 
 
 async def await_job(client: AsyncClient, job_id: str) -> dict[str, Any]:
-    """Long-poll one job to completion."""
+    """Read one settled job."""
     response = await client.get(f"/v1/jobs/{job_id}", params={"wait": 10}, headers=auth())
     assert response.status_code == 200, response.text
     body: dict[str, Any] = response.json()

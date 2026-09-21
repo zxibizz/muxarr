@@ -6,6 +6,8 @@ case returns :class:`ImportOutcome`, and the shim protocol renders it.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,6 +15,12 @@ from src.domain.enums import App, MoveStatus
 from src.domain.naming import EpisodeRef, parse_episode_marker
 
 OUTPUT_SUFFIX = ".mkv"
+
+
+def fingerprint(payload: object) -> str:
+    """Stable digest of an import request, used to detect job id reuse."""
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)

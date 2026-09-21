@@ -7,9 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.application.interfaces.jobs import Job
-from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
-from src.infrastructure.jobs.memory_store import fingerprint
+from src.application.interfaces.jobs import JobRecord
+from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
 
 # Constrained so a job id cannot smuggle path separators into the URL or control
 # characters into the log.
@@ -65,7 +64,7 @@ class JobModel(BaseModel):
     history_id: int | None = None
 
     @classmethod
-    def from_job(cls, job: Job) -> JobModel:
+    def from_job(cls, job: JobRecord) -> JobModel:
         return cls(
             id=job.id,
             state=job.state,

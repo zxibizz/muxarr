@@ -1,190 +1,217 @@
-"""Unit tests for the in-memory job registry.
+"""The queue the API and the worker share.
 
-The shim's correctness rests on two properties here: a resubmitted job id must
-re-attach rather than queue a second mux, and a waiter must be woken the moment a
-job settles rather than on its next poll.
+The shim's correctness rests on two properties: a resubmitted job id must
+re-attach rather than queue a second mux, and a claim must be exclusive so two
+workers cannot mux the same import concurrently.
 """
 
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
-from src.application.interfaces.jobs import Job, JobConflictError
-from src.application.use_cases.imports.dto import ImportOutcome
+from src.application.interfaces.jobs import JobConflictError
+from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
+from src.db.session import DBManager
+from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 
-# Aliased: the concrete store is the subject here, `JobStore` is now the protocol.
-from src.infrastructure.jobs.memory_store import InMemoryJobStore as JobStore
-from src.infrastructure.jobs.memory_store import fingerprint
-
-OUTCOME = ImportOutcome(move_status="DeferMove", reason="stub")
+REQUEST = ImportRequest(
+    app="radarr",
+    source_path=Path("/downloads/a.mkv"),
+    destination_path=Path("/library/a.mkv"),
+)
+OTHER_REQUEST = ImportRequest(
+    app="radarr",
+    source_path=Path("/downloads/b.mkv"),
+    destination_path=Path("/library/b.mkv"),
+)
 
 FINGERPRINT = fingerprint({"source_path": "/downloads/a.mkv"})
 OTHER_FINGERPRINT = fingerprint({"source_path": "/downloads/b.mkv"})
 
+OUTCOME = ImportOutcome(move_status="DeferMove", reason="stub")
 
-async def _wait(store: JobStore, timeout: float) -> Job | None:
-    """Wait on job-1, with a hard ceiling so a missed wakeup fails fast."""
-    return await asyncio.wait_for(store.wait("job-1", timeout), timeout=5)
+
+@pytest.fixture
+def jobs(db: DBManager) -> SqlAlchemyJobRepository:
+    return SqlAlchemyJobRepository(db)
 
 
 class TestCreation:
-    def test_a_new_id_creates_a_job(self) -> None:
-        job, created = JobStore().create_or_get("job-1", FINGERPRINT)
+    async def test_a_new_id_creates_a_job(self, jobs: SqlAlchemyJobRepository) -> None:
+        job, created = await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
         assert created is True
+        assert job.id == "job-1"
         assert job.state == "pending"
 
-    def test_the_same_id_returns_the_same_job(self) -> None:
-        store = JobStore()
-        first, _ = store.create_or_get("job-1", FINGERPRINT)
-
-        second, created = store.create_or_get("job-1", FINGERPRINT)
+    async def test_the_same_id_and_request_re_attaches(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        first, _ = await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        second, created = await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
         assert created is False
-        assert second is first
+        assert second.id == first.id
 
-    def test_the_same_id_for_a_different_import_is_rejected(self) -> None:
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
+    async def test_the_same_id_with_a_different_request_conflicts(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
         with pytest.raises(JobConflictError):
-            store.create_or_get("job-1", OTHER_FINGERPRINT)
+            await jobs.create_or_get("job-1", OTHER_FINGERPRINT, OTHER_REQUEST)
 
-    def test_unknown_ids_read_as_none(self) -> None:
-        assert JobStore().get("nope") is None
+    async def test_the_request_round_trips(self, jobs: SqlAlchemyJobRepository) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
+        found = await jobs.get("job-1")
 
-class TestTransitions:
-    def test_success_carries_the_outcome_and_history_row(self) -> None:
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
+        assert found is not None
+        assert found.request == REQUEST
 
-        store.start("job-1")
-        store.succeed("job-1", OUTCOME, 42)
-
-        job = store.get("job-1")
-        assert job is not None
-        assert job.state == "succeeded"
-        assert job.outcome is OUTCOME
-        assert job.history_id == 42
-        assert job.done is True
-
-    def test_failure_carries_the_error(self) -> None:
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
-
-        store.fail("job-1", "mkvmerge exploded")
-
-        job = store.get("job-1")
-        assert job is not None
-        assert job.state == "failed"
-        assert job.error == "mkvmerge exploded"
-
-    def test_transitioning_an_unknown_job_is_a_no_op(self) -> None:
-        JobStore().succeed("nope", OUTCOME, None)
+    async def test_unknown_id_is_none(self, jobs: SqlAlchemyJobRepository) -> None:
+        assert await jobs.get("nope") is None
 
 
-class TestWait:
-    def test_waiting_on_an_unknown_job_returns_none(self) -> None:
-        assert asyncio.run(JobStore().wait("nope", 0.1)) is None
+class TestClaiming:
+    async def test_claims_the_oldest_pending_job(self, jobs: SqlAlchemyJobRepository) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.create_or_get("job-2", OTHER_FINGERPRINT, OTHER_REQUEST)
 
-    def test_an_already_finished_job_returns_immediately(self) -> None:
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
-        store.succeed("job-1", OUTCOME, None)
+        claimed = await jobs.claim_next()
 
-        job = asyncio.run(_wait(store, 30))
+        assert claimed is not None
+        assert claimed.id == "job-1"
+        assert claimed.state == "running"
 
-        assert job is not None
-        assert job.state == "succeeded"
+    async def test_an_empty_queue_claims_nothing(self, jobs: SqlAlchemyJobRepository) -> None:
+        assert await jobs.claim_next() is None
 
-    def test_a_waiter_wakes_as_soon_as_the_job_settles(self) -> None:
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
+    async def test_a_claimed_job_is_not_claimed_twice(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
-        async def scenario() -> Job | None:
-            async def finish_shortly() -> None:
-                await asyncio.sleep(0.05)
-                store.succeed("job-1", OUTCOME, None)
+        assert await jobs.claim_next() is not None
+        assert await jobs.claim_next() is None
 
-            async with asyncio.TaskGroup() as group:
-                group.create_task(finish_shortly())
-                # Would block for the full 30s if the wakeup were missed.
-                waiter = group.create_task(_wait(store, 30))
-            return waiter.result()
+    async def test_concurrent_claims_each_get_a_distinct_job(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        """Two workers must never mux the same import."""
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.create_or_get("job-2", OTHER_FINGERPRINT, OTHER_REQUEST)
 
-        job = asyncio.run(scenario())
-        assert job is not None
-        assert job.state == "succeeded"
+        claimed = await asyncio.gather(*(jobs.claim_next() for _ in range(4)))
 
-    def test_an_intermediate_transition_does_not_end_the_wait(self) -> None:
-        """'running' is not terminal; a waiter must keep waiting through it."""
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
-
-        async def scenario() -> Job | None:
-            async def progress() -> None:
-                await asyncio.sleep(0.02)
-                store.start("job-1")
-                await asyncio.sleep(0.02)
-                store.succeed("job-1", OUTCOME, None)
-
-            async with asyncio.TaskGroup() as group:
-                group.create_task(progress())
-                waiter = group.create_task(_wait(store, 30))
-            return waiter.result()
-
-        job = asyncio.run(scenario())
-        assert job is not None
-        assert job.state == "succeeded"
-
-    def test_a_still_running_job_is_returned_when_the_wait_expires(self) -> None:
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
-        store.start("job-1")
-
-        job = asyncio.run(store.wait("job-1", 0.05))
-
-        assert job is not None
-        assert job.state == "running"
-
-    def test_a_zero_wait_polls_without_blocking(self) -> None:
-        store = JobStore()
-        store.create_or_get("job-1", FINGERPRINT)
-
-        job = asyncio.run(_wait(store, 0))
-
-        assert job is not None
-        assert job.state == "pending"
+        ids = sorted(job.id for job in claimed if job is not None)
+        assert ids == ["job-1", "job-2"]
 
 
-class TestEviction:
-    def test_finished_jobs_expire(self) -> None:
-        store = JobStore(ttl_seconds=0)
-        store.create_or_get("job-1", FINGERPRINT)
-        store.succeed("job-1", OUTCOME, None)
+class TestCompletion:
+    async def test_succeed_stores_the_outcome_and_history_id(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.succeed("job-1", OUTCOME, 42)
 
-        assert store.get("job-1") is None
+        found = await jobs.get("job-1")
 
-    def test_unfinished_jobs_never_expire(self) -> None:
-        """Evicting a running mux would make the shim fail a healthy import."""
-        store = JobStore(ttl_seconds=0)
-        store.create_or_get("job-1", FINGERPRINT)
-        store.start("job-1")
+        assert found is not None
+        assert found.state == "succeeded"
+        assert found.done is True
+        assert found.outcome == OUTCOME
+        assert found.history_id == 42
 
-        assert store.get("job-1") is not None
+    async def test_a_full_outcome_round_trips(self, jobs: SqlAlchemyJobRepository) -> None:
+        """The API renders the protocol from this, so every field has to survive."""
+        rich = ImportOutcome(
+            move_status="RenameRequested",
+            reason="embedded 1 external track(s)",
+            media_file=Path("/library/a.mkv"),
+            extra_files=(Path("/downloads/leftover.srt"),),
+            prevent_extra_import=True,
+            added_tracks=("subtitles:Russian",),
+            rejected_tracks=({"track": "eng.srt", "reason": "already present"},),
+            duration_ms=1234,
+            source_bytes=100,
+            output_bytes=120,
+        )
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.succeed("job-1", rich, None)
 
-    def test_the_oldest_finished_jobs_go_first_when_over_capacity(self) -> None:
-        store = JobStore(max_jobs=2)
-        for index in range(4):
-            job_id = f"job-{index}"
-            store.create_or_get(job_id, FINGERPRINT)
-            store.succeed(job_id, OUTCOME, None)
+        found = await jobs.get("job-1")
 
-        store.create_or_get("job-fresh", FINGERPRINT)
+        assert found is not None
+        assert found.outcome == rich
 
-        assert store.get("job-0") is None
-        assert store.get("job-3") is not None
-        assert store.get("job-fresh") is not None
+    async def test_fail_stores_the_error(self, jobs: SqlAlchemyJobRepository) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.fail("job-1", "RuntimeError: boom")
+
+        found = await jobs.get("job-1")
+
+        assert found is not None
+        assert found.state == "failed"
+        assert found.error == "RuntimeError: boom"
+
+
+class TestReconciliation:
+    async def test_interrupted_jobs_are_failed(self, jobs: SqlAlchemyJobRepository) -> None:
+        """A row left running died with its worker; the shim must see an error."""
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.claim_next()
+
+        assert await jobs.fail_running("worker restarted") == 1
+
+        found = await jobs.get("job-1")
+        assert found is not None
+        assert found.state == "failed"
+
+    async def test_queued_jobs_are_left_alone(self, jobs: SqlAlchemyJobRepository) -> None:
+        """Nothing has run them yet, and the starting worker is about to."""
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+
+        assert await jobs.fail_running("worker restarted") == 0
+
+        found = await jobs.get("job-1")
+        assert found is not None
+        assert found.state == "pending"
+
+    async def test_finished_jobs_are_left_alone(self, jobs: SqlAlchemyJobRepository) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.succeed("job-1", OUTCOME, None)
+
+        assert await jobs.fail_running("worker restarted") == 0
+
+        found = await jobs.get("job-1")
+        assert found is not None
+        assert found.state == "succeeded"
+
+
+class TestPruning:
+    async def test_fresh_finished_jobs_survive(self, jobs: SqlAlchemyJobRepository) -> None:
+        """Evicting a job the shim has not read yet fails a good import."""
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.succeed("job-1", OUTCOME, None)
+
+        assert await jobs.prune(3600) == 0
+
+    async def test_expired_finished_jobs_are_dropped(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+        await jobs.succeed("job-1", OUTCOME, None)
+
+        assert await jobs.prune(-1) == 1
+        assert await jobs.get("job-1") is None
+
+    async def test_unfinished_jobs_are_never_pruned(
+        self, jobs: SqlAlchemyJobRepository
+    ) -> None:
+        await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+
+        assert await jobs.prune(-1) == 0

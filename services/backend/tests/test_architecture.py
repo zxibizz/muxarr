@@ -19,6 +19,9 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
     "domain": ("src.api", "src.application", "src.infrastructure", "fastapi", "sqlalchemy"),
     "application": ("src.api", "src.infrastructure", "fastapi", "sqlalchemy"),
     "infrastructure": ("src.api", "fastapi"),
+    # The worker is a separate process; dragging the web stack in would mean
+    # the two could no longer be deployed apart.
+    "worker": ("src.api", "fastapi", "uvicorn"),
 }
 
 EXEMPT = {"domain/models.py"}

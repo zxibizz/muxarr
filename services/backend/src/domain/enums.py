@@ -21,6 +21,10 @@ MoveStatus = Literal["DeferMove", "MoveComplete", "RenameRequested"]
 
 App = Literal["radarr", "sonarr"]
 
+JobState = Literal["pending", "running", "succeeded", "failed"]
+
+TERMINAL_JOB_STATES: frozenset[str] = frozenset({"succeeded", "failed"})
+
 
 class LogComponent(StrEnum):
     """Which part of the codebase wrote a log record.
@@ -32,6 +36,7 @@ class LogComponent(StrEnum):
 
     API = "api"
     CLI = "cli"
+    WORKER = "worker"
 
     USECASE_IMPORT = "usecase.import"
     USECASE_JOBS = "usecase.jobs"

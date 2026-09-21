@@ -1,6 +1,6 @@
-"""Queue an import and run it off the event loop.
+"""Run one claimed import. Runs in the worker process.
 
-The mux itself is synchronous and can run for hours, so it executes on a worker
+The mux itself is synchronous and can take hours, so it executes on a worker
 thread; only the bookkeeping around it is async.
 """
 
@@ -10,7 +10,7 @@ import asyncio
 from pathlib import Path
 
 from src.application.interfaces.history import HistoryRepository
-from src.application.interfaces.jobs import Job, JobStore
+from src.application.interfaces.jobs import JobRecord, JobRepository
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
 from src.core.logging import get_logger
@@ -19,56 +19,38 @@ from src.domain.enums import LogComponent
 log = get_logger(LogComponent.USECASE_JOBS)
 
 
-class ImportJobService:
+class RunImportJobUseCase:
     def __init__(
         self,
         *,
-        jobs: JobStore,
+        jobs: JobRepository,
         history: HistoryRepository,
         handler: HandleImportUseCase,
-        max_concurrent_muxes: int = 1,
     ) -> None:
         self._jobs = jobs
         self._history = history
         self._handler = handler
-        # One mux at a time by default; concurrent remuxes on one spindle are
-        # slower than running them back to back.
-        self._semaphore = asyncio.Semaphore(max_concurrent_muxes)
 
-    def submit(self, job_id: str, fingerprint: str, request: ImportRequest) -> Job:
-        """Register the job and start it if this call created it."""
-        job, created = self._jobs.create_or_get(job_id, fingerprint)
-        if created:
-            job.task = asyncio.create_task(self._run(job, request))
-        return job
-
-    async def wait(self, job_id: str, timeout: float) -> Job | None:
-        return await self._jobs.wait(job_id, timeout)
-
-    def get(self, job_id: str) -> Job | None:
-        return self._jobs.get(job_id)
-
-    async def _run(self, job: Job, request: ImportRequest) -> None:
+    async def execute(self, job: JobRecord) -> None:
+        request = job.request
         bound = log.bind(
             job_id=job.id,
             app=request.app,
             mode=request.transfer_mode,
             source=request.source_path,
         )
-        bound.info("import queued")
+        bound.info("import started")
         try:
-            self._jobs.start(job.id)
-            async with self._semaphore:
-                outcome = await asyncio.to_thread(self._handler.execute, request)
+            outcome = await asyncio.to_thread(self._handler.execute, request)
         except Exception as exc:
             # handle_import degrades to DeferMove internally, so reaching here
             # means the daemon itself broke; the shim turns it into a failed
             # import rather than letting *arr move a possibly half-muxed file.
             bound.exception("import job failed")
-            self._jobs.fail(job.id, f"{type(exc).__name__}: {exc}")
+            await self._jobs.fail(job.id, f"{type(exc).__name__}: {exc}")
             return
         bound.info("import settled", status=outcome.move_status, reason=outcome.reason)
-        self._jobs.succeed(job.id, outcome, await self._record(request, outcome))
+        await self._jobs.succeed(job.id, outcome, await self._record(request, outcome))
 
     async def _record(self, request: ImportRequest, outcome: ImportOutcome) -> int | None:
         episode = request.episode_ref
