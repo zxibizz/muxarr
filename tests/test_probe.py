@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from muxarr import probe as probe_module
 from muxarr.errors import ProbeError
+from muxarr.models import MediaInfo
 from muxarr.probe import (
     MODERN_FLAG_SYNTAX_MIN_VERSION,
     parse_ffprobe_json,
@@ -128,3 +130,51 @@ def test_invalid_json_raises_probe_error() -> None:
 )
 def test_flag_syntax_detection(version: tuple[int, int] | None, expected: bool) -> None:
     assert supports_modern_flag_syntax(version) is expected
+
+
+class TestProbeErrorReporting:
+    """An unparseable file must not be reported as a missing tool."""
+
+    def test_reports_the_real_failure_when_a_backend_exists(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        target = tmp_path / "broken.mkv"
+        target.write_bytes(b"not a container")
+
+        monkeypatch.setattr(probe_module, "has_tool", lambda name: name == "mkvmerge")
+
+        def fail(_path: Path) -> MediaInfo:
+            raise ProbeError("cannot be parsed")
+
+        monkeypatch.setattr(probe_module, "probe_with_mkvmerge", fail)
+
+        with pytest.raises(ProbeError, match="mkvmerge: cannot be parsed"):
+            probe_module.probe(target)
+
+    def test_reports_a_missing_backend_only_when_nothing_is_installed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        target = tmp_path / "video.mkv"
+        target.write_bytes(b"x")
+
+        monkeypatch.setattr(probe_module, "has_tool", lambda _name: False)
+
+        with pytest.raises(ProbeError, match="no probe backend available"):
+            probe_module.probe(target)
+
+    def test_falls_back_to_ffprobe_when_mkvmerge_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        target = tmp_path / "odd.ts"
+        target.write_bytes(b"x")
+        expected = MediaInfo(path=target, container="mpegts", tracks=())
+
+        monkeypatch.setattr(probe_module, "has_tool", lambda _name: True)
+
+        def fail(_path: Path) -> MediaInfo:
+            raise ProbeError("unsupported")
+
+        monkeypatch.setattr(probe_module, "probe_with_mkvmerge", fail)
+        monkeypatch.setattr(probe_module, "probe_with_ffprobe", lambda _path: expected)
+
+        assert probe_module.probe(target) is expected

@@ -12,17 +12,20 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
+from dataclasses import asdict
 from functools import partial
 from pathlib import Path
 from typing import Annotated, Literal
 
 import anyio.to_thread
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from muxarr import __version__
+from muxarr import __version__, history
 from muxarr.config import Settings
+from muxarr.history import HistoryStore
 from muxarr.paths import PathGuard
 from muxarr.pipeline import ImportOutcome, ImportRequest, handle_import
 from muxarr.protocol import render_text
@@ -77,12 +80,57 @@ class Health(BaseModel):
     status: Literal["ok"] = "ok"
     version: str
     read_roots: list[str]
+    history_ephemeral: bool = False
+    auth_required: bool = False
 
 
-def create_app(settings: Settings) -> FastAPI:
+class OperationModel(BaseModel):
+    id: int
+    created_at: str
+    app: str
+    title: str
+    move_status: str
+    reason: str
+    source_path: str
+    destination_path: str
+    library_path: str
+    media_file: str | None = None
+    transfer_mode: str = ""
+    season: int | None = None
+    episodes: list[int] = Field(default_factory=list)
+    added_tracks: list[str] = Field(default_factory=list)
+    rejected_tracks: list[dict[str, str]] = Field(default_factory=list)
+    duration_ms: int = 0
+    source_bytes: int | None = None
+    output_bytes: int | None = None
+    dry_run: bool = False
+
+
+class HistoryPage(BaseModel):
+    items: list[OperationModel]
+    total: int
+    limit: int
+    offset: int
+
+
+class StatsModel(BaseModel):
+    total: int
+    muxed: int
+    deferred: int
+    tracks_added: int
+    last_24h: int
+
+
+def _title_for(request: ImportRequest) -> str:
+    return Path(request.source_path).name
+
+
+def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI:
     app = FastAPI(title="muxarr", version=__version__)
     guard = PathGuard.from_roots(settings.read_roots)
     semaphore = asyncio.Semaphore(settings.max_concurrent_muxes)
+    history_store = store or history.open_store(settings.data_dir)
+    history_store.prune(settings.history_retention_days)
 
     def authorise(authorization: Annotated[str | None, Header()] = None) -> None:
         if settings.auth_token is None:
@@ -98,7 +146,53 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/healthz", response_model=Health)
     def healthz() -> Health:
-        return Health(version=__version__, read_roots=[str(r) for r in guard.read_roots])
+        return Health(
+            version=__version__,
+            read_roots=[str(r) for r in guard.read_roots],
+            history_ephemeral=history_store.ephemeral,
+            auth_required=settings.auth_token is not None,
+        )
+
+    @app.get(
+        "/v1/history",
+        response_model=HistoryPage,
+        dependencies=[Depends(authorise)],
+    )
+    def list_history(
+        limit: int = Query(50, ge=1, le=history.MAX_PAGE_SIZE),
+        offset: int = Query(0, ge=0),
+        move_status: str | None = None,
+        app_name: str | None = Query(None, alias="app"),
+        q: str | None = None,
+    ) -> HistoryPage:
+        page = history_store.list(
+            limit=limit, offset=offset, status=move_status, app=app_name, query=q
+        )
+        return HistoryPage(
+            items=[OperationModel(**asdict(op)) for op in page.items],
+            total=page.total,
+            limit=page.limit,
+            offset=page.offset,
+        )
+
+    @app.get(
+        "/v1/history/{operation_id}",
+        response_model=OperationModel,
+        dependencies=[Depends(authorise)],
+    )
+    def get_operation(operation_id: int) -> OperationModel:
+        found = history_store.get(operation_id)
+        if found is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        return OperationModel(**asdict(found))
+
+    @app.delete("/v1/history", dependencies=[Depends(authorise)])
+    def clear_history() -> dict[str, int]:
+        return {"deleted": history_store.clear()}
+
+    @app.get("/v1/stats", response_model=StatsModel, dependencies=[Depends(authorise)])
+    def get_stats() -> StatsModel:
+        return StatsModel(**asdict(history_store.stats()))
 
     @app.post(
         "/v1/import",
@@ -135,9 +229,50 @@ def create_app(settings: Settings) -> FastAPI:
                 partial(handle_import, request, settings, guard)
             )
         log.info("import result status=%s reason=%s", outcome.move_status, outcome.reason)
+        _record(request, outcome)
         return outcome
 
+    def _record(request: ImportRequest, outcome: ImportOutcome) -> None:
+        try:
+            history_store.record(
+                app=request.app,
+                title=_title_for(request),
+                move_status=outcome.move_status,
+                reason=outcome.reason,
+                source_path=str(request.source_path),
+                destination_path=str(request.destination_path),
+                library_path=str(request.library_path),
+                media_file=str(outcome.media_file) if outcome.media_file else None,
+                transfer_mode=request.transfer_mode,
+                season=request.season,
+                episodes=request.episodes,
+                added_tracks=outcome.added_tracks,
+                rejected_tracks=outcome.rejected_tracks,
+                duration_ms=outcome.duration_ms,
+                source_bytes=outcome.source_bytes,
+                output_bytes=outcome.output_bytes,
+                dry_run=request.dry_run,
+            )
+        except Exception:
+            # Losing a history row must never turn a good import into a failure.
+            log.exception("could not record history for %s", request.source_path)
+
+    _mount_web_ui(app, settings)
     return app
+
+
+def _mount_web_ui(app: FastAPI, settings: Settings) -> None:
+    """Serve the built SPA, if present.
+
+    Mounted last on purpose: mounts are matched in registration order, so a mount
+    at "/" added earlier would shadow every API route.
+    """
+    web_dir = settings.web_dir or Path("/app/web")
+    if not (web_dir / "index.html").is_file():
+        log.info("no web UI at %s; serving API only", web_dir)
+        return
+    app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
+    log.info("serving web UI from %s", web_dir)
 
 
 def serve(settings: Settings | None = None) -> None:
