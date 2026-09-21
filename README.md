@@ -3,10 +3,10 @@
 Embeds external audio and subtitle tracks into video containers at the moment
 Radarr/Sonarr import a download, using the **Import Using Script** hook.
 
-When a release ships `Subs/2_English.srt` or a separate `.ac3` dub alongside the
-video, muxarr remuxes them into a single MKV as the file lands in your library —
-so the tracks are embedded rather than scattered as sidecars, and the filename
-reflects the tracks that are actually in the file.
+When a release ships `Subs/2_English.srt`, a separate `.ac3` dub, or a folder of
+alternate dubs like `RUS Sound [Group]/`, muxarr remuxes them into a single MKV
+as the file lands in your library — so the tracks are embedded rather than
+scattered as sidecars, and the filename reflects the tracks actually in the file.
 
 ## Design rules
 
@@ -15,22 +15,73 @@ reflects the tracks that are actually in the file.
 - **The download folder is read-only.** muxarr never writes, renames or deletes
   anything on the source side, in any transfer mode. Cleanup of the original
   stays with your download client's Completed Download Handling.
-- **Fail safe.** Any error at all degrades to `DeferMove`, and Radarr/Sonarr
-  perform a completely normal import. The shim always exits 0.
+- **Fail safe.** Any error degrades to `DeferMove`, and Radarr/Sonarr perform a
+  completely normal import. The shim always exits 0.
 - **Staging lives in the destination directory**, so the final step is an atomic
   rename rather than a cross-device copy.
 
-## Layout
+## How it fits together
 
-| Path | Role |
-| --- | --- |
-| `src/muxarr/probe.py` | container inspection via `mkvmerge -J`, `ffprobe` fallback |
-| `src/muxarr/discovery.py` | find sidecar files next to the download |
-| `src/muxarr/language.py` | infer language + forced/SDH flags from filenames |
-| `src/muxarr/selection.py` | drop tracks already present, order the rest |
-| `src/muxarr/mux.py` | build and run the `mkvmerge` command |
-| `src/muxarr/placement.py` | free-space check, atomic placement, permissions |
-| `src/muxarr/cli.py` | `muxarr inspect` / `plan` / `mux` |
+```
+Radarr/Sonarr  --exec-->  muxarr-import.sh  --HTTP-->  muxarr daemon
+ (import)                 (in *arr container)          (owns mkvmerge)
+      ^                                                      |
+      +---------- [MoveStatus] RenameRequested <-------------+
+```
+
+The shim is dependency-free POSIX `sh` (needs only `curl` or `wget`). All the
+heavy dependencies live in the muxarr container.
+
+## Setup
+
+1. **Deploy.** Copy `compose.example.yaml` to `compose.yaml`, set `MUXARR_TOKEN`
+   in a `.env` file, and adjust the volume paths.
+
+   > Every media path must be mounted at the **same path** in the \*arr
+   > containers and in muxarr. Radarr/Sonarr pass absolute paths; if they mean
+   > different things in each container, muxarr rejects them and defers.
+
+2. **Mount the shim** into the \*arr container (the example compose does this)
+   and make sure it is executable.
+
+3. **Configure Radarr/Sonarr.** Settings → Media Management → *show Advanced* →
+   Importing:
+   - tick **Import Using Script**
+   - set **Import Script Path** to `/config/scripts/muxarr-import.sh`
+   - leave **Import Extra Files** as you had it; muxarr suppresses the duplicate
+     sidecar copy only for imports it actually muxed
+
+4. **Check it.** `curl http://muxarr:8710/healthz` from inside the \*arr
+   container, then import something and watch the muxarr logs.
+
+## Configuration
+
+All settings are environment variables on the **daemon**:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MUXARR_READ_ROOTS` | *required* | Colon-separated paths muxarr may read |
+| `MUXARR_TOKEN` | *unset* | Bearer token; unauthenticated if unset |
+| `MUXARR_HOST` / `MUXARR_PORT` | `0.0.0.0` / `8710` | Bind address |
+| `MUXARR_MAX_CONCURRENT` | `1` | Simultaneous remuxes |
+| `MUXARR_SCRATCH_DIR` | destination dir | Only change for NFS/SMB/union FS |
+| `MUXARR_DEDUPE` | `language_codec` | `off`, `language`, `language_codec` |
+| `MUXARR_SKIP_IMAGE_SUBTITLES` | `false` | Exclude PGS/VobSub |
+| `MUXARR_SKIP_UNDETERMINED` | `false` | Exclude tracks with unknown language |
+| `MUXARR_MAX_TRACKS` | `24` | Cap on embedded tracks |
+| `MUXARR_PRESERVE_OWNERSHIP` | `true` | chown output to match the source |
+| `MUXARR_LOG_LEVEL` | `INFO` | |
+
+And on the **shim**: `MUXARR_URL`, `MUXARR_TOKEN`, `MUXARR_TIMEOUT`.
+
+## CLI
+
+```sh
+muxarr inspect video.mkv          # list tracks in a container
+muxarr plan   video.mkv           # show what would be embedded, writes nothing
+muxarr mux    video.mkv --out out.mkv
+muxarr serve                      # run the daemon
+```
 
 ## Development
 
@@ -39,17 +90,18 @@ uv venv --python 3.11 .venv
 uv pip install -e '.[dev]'
 .venv/bin/ruff check .
 .venv/bin/mypy
-.venv/bin/pytest
+.venv/bin/python -m pytest
 ```
 
-Tests that need real `mkvmerge`/`ffmpeg` binaries are marked and skipped when
-those tools are absent:
+Tests needing real `mkvmerge`/`ffmpeg` are marked and skipped when those tools
+are absent. The container has them, so the full suite runs there:
 
 ```sh
-brew install mkvtoolnix ffmpeg   # optional, enables the integration tests
+docker build --target test -t muxarr:test -f docker/Dockerfile .
+docker run --rm muxarr:test
 ```
 
 ## Requirements
 
-`mkvtoolnix` (for `mkvmerge`) is required at runtime. `ffmpeg` is optional and
-used only as a probe fallback.
+`mkvtoolnix` is required at runtime. `ffmpeg` is optional, used as a probe
+fallback and to generate test fixtures.
