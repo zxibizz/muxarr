@@ -5,6 +5,10 @@ dependency so the *arr container needs nothing but a shell.
 
 Keeping the mux out-of-process also means stray mkvmerge output can never reach
 the shim's stdout, where *arr would try to parse it as protocol.
+
+Imports are asynchronous: the shim submits a job and long-polls for the outcome.
+Holding one request open for the length of a remux did not survive proxy idle
+timeouts, and a dropped reply was indistinguishable from a failed mux.
 """
 
 from __future__ import annotations
@@ -19,21 +23,29 @@ from typing import Annotated, Literal
 
 import anyio.to_thread
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import Path as PathParam
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from muxarr import __version__, history
+from muxarr import __version__, history, protocol
 from muxarr.config import Settings
 from muxarr.history import HistoryStore
+from muxarr.jobs import Job, JobConflictError, JobStore, fingerprint
 from muxarr.paths import PathGuard
 from muxarr.pipeline import ImportOutcome, ImportRequest, handle_import
-from muxarr.protocol import render_text
 
 log = logging.getLogger(__name__)
 
+# Constrained so a job id cannot smuggle path separators into the URL or control
+# characters into the log.
+JOB_ID_PATTERN = r"^[A-Za-z0-9._:-]{8,128}$"
+
+DEFAULT_POLL_WAIT = 25.0
+
 
 class ImportPayload(BaseModel):
+    job_id: str = Field(pattern=JOB_ID_PATTERN)
     app: Literal["radarr", "sonarr"]
     source_path: str
     destination_path: str
@@ -48,6 +60,9 @@ class ImportPayload(BaseModel):
             transfer_mode=self.transfer_mode,
             dry_run=self.dry_run,
         )
+
+    def fingerprint(self) -> str:
+        return fingerprint(self.model_dump(exclude={"job_id"}))
 
 
 class ImportResult(BaseModel):
@@ -67,6 +82,24 @@ class ImportResult(BaseModel):
             extra_files=[str(p) for p in outcome.extra_files],
             prevent_extra_import=outcome.prevent_extra_import,
             added_tracks=list(outcome.added_tracks),
+        )
+
+
+class JobModel(BaseModel):
+    id: str
+    state: str
+    result: ImportResult | None = None
+    error: str | None = None
+    history_id: int | None = None
+
+    @classmethod
+    def from_job(cls, job: Job) -> JobModel:
+        return cls(
+            id=job.id,
+            state=job.state,
+            result=ImportResult.from_outcome(job.outcome) if job.outcome else None,
+            error=job.error,
+            history_id=job.history_id,
         )
 
 
@@ -117,11 +150,16 @@ def _title_for(request: ImportRequest) -> str:
     return Path(request.source_path).name
 
 
-def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI:
+def create_app(
+    settings: Settings,
+    store: HistoryStore | None = None,
+    jobs: JobStore | None = None,
+) -> FastAPI:
     app = FastAPI(title="muxarr", version=__version__)
     guard = PathGuard.from_roots(settings.read_roots)
     semaphore = asyncio.Semaphore(settings.max_concurrent_muxes)
     history_store = store or history.HistoryStore()
+    job_store = jobs or JobStore(ttl_seconds=settings.job_ttl_seconds)
 
     def authorise(authorization: Annotated[str | None, Header()] = None) -> None:
         if settings.auth_token is None:
@@ -186,46 +224,99 @@ def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI
 
     @app.post(
         "/v1/import",
-        response_model=ImportResult,
+        response_model=JobModel,
+        status_code=status.HTTP_202_ACCEPTED,
         dependencies=[Depends(authorise)],
     )
-    async def import_media(payload: ImportPayload) -> ImportResult:
-        return ImportResult.from_outcome(await _run(payload))
+    async def import_media(payload: ImportPayload) -> JobModel:
+        """Queue an import and return immediately; the shim polls for the result.
 
-    @app.post(
-        "/v1/import/protocol",
+        Idempotent on ``job_id`` so the shim can retry a submission whose reply
+        was lost without starting the mux twice.
+        """
+        try:
+            job, created = job_store.create_or_get(payload.job_id, payload.fingerprint())
+        except JobConflictError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        if created:
+            job.task = asyncio.create_task(_run_job(job, payload))
+        return JobModel.from_job(job)
+
+    @app.get(
+        "/v1/jobs/{job_id}",
+        response_model=JobModel,
+        dependencies=[Depends(authorise)],
+    )
+    async def get_job(
+        job_id: Annotated[str, PathParam(pattern=JOB_ID_PATTERN)],
+        wait: float = Query(0.0, ge=0),
+    ) -> JobModel:
+        job = await job_store.wait(job_id, _clamp_wait(wait))
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown job")
+        return JobModel.from_job(job)
+
+    @app.get(
+        "/v1/jobs/{job_id}/protocol",
         response_class=PlainTextResponse,
         dependencies=[Depends(authorise)],
     )
-    async def import_media_protocol(payload: ImportPayload) -> PlainTextResponse:
-        """Same work, rendered as *arr's stdout protocol.
+    async def get_job_protocol(
+        job_id: Annotated[str, PathParam(pattern=JOB_ID_PATTERN)],
+        wait: float = Query(DEFAULT_POLL_WAIT, ge=0),
+    ) -> PlainTextResponse:
+        """Long-poll transport for the shim, rendered as *arr's stdout protocol.
 
-        Lets the shim be a dumb pipe instead of a JSON parser written in sh.
+        Always 200, with the state in the body: curl and busybox wget surface
+        non-2xx so differently that a sh shim cannot tell "unknown job" from
+        "connection refused". Encoding state in the body makes a missing state
+        line mean exactly one thing -- transport failure, worth retrying.
         """
-        return PlainTextResponse(render_text(await _run(payload)))
+        job = await job_store.wait(job_id, _clamp_wait(wait))
+        if job is None:
+            body = protocol.render_poll(protocol.STATE_UNKNOWN)
+        elif job.state == "succeeded" and job.outcome is not None:
+            body = protocol.render_poll(protocol.STATE_DONE, job.outcome)
+        elif job.state == "failed":
+            body = protocol.render_poll(protocol.STATE_ERROR)
+        else:
+            body = protocol.render_poll(protocol.STATE_RUNNING)
+        return PlainTextResponse(body)
 
-    async def _run(payload: ImportPayload) -> ImportOutcome:
+    def _clamp_wait(wait: float) -> float:
+        return min(wait, settings.max_poll_wait_seconds)
+
+    async def _run_job(job: Job, payload: ImportPayload) -> None:
         request = payload.to_request()
         log.info(
-            "import request app=%s mode=%s source=%s",
+            "import job=%s app=%s mode=%s source=%s",
+            job.id,
             request.app,
             request.transfer_mode,
             request.source_path,
         )
-        # One mux at a time by default; concurrent remuxes on one spindle are
-        # slower than running them back to back.
-        async with semaphore:
-            outcome = await anyio.to_thread.run_sync(
-                partial(handle_import, request, settings, guard)
-            )
+        try:
+            job_store.start(job.id)
+            # One mux at a time by default; concurrent remuxes on one spindle are
+            # slower than running them back to back.
+            async with semaphore:
+                outcome = await anyio.to_thread.run_sync(
+                    partial(handle_import, request, settings, guard)
+                )
+        except Exception as exc:
+            # handle_import degrades to DeferMove internally, so reaching here
+            # means the daemon itself broke; the shim turns it into a failed
+            # import rather than letting *arr move a possibly half-muxed file.
+            log.exception("import job %s failed", job.id)
+            job_store.fail(job.id, f"{type(exc).__name__}: {exc}")
+            return
         log.info("import result status=%s reason=%s", outcome.move_status, outcome.reason)
-        _record(request, outcome)
-        return outcome
+        job_store.succeed(job.id, outcome, _record(request, outcome))
 
-    def _record(request: ImportRequest, outcome: ImportOutcome) -> None:
+    def _record(request: ImportRequest, outcome: ImportOutcome) -> int | None:
         episode = request.episode_ref
         try:
-            history_store.record(
+            return history_store.record(
                 app=request.app,
                 title=_title_for(request),
                 move_status=outcome.move_status,
@@ -246,6 +337,7 @@ def create_app(settings: Settings, store: HistoryStore | None = None) -> FastAPI
         except Exception:
             # Losing a history row must never turn a good import into a failure.
             log.exception("could not record history for %s", request.source_path)
+            return None
 
     _mount_web_ui(app, settings)
     return app
