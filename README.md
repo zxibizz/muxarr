@@ -4,27 +4,46 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![ghcr.io](https://img.shields.io/badge/ghcr.io-zxibizz%2Fmuxarr-blue?logo=docker&logoColor=white)](https://github.com/zxibizz/muxarr/pkgs/container/muxarr)
 
-Embeds external audio and subtitle tracks into video containers at the moment
-Radarr/Sonarr import a download, using the **Import Using Script** hook.
+**Sidecars in, one clean MKV out.** muxarr embeds external audio and subtitle
+tracks into the video container at the moment Radarr/Sonarr import a download,
+using the **Import Using Script** hook.
 
-When a release ships `Subs/2_English.srt`, a separate `.ac3` dub, or a folder of
-alternate dubs like `RUS Sound [Group]/`, muxarr remuxes them into a single MKV
-as the file lands in your library — so the tracks are embedded rather than
-scattered as sidecars, and the filename reflects the tracks actually in the file.
+No sidecar `.srt` your player has to be told about. No second file to keep next
+to the first one forever. No manual pass with mkvtoolnix after every release
+that ships a dub in its own folder.
 
-## Design rules
+```
+ the release Radarr/Sonarr grabbed        what lands in your library
+
+ Some.Movie.2024.1080p-GRP/               Some Movie (2024)/
+ ├── Some.Movie.2024.1080p-GRP.mkv        └── Some Movie (2024) Bluray-1080p.mkv
+ ├── Subs/2_English.srt                       ├── video     h264
+ ├── Subs/3_English.SDH.srt                   ├── audio     English
+ └── RUS Sound [Group]/dub.mka                ├── audio     Russian      <- dub.mka
+                                              ├── subtitles English      <- 2_English.srt
+                                              └── subtitles English SDH  <- 3_English.SDH.srt
+```
+
+It runs where the tracks already are — inside your existing \*arr stack, with no
+change to how you download, rename or organise anything.
 
 - **Stream-copy only.** No transcoding, ever. A mux costs one sequential read
-  and one sequential write.
+  and one sequential write; a 40 GB remux is disk-bound, not CPU-bound.
 - **The download folder is read-only.** muxarr never writes, renames or deletes
-  anything on the source side, in any transfer mode. Cleanup of the original
-  stays with your download client's Completed Download Handling.
-- **Fail safe.** Any error degrades to `DeferMove`, and Radarr/Sonarr perform a
-  completely normal import. The shim exits 0 on every path up to the point a
-  remux is queued — after that, a lost result exits non-zero and fails the
-  import, because deferring would race a mux that may still be running.
+  anything on the source side, in any transfer mode. Seeding is unaffected, and
+  cleanup stays with your download client's Completed Download Handling.
+- **Fail safe by construction.** Any error degrades to `DeferMove`, and
+  Radarr/Sonarr perform a completely normal import — the worst case is the
+  import you would have had anyway. The shim exits 0 on every path up to the
+  point a remux is queued; after that, a lost result exits non-zero and fails
+  the import, because deferring would race a mux that may still be running.
 - **Staging lives in the destination directory**, so the final step is an atomic
   rename rather than a cross-device copy.
+- **Every decision is on the record.** Each import keeps the reasoning that
+  produced it — what the source already held, which sidecars were found, why
+  each was taken or passed over — and the UI shows it back to you.
+
+![The muxarr import history: what was muxed, what was skipped and which tracks went in](docs/images/history.png)
 
 ## How it fits together
 
@@ -63,9 +82,16 @@ import it has been handed — including the ones it skipped, which is usually th
 question you actually have.
 
 Each row expands into the full decision: the paths involved, which tracks were
-embedded, and which sidecars were passed over *and why*. The history is stored
-in SQLite under `/config`, so it survives restarts — mount that volume or you
-will lose it.
+embedded and where each came from, which sidecars were passed over *and why*,
+and the step-by-step log of the import that produced it — down to the mkvmerge
+command line, if you scroll that far.
+
+![An import opened up: the tracks that were embedded and the reasoning behind them](docs/images/operation-detail.png)
+
+Imports that have not settled yet are listed the same way and follow their log
+live, so a mux that will take an hour is something you can watch rather than
+guess at. The history is stored in SQLite under `/config`, so it survives
+restarts — mount that volume or you will lose it.
 
 If `MUXARR_TOKEN` is set, the UI asks for it once and keeps it in the browser's
 local storage.
@@ -114,6 +140,8 @@ A variable that is actually set in your compose file **wins and locks the
 field**: the UI renders it read-only and names the variable, so compose stays
 the single source of truth for anything you have configured there. Leave a
 variable out to manage that setting from the UI instead.
+
+![The settings page, with the fields pinned by the environment called out](docs/images/settings.png)
 
 | Variable | Default | UI | Meaning |
 | --- | --- | --- | --- |
@@ -227,8 +255,9 @@ If the provider is slow, unreachable, or answers with nonsense, muxarr logs a
 warning and uses the filename result. An import is never failed because an API
 call was.
 
-Tracks the model chose are marked `[ai]` in the history, so you can tell them
-apart in the UI.
+Tracks the model chose are marked in the history, and the operation detail spells
+out which file each one came from and that the provider identified it — so an AI
+decision is never something you have to take on faith.
 
 ### Track names
 
@@ -311,14 +340,14 @@ Pin a version tag rather than `latest`, so a restart never changes the version
 underneath you:
 
 ```yaml
-image: ghcr.io/zxibizz/muxarr:0.9.0
+image: ghcr.io/zxibizz/muxarr:0.9.1
 ```
 
 The published tags are:
 
 | Tag | Moves to | Use it if |
 | --- | --- | --- |
-| `0.9.0` | nothing, ever | You want restarts to be boring. Recommended |
+| `0.9.1` | nothing, ever | You want restarts to be boring. Recommended |
 | `0.9` | the newest `0.9.x` | You want patch fixes without thinking about it |
 | `latest` | the newest stable release | You do not mind a major upgrade arriving on a restart |
 | `beta` | the newest prerelease | You are testing a release candidate |
