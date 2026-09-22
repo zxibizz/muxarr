@@ -13,3 +13,9 @@ class ChatCompleter(Protocol):
     def complete(self, *, system: str, user: str, timeout: float) -> str:
         """Return the assistant's raw reply text, or raise ``AiError``."""
         ...
+
+
+class ChatCompleterFactory(Protocol):
+    def create(self, *, base_url: str, model: str, api_key: str | None) -> ChatCompleter:
+        """Build a completer for credentials that may not be the saved ones."""
+        ...

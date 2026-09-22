@@ -23,6 +23,7 @@ from src.domain.media import MediaInfo, Track
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
+from src.infrastructure.settings.repository import SqlAlchemySettingsRepository
 from src.settings.config import Settings
 from tests.conftest import touch
 
@@ -85,6 +86,9 @@ async def container(settings: Settings, db: DBManager) -> AppContainer:
         history=SqlAlchemyHistoryRepository(db),
         jobs=SqlAlchemyJobRepository(db),
         worker_state=SqlAlchemyWorkerStateRepository(db),
+        settings_store=SqlAlchemySettingsRepository(db),
+        # The real environment would pin whatever the developer happens to export.
+        env={},
     )
 
 

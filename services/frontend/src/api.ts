@@ -1,8 +1,12 @@
 import type {
+  AiTestRequest,
+  AiTestResult,
   Health,
   HistoryFilters,
   HistoryPage,
   Operation,
+  ServiceSettings,
+  SettingsPatch,
   Stats,
   SystemStatus,
 } from './types';
@@ -35,16 +39,23 @@ export function setToken(token: string): void {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, body?: unknown): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
+  if (body !== undefined) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   let response: Response;
   try {
-    response = await fetch(path, { ...init, headers });
+    response = await fetch(path, {
+      ...init,
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
   } catch (cause) {
     throw new ApiError(0, `cannot reach the muxarr daemon (${String(cause)})`);
   }
@@ -57,9 +68,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 async function describe(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { detail?: string };
-    if (body.detail) {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === 'string') {
       return body.detail;
+    }
+    // FastAPI's own validation errors are a list of objects, not a string.
+    if (Array.isArray(body.detail)) {
+      return body.detail
+        .map((item) => (item as { msg?: string }).msg ?? String(item))
+        .join('; ');
     }
   } catch {
     // Not JSON; fall through to the status text.
@@ -85,4 +102,12 @@ export const api = {
   operation: (id: number) => request<Operation>(`/v1/history/${id}`),
 
   clearHistory: () => request<{ deleted: number }>('/v1/history', { method: 'DELETE' }),
+
+  settings: () => request<ServiceSettings>('/v1/settings'),
+
+  updateSettings: (patch: SettingsPatch) =>
+    request<ServiceSettings>('/v1/settings', { method: 'PATCH' }, patch),
+
+  testAi: (candidate: AiTestRequest) =>
+    request<AiTestResult>('/v1/settings/ai/test', { method: 'POST' }, candidate),
 };

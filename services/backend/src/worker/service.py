@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
 from src.application.interfaces.history import HistoryRepository
@@ -16,6 +17,7 @@ from src.application.interfaces.jobs import JobRecord, JobRepository, WorkerStat
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
 from src.core.logging import get_logger
 from src.domain.enums import LogComponent
+from src.settings.config import Settings
 
 log = get_logger(LogComponent.WORKER)
 
@@ -34,6 +36,10 @@ WORKER_STALE_AFTER = HEARTBEAT_INTERVAL * 6
 # idle pass would be two pointless DELETEs a second.
 SWEEP_INTERVAL = 60.0
 
+# A setting saved in the browser should take effect before the user has
+# finished reading the confirmation.
+SETTINGS_POLL_INTERVAL = 5.0
+
 
 class ImportWorker:
     def __init__(
@@ -42,21 +48,22 @@ class ImportWorker:
         jobs: JobRepository,
         worker_state: WorkerStateRepository,
         history: HistoryRepository,
-        run_job: RunImportJobUseCase,
-        max_concurrent_muxes: int = 1,
-        job_ttl_seconds: float = 3600.0,
-        history_max_records: int = 200,
+        # Callables, not values: settings change under a running worker, and
+        # the use case is rebuilt when they do.
+        run_job: Callable[[], RunImportJobUseCase],
+        settings: Callable[[], Settings],
+        sync: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         self._jobs = jobs
         self._worker_state = worker_state
         self._history = history
         self._run_job = run_job
-        self._max_concurrent = max(1, max_concurrent_muxes)
-        self._job_ttl = job_ttl_seconds
-        self._history_max_records = history_max_records
+        self._settings = settings
+        self._sync = sync
         self._stop = asyncio.Event()
         self._last_heartbeat = 0.0
         self._last_sweep = 0.0
+        self._last_reload = 0.0
 
     def stop(self) -> None:
         self._stop.set()
@@ -66,6 +73,7 @@ class ImportWorker:
         running: set[asyncio.Task[None]] = set()
 
         while not self._stop.is_set():
+            await self._reload()
             await self._beat()
             await self._fill(running)
 
@@ -98,7 +106,8 @@ class ImportWorker:
             log.warning("failed jobs interrupted by a restart", count=stale)
 
     async def _fill(self, running: set[asyncio.Task[None]]) -> None:
-        while not self._stop.is_set() and len(running) < self._max_concurrent:
+        limit = max(1, self._settings().max_concurrent_muxes)
+        while not self._stop.is_set() and len(running) < limit:
             job = await self._claim()
             if job is None:
                 return
@@ -115,12 +124,24 @@ class ImportWorker:
 
     async def _execute(self, job: JobRecord) -> None:
         try:
-            await self._run_job.execute(job)
+            await self._run_job().execute(job)
         except Exception as exc:
             # run_job handles its own failures; reaching here means the
             # bookkeeping itself broke, and the job must not stay running.
             log.exception("job bookkeeping failed", job_id=job.id)
             await self._jobs.fail(job.id, f"{type(exc).__name__}: {exc}")
+
+    async def _reload(self) -> None:
+        if self._sync is None:
+            return
+        now = time.monotonic()
+        if now - self._last_reload < SETTINGS_POLL_INTERVAL:
+            return
+        self._last_reload = now
+        try:
+            await self._sync()
+        except Exception:
+            log.exception("could not reload settings")
 
     async def _beat(self) -> None:
         now = time.monotonic()
@@ -147,16 +168,17 @@ class ImportWorker:
         if now - self._last_sweep < SWEEP_INTERVAL:
             return
         self._last_sweep = now
+        settings = self._settings()
 
         try:
-            await self._jobs.prune(self._job_ttl)
+            await self._jobs.prune(settings.job_ttl_seconds)
         except Exception:
             log.exception("could not prune finished jobs")
 
         try:
-            removed = await self._history.prune(self._history_max_records)
+            removed = await self._history.prune(settings.history_max_records)
         except Exception:
             log.exception("could not trim the history")
             return
         if removed:
-            log.info("trimmed history", removed=removed, kept=self._history_max_records)
+            log.info("trimmed history", removed=removed, kept=settings.history_max_records)

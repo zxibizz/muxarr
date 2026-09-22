@@ -8,6 +8,7 @@ timeout and then fails a perfectly good import.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,8 @@ from src.db.session import DBManager
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
-from src.worker.service import ImportWorker
+from src.settings.config import Settings
+from src.worker.service import IDLE_POLL_INTERVAL, ImportWorker
 
 REQUEST = ImportRequest(
     app="radarr",
@@ -59,13 +61,17 @@ def build(
     history: SqlAlchemyHistoryRepository,
     runner: RecordingRunner,
     history_max_records: int = 200,
+    settings: Callable[[], Settings] | None = None,
+    sync: Callable[[], Awaitable[bool]] | None = None,
 ) -> ImportWorker:
+    fixed = Settings(read_roots=(Path("/downloads"),), history_max_records=history_max_records)
     return ImportWorker(
         jobs=jobs,
         worker_state=worker_state,
         history=history,
-        run_job=runner,  # type: ignore[arg-type]
-        history_max_records=history_max_records,
+        run_job=lambda: runner,  # type: ignore[arg-type,return-value]
+        settings=settings or (lambda: fixed),
+        sync=sync,
     )
 
 
@@ -161,3 +167,77 @@ async def test_history_is_trimmed_to_the_cap_while_idle(
 
     page = await history.list()
     assert [op.title for op in page.items] == ["4.mkv", "3.mkv"]
+
+
+async def test_settings_are_re_read_while_running(
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
+) -> None:
+    """A change saved in the browser must not need a container restart."""
+    syncs = 0
+
+    async def sync() -> bool:
+        nonlocal syncs
+        syncs += 1
+        return False
+
+    await run_briefly(build(jobs, worker_state, history, RecordingRunner(jobs), sync=sync))
+
+    assert syncs == 1
+
+
+async def test_a_reload_failure_does_not_stop_the_queue(
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
+) -> None:
+    """Imports matter more than settings freshness."""
+    await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
+    runner = RecordingRunner(jobs)
+
+    async def sync() -> bool:
+        raise RuntimeError("database is away")
+
+    await run_briefly(build(jobs, worker_state, history, runner, sync=sync))
+
+    assert runner.seen == ["job-1"]
+
+
+async def test_a_raised_concurrency_takes_effect_without_a_restart(
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
+) -> None:
+    current = Settings(read_roots=(Path("/downloads"),), max_concurrent_muxes=1)
+    started = asyncio.Event()
+    release = asyncio.Event()
+    concurrent = 0
+    peak = 0
+
+    class Blocking(RecordingRunner):
+        async def execute(self, job: JobRecord) -> None:
+            nonlocal concurrent, peak
+            self.seen.append(job.id)
+            concurrent += 1
+            peak = max(peak, concurrent)
+            started.set()
+            await release.wait()
+            concurrent -= 1
+
+    for index in range(2):
+        await jobs.create_or_get(f"job-{index}", f"{FINGERPRINT}{index}", REQUEST)
+
+    runner = Blocking(jobs)
+    worker = build(jobs, worker_state, history, runner, settings=lambda: current)
+    task = asyncio.create_task(worker.run())
+    await asyncio.wait_for(started.wait(), timeout=5)
+
+    current = Settings(read_roots=(Path("/downloads"),), max_concurrent_muxes=2)
+    # Long enough for the loop to come back round off its idle wait.
+    await asyncio.sleep(IDLE_POLL_INTERVAL * 2)
+    assert peak == 2
+
+    release.set()
+    worker.stop()
+    await asyncio.wait_for(task, timeout=5)

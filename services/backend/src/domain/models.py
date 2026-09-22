@@ -81,3 +81,20 @@ class WorkerState(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     last_seen: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class AppSettings(Base):
+    """Single row; the UI-edited overrides layered over the environment.
+
+    One row rather than a key per row so a save is atomic, and so ``revision``
+    is a single integer the worker process can cheaply poll for changes.
+    ``payload`` holds only the overridden keys, as the same raw strings the
+    environment would have supplied.
+    """
+
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False, server_default="{}")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)

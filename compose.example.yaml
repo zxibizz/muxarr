@@ -31,6 +31,9 @@ services:
       # Colon-separated. Must cover both download and library paths.
       MUXARR_READ_ROOTS: /downloads:/media
       MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
+      # Anything below this line can also be managed from the Settings page.
+      # Setting it here pins it: the UI shows it read-only and names the
+      # variable, so this file stays the source of truth for what it declares.
       MUXARR_LOG_LEVEL: INFO
       # Uncomment only if the library is on NFS/SMB or a union filesystem.
       # Staging elsewhere costs an extra full copy and loses atomicity.
@@ -42,6 +45,8 @@ services:
       # Release folder and file NAMES are sent to the endpoint below -- never
       # file contents, never absolute paths. Point it at a local Ollama or
       # LM Studio instance to keep even the names on your own machine.
+      # Easier to set up from the Settings page, which can test the provider
+      # before you commit to it.
       # MUXARR_AI_MODE: fallback
       # MUXARR_AI_MODEL: gpt-4o-mini
       # MUXARR_AI_API_KEY: ${MUXARR_AI_API_KEY:-}
