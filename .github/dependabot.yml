@@ -4,6 +4,7 @@ updates:
     directory: /services/backend
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     groups:
       backend:
         patterns: ["*"]
@@ -13,15 +14,45 @@ updates:
     directory: /services/frontend
     schedule:
       interval: weekly
+    # The default of 5 is too low here: it silently suppressed the @mantine/core
+    # bump while shipping the @mantine/hooks one, which cannot install alone.
+    open-pull-requests-limit: 10
     groups:
+      # Families that must move in lockstep. Grouped across all update types, so
+      # a major never arrives as a set of individually unmergeable PRs.
+      mantine:
+        patterns: ["@mantine/*"]
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      lint:
+        patterns: ["eslint", "@eslint/*", "typescript-eslint", "eslint-plugin-*"]
+      build-and-test:
+        patterns: ["vite", "vitest", "@vitejs/*", "jsdom", "@testing-library/*", "typescript"]
+      # Must stay last: an earlier group wins, so this only sweeps the remainder.
       frontend:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # These need code migration, not a version bump, so an automated PR would
+      # only sit there red. Raise them deliberately instead.
+      - dependency-name: "@mantine/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     groups:
       actions:
         patterns: ["*"]
@@ -33,3 +64,4 @@ updates:
       - /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
