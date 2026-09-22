@@ -62,6 +62,7 @@ def make(
     mode: str = "fallback",
     max_entries: int = 200,
     max_tracks: int = 24,
+    name_tracks: bool = False,
 ) -> AiAssistedTrackDiscovery:
     return AiAssistedTrackDiscovery(
         heuristic=FilesystemTrackDiscovery(),
@@ -69,6 +70,7 @@ def make(
         mode=mode,  # type: ignore[arg-type]
         max_entries=max_entries,
         max_tracks=max_tracks,
+        name_tracks=name_tracks,
     )
 
 
@@ -155,6 +157,87 @@ class TestModeGating:
         assert len(completer.calls) == 1
         assert [t.language for t in found] == ["eng"]
         assert [t.source for t in found] == ["heuristic"]
+
+
+class TestNameTracks:
+    """The provider writes the labels; the filenames keep choosing the files."""
+
+    @pytest.fixture
+    def settled(self, tmp_path: Path) -> Path:
+        root = tmp_path / "Movie.2024.1080p"
+        video_path = touch(root / "Movie.2024.1080p.mkv", b"video")
+        touch(root / "Movie.2024.1080p.eng.srt", "subs")
+        touch(root / "Movie.2024.1080p.rus.mka", b"audio")
+        return video_path
+
+    def test_the_provider_is_consulted_even_when_the_filenames_settled_it(
+        self, settled: Path
+    ) -> None:
+        completer = StubCompleter()
+
+        make(completer, mode="fallback", name_tracks=True).discover(settled)
+
+        assert len(completer.calls) == 1
+
+    def test_the_provider_title_becomes_the_track_name(self, settled: Path) -> None:
+        completer = StubCompleter(
+            tracks_reply(
+                {"file": "Movie.2024.1080p.rus.mka", "language": "rus", "title": "Russian (Kubik)"}
+            )
+        )
+
+        found = make(completer, mode="fallback", name_tracks=True).discover(settled)
+
+        by_name = {t.path.name: t for t in found}
+        assert by_name["Movie.2024.1080p.rus.mka"].name == "Russian (Kubik)"
+        # Untouched by the reply, so it keeps the name the filename produced.
+        assert by_name["Movie.2024.1080p.eng.srt"].name == "English"
+
+    def test_naming_does_not_let_the_provider_change_the_selection(
+        self, settled: Path
+    ) -> None:
+        completer = StubCompleter(
+            tracks_reply(
+                {"file": "Movie.2024.1080p.eng.srt", "language": "fre", "title": "French"}
+            )
+        )
+
+        found = make(completer, mode="fallback", name_tracks=True).discover(settled)
+
+        assert len(found) == 2
+        subtitle = next(t for t in found if t.path.suffix == ".srt")
+        assert subtitle.language == "eng"
+        assert subtitle.name == "French"
+        assert all(t.source == "heuristic" for t in found)
+
+    def test_a_provider_failure_leaves_the_names_alone(self, settled: Path) -> None:
+        completer = StubCompleter(AiError("connection refused"))
+
+        found = make(completer, mode="fallback", name_tracks=True).discover(settled)
+
+        assert sorted(t.name or "" for t in found) == ["English", "Russian"]
+
+    def test_verify_stays_a_shadow_mode(self, settled: Path) -> None:
+        completer = StubCompleter(
+            tracks_reply(
+                {"file": "Movie.2024.1080p.eng.srt", "language": "eng", "title": "English (AI)"}
+            )
+        )
+
+        found = make(completer, mode="verify", name_tracks=True).discover(settled)
+
+        assert all(t.name != "English (AI)" for t in found)
+
+    def test_an_undetermined_release_still_hands_selection_to_the_provider(
+        self, video: Path
+    ) -> None:
+        completer = StubCompleter(
+            tracks_reply({"file": "Nadpisi/Some.Show.S02E05.ass", "language": "rus"})
+        )
+
+        found = make(completer, mode="fallback", name_tracks=True).discover(video)
+
+        assert [t.source for t in found] == ["ai"]
 
 
 class TestDegradation:
@@ -317,6 +400,20 @@ class TestReplyValidation:
         assert "\x00" not in (tracks[0].name or "")
         assert len(tracks[0].name or "") <= 120
         assert tracks[0].variant is None
+
+    def test_a_missing_title_falls_back_to_the_derived_one(self, release: Path) -> None:
+        reply = tracks_reply(
+            {
+                "file": "Nadpisi/Some.Show.S02E05.ass",
+                "language": "rus",
+                "title": None,
+                "forced": True,
+            }
+        )
+
+        tracks = materialise(reply, index=self.index(release), max_tracks=24)
+
+        assert tracks[0].name == "Russian (Forced)"
 
     def test_duplicate_proposals_collapse_to_one_track(self, release: Path) -> None:
         reply = tracks_reply(

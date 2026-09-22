@@ -37,6 +37,7 @@ class SettingsView(BaseModel):
     ai_model: str
     ai_timeout_seconds: float
     ai_max_entries: int
+    ai_name_tracks: bool
     ai_api_key_set: bool
 
     log_level: str
@@ -74,6 +75,7 @@ class SettingsPatch(BaseModel):
     ai_model: str | None = None
     ai_timeout_seconds: float | None = Field(default=None, ge=1)
     ai_max_entries: int | None = Field(default=None, ge=1)
+    ai_name_tracks: bool | None = None
 
     log_level: LogLevel | None = None
 
