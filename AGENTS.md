@@ -90,7 +90,7 @@ The mux integration tests skip without mkvtoolnix and ffmpeg on PATH. The dev
 image ships both:
 
 ```bash
-docker compose -f compose.dev.yaml run --rm backend pytest -q
+docker compose -f compose.dev.yaml run --rm muxarr pytest -q
 ```
 
 ## Container

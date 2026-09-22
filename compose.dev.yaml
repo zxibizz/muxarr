@@ -1,75 +1,50 @@
-# Local development: API, worker and frontend in separate containers, all hot-reloading.
+# Local development: one container running the API, the worker and the Vite dev
+# server, all hot-reloading.
 #
 #   docker compose -f compose.dev.yaml up --build
 #
 # UI on http://localhost:5173, API on http://localhost:8000.
-
-# The API and the worker are the same image with different commands; the worker
-# is the only one that muxes, but both need the media mounts to resolve paths.
-x-backend: &backend
-  build:
-    context: .
-    dockerfile: Dockerfile.dev
-    target: backend
-  # The whole repo is mounted, not just services/backend: the shim contract
-  # tests reach back up to the repo-root scripts/ directory.
-  working_dir: /repo/services/backend
-  environment: &backend-env
-    PYTHONPATH: /repo/services/backend
-    # Both roots must exist inside the container; see ./dev-media below.
-    MUXARR_READ_ROOTS: /downloads:/media
-    MUXARR_DB_URL: sqlite+aiosqlite:////config/muxarr.db
-    MUXARR_TOKEN: ${MUXARR_TOKEN:-dev-token}
-    MUXARR_LOG_LEVEL: DEBUG
-    # macOS/Windows bind mounts do not deliver inotify events.
-    WATCHFILES_FORCE_POLLING: "true"
-  volumes:
-    - .:/repo
-    - backend-config:/config
-    - ./dev-media/downloads:/downloads
-    - ./dev-media/media:/media
+#
+# This is not what production looks like -- there the SPA is a static build
+# behind nginx on a single port, supervised by s6. See Dockerfile.all-in-one.
 
 services:
-  backend:
-    <<: *backend
-    command: >
-      sh -c "alembic upgrade head &&
-             uvicorn --factory src.api.app:build_app
-             --host 0.0.0.0 --port 8000 --reload --reload-dir src"
+  muxarr:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: muxarr-dev
+    # The whole repo is mounted, not just services/backend: the shim contract
+    # tests reach back up to the repo-root scripts/ directory.
+    working_dir: /repo/services/backend
+    command: bash /repo/cicd/containers/dev/entrypoint.sh
+    environment:
+      PYTHONPATH: /repo/services/backend
+      # Both roots must exist inside the container; see ./dev-media below.
+      MUXARR_READ_ROOTS: /downloads:/media
+      MUXARR_DB_URL: sqlite+aiosqlite:////config/muxarr.db
+      MUXARR_TOKEN: ${MUXARR_TOKEN:-dev-token}
+      MUXARR_LOG_LEVEL: DEBUG
+      # macOS/Windows bind mounts do not deliver inotify events.
+      WATCHFILES_FORCE_POLLING: "true"
+      VITE_WATCH_POLLING: "true"
+      VITE_API_PROXY_TARGET: http://127.0.0.1:8000
+    volumes:
+      - .:/repo
+      - config:/config
+      # Keeps the container's Linux binaries out of the host's node_modules.
+      - node-modules:/repo/services/frontend/node_modules
+      - ./dev-media/downloads:/downloads
+      - ./dev-media/media:/media
     ports:
       - "8000:8000"
+      - "5173:5173"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 5s
       timeout: 3s
       retries: 12
 
-  worker:
-    <<: *backend
-    command: watchfiles --filter python "python -m src.worker" src
-    # Waits for the API because that is what runs the migrations.
-    depends_on:
-      backend:
-        condition: service_healthy
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-      target: frontend
-    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
-    environment:
-      VITE_API_PROXY_TARGET: http://backend:8000
-      VITE_WATCH_POLLING: "true"
-    volumes:
-      - ./services/frontend:/app
-      - frontend-node-modules:/app/node_modules
-    ports:
-      - "5173:5173"
-    depends_on:
-      backend:
-        condition: service_healthy
-
 volumes:
-  backend-config:
-  frontend-node-modules:
+  config:
+  node-modules:

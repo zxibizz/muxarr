@@ -41,12 +41,12 @@ npm run test
 npm run build
 ```
 
-Or run the whole stack with hot reload on both sides, in an image that already
-has mkvtoolnix and ffmpeg:
+Or run the whole stack with hot reload on both sides, in one container that
+already has mkvtoolnix and ffmpeg:
 
 ```sh
 docker compose -f compose.dev.yaml up --build
-docker compose -f compose.dev.yaml run --rm backend pytest -q
+docker compose -f compose.dev.yaml run --rm muxarr pytest -q
 ```
 
 ## The rules that will get a PR sent back

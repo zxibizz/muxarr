@@ -1,9 +1,22 @@
 # syntax=docker/dockerfile:1
 #
-# Split containers with hot reload. Production uses Dockerfile.all-in-one.
+# One container for local development: API, worker and the Vite dev server, all
+# hot-reloading. This image is never published -- production is
+# Dockerfile.all-in-one, which is a different shape entirely (static SPA behind
+# nginx, everything supervised by s6).
 
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS backend
+FROM node:22-bookworm-slim AS node
 
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+
+# Node lifted from the official image; both are bookworm, so the binary and its
+# bundled npm work as-is without adding a third-party apt repository.
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+
+# ffmpeg is optional in production but always present here: without it eleven
+# probe and mux tests skip instead of running.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends mkvtoolnix ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
@@ -13,20 +26,19 @@ ENV UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
+    PYTHONPATH=/repo/services/backend \
     PYTHONPYCACHEPREFIX=/tmp/pycache
 
-WORKDIR /app
+WORKDIR /repo/services/backend
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=services/backend/uv.lock,target=uv.lock \
     --mount=type=bind,source=services/backend/pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project
 
-
-FROM node:22-slim AS frontend
-
-ENV NODE_ENV=development
-WORKDIR /app
+# Seeds the node_modules volume with Linux binaries on first `up`. This path has
+# to match the volume mount in compose.dev.yaml or the seeding does not happen.
+WORKDIR /repo/services/frontend
 COPY services/frontend/package.json services/frontend/package-lock.json* ./
-# Seeds the node_modules volume with Linux binaries on first `up`.
 RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install; fi
+
+WORKDIR /repo/services/backend

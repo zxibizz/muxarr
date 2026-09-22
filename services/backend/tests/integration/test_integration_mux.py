@@ -3,7 +3,7 @@
 Skipped unless mkvtoolnix/ffmpeg are on PATH. The dev image ships both, which is
 where the mux path is actually exercised:
 
-    docker compose -f compose.dev.yaml run --rm backend pytest -q
+    docker compose -f compose.dev.yaml run --rm muxarr pytest -q
 
 Fixtures are generated with ffmpeg's synthetic sources, so no real media is
 needed and nothing is downloaded.
