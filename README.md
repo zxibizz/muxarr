@@ -193,6 +193,19 @@ underneath you:
 image: ghcr.io/zxibizz/muxarr:0.9.0
 ```
 
+The published tags are:
+
+| Tag | Moves to | Use it if |
+| --- | --- | --- |
+| `0.9.0` | nothing, ever | You want restarts to be boring. Recommended |
+| `0.9` | the newest `0.9.x` | You want patch fixes without thinking about it |
+| `latest` | the newest stable release | You do not mind a major upgrade arriving on a restart |
+| `beta` | the newest prerelease | You are testing a release candidate |
+
+`beta` and `latest` never point at the same image: a prerelease is only ever
+published as `beta` and its exact version, and never moves `latest`, `0.9` or
+`0`.
+
 Then:
 
 1. Read the [changelog](CHANGELOG.md) for the versions you are crossing.

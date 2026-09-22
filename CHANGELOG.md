@@ -12,6 +12,27 @@ within the same major version.
 
 ## [Unreleased]
 
+### Added
+
+- A `beta` image tag, moved by every prerelease. `latest` continues to track
+  stable releases only.
+
+### Added
+
+- Optional **AI mode** for sidecar discovery (`MUXARR_AI_MODE`, off by default).
+  When a release layout defeats the filename rules, a model behind any
+  OpenAI-compatible endpoint can match and label the sidecars instead. Four
+  modes: `off`, `fallback` (only when the filename rules come up short),
+  `always`, and `verify` (consult but keep the filename answer, logging
+  disagreements). Configured by `MUXARR_AI_BASE_URL`, `MUXARR_AI_API_KEY`,
+  `MUXARR_AI_MODEL`, `MUXARR_AI_TIMEOUT` and `MUXARR_AI_MAX_ENTRIES`.
+  Only file and folder *names* are sent, relative to the release folder; never
+  file contents and never absolute paths. A proposal is only accepted if it
+  names a file muxarr already listed on disk, the track kind still comes from
+  the extension, and an unrecognised language falls back to `und`. Any provider
+  failure degrades to the filename result rather than failing the import.
+  AI-chosen tracks are marked `[ai]` in the history.
+
 ## [0.9.0] - 2026-09-22
 
 First public release. Pre-1.0 while the upgrade path and the published image
