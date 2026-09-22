@@ -10,6 +10,7 @@ from functools import cached_property
 
 from src.application.interfaces.history import HistoryRepository
 from src.application.interfaces.jobs import JobRepository, WorkerStateRepository
+from src.application.interfaces.track_source import TrackDiscovery
 from src.application.use_cases.history.operations import (
     ClearHistoryUseCase,
     GetOperationUseCase,
@@ -23,6 +24,8 @@ from src.application.use_cases.imports.run_job import RunImportJobUseCase
 from src.application.use_cases.system.status import GetSystemStatusUseCase
 from src.db.session import DBManager
 from src.domain.paths import PathGuard
+from src.infrastructure.ai.discovery import AiAssistedTrackDiscovery
+from src.infrastructure.ai.openai_compat import OpenAICompatibleChatCompleter
 from src.infrastructure.filesystem.placement import FilesystemPlacement
 from src.infrastructure.filesystem.track_discovery import FilesystemTrackDiscovery
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
@@ -69,12 +72,31 @@ class AppContainer:
         return self._worker_state_override or SqlAlchemyWorkerStateRepository(self.db)
 
     @cached_property
+    def track_discovery(self) -> TrackDiscovery:
+        settings = self.settings
+        heuristic = FilesystemTrackDiscovery()
+        if not settings.ai_enabled:
+            return heuristic
+        return AiAssistedTrackDiscovery(
+            heuristic=heuristic,
+            completer=OpenAICompatibleChatCompleter(
+                base_url=settings.ai_base_url,
+                model=settings.ai_model,
+                api_key=settings.ai_api_key,
+            ),
+            mode=settings.ai_mode,
+            max_entries=settings.ai_max_entries,
+            timeout=settings.ai_timeout_seconds,
+            max_tracks=settings.max_external_tracks,
+        )
+
+    @cached_property
     def handle_import(self) -> HandleImportUseCase:
         return HandleImportUseCase(
             settings=self.settings,
             guard=self.guard,
             prober=FallbackMediaProber(),
-            tracks=FilesystemTrackDiscovery(),
+            tracks=self.track_discovery,
             muxer=MkvmergeMuxer(),
             placement=FilesystemPlacement(),
         )

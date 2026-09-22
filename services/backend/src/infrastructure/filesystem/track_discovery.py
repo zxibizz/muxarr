@@ -60,10 +60,10 @@ def discover(
     if not root.is_dir():
         return []
 
-    sibling_video_count = _count_videos(root)
+    sibling_video_count = count_videos(root)
 
     tracks: list[ExternalTrack] = []
-    for path, context in sorted(_index_candidates(root)):
+    for path, context in sorted(index_candidates(root)):
         if path == video_path:
             continue
         if not belongs_to(path, episode=episode, sibling_video_count=sibling_video_count):
@@ -74,7 +74,7 @@ def discover(
     return tracks
 
 
-def _index_candidates(root: Path) -> list[tuple[Path, tuple[str, ...]]]:
+def index_candidates(root: Path) -> list[tuple[Path, tuple[str, ...]]]:
     """Every file within :data:`MAX_SCAN_DEPTH`, paired with its folder names.
 
     Folder names are returned nearest-first, since they are what carries the
@@ -115,8 +115,32 @@ def _dirs_in(directory: Path) -> list[Path]:
         return []
 
 
-def _count_videos(root: Path) -> int:
+def count_videos(root: Path) -> int:
     return sum(1 for p in _files_in(root) if p.suffix.lower() in VIDEO_EXTENSIONS)
+
+
+def classify(path: Path) -> tuple[TrackKind, Path | None] | None:
+    """Decide what kind of track a sidecar is, from its extension alone.
+
+    Returns the kind and, for VobSub, the companion ``.sub`` that travels with the
+    ``.idx``. ``None`` means the file is not usable as an external track.
+    """
+    suffix = path.suffix.lower()
+
+    if suffix in AUDIO_EXTENSIONS:
+        return "audio", None
+    if suffix not in SUBTITLE_EXTENSIONS:
+        return None
+    if suffix == ".sub":
+        # A bare .sub is an unusable VobSub half; the .idx entry covers the pair.
+        return None
+    if suffix == ".idx":
+        companion = path.with_suffix(".sub")
+        if not companion.is_file():
+            log.debug("skipping VobSub index with no matching .sub", path=path)
+            return None
+        return "subtitles", companion
+    return "subtitles", None
 
 
 def _to_external_track(
@@ -125,24 +149,10 @@ def _to_external_track(
     video_stem: str,
     context: tuple[str, ...] = (),
 ) -> ExternalTrack | None:
-    suffix = path.suffix.lower()
-    kind: TrackKind
-    companion: Path | None = None
-
-    if suffix in AUDIO_EXTENSIONS:
-        kind = "audio"
-    elif suffix in SUBTITLE_EXTENSIONS:
-        kind = "subtitles"
-        if suffix == ".sub":
-            # A bare .sub is an unusable VobSub half; the .idx entry covers the pair.
-            return None
-        if suffix == ".idx":
-            companion = path.with_suffix(".sub")
-            if not companion.is_file():
-                log.debug("skipping VobSub index with no matching .sub", path=path)
-                return None
-    else:
+    classified = classify(path)
+    if classified is None:
         return None
+    kind, companion = classified
 
     attrs = language.infer(path, video_stem=video_stem, context=context)
     return ExternalTrack(

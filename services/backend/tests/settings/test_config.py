@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.settings.config import DEFAULT_PORT, ConfigError, Settings
+from src.settings.config import DEFAULT_AI_BASE_URL, DEFAULT_PORT, ConfigError, Settings
 
 
 def env(**overrides: str) -> dict[str, str]:
@@ -111,3 +111,51 @@ def test_selection_policy_is_derived_from_settings() -> None:
     assert policy.dedupe == "language"
     assert policy.max_external_tracks == 3
     assert policy.skip_undetermined_language is True
+
+
+class TestAiMode:
+    def test_is_off_by_default(self) -> None:
+        settings = Settings.from_env(env())
+
+        assert settings.ai_mode == "off"
+        assert settings.ai_enabled is False
+        assert settings.ai_api_key is None
+        assert settings.ai_base_url == DEFAULT_AI_BASE_URL
+
+    @pytest.mark.parametrize("mode", ["fallback", "always", "verify"])
+    def test_valid_modes(self, mode: str) -> None:
+        settings = Settings.from_env(env(MUXARR_AI_MODE=mode, MUXARR_AI_MODEL="tiny"))
+
+        assert settings.ai_mode == mode
+        assert settings.ai_enabled is True
+
+    def test_invalid_mode_is_rejected(self) -> None:
+        with pytest.raises(ConfigError, match="MUXARR_AI_MODE"):
+            Settings.from_env(env(MUXARR_AI_MODE="magic"))
+
+    def test_mode_is_case_insensitive(self) -> None:
+        assert Settings.from_env(env(MUXARR_AI_MODE="FALLBACK", MUXARR_AI_MODEL="t")).ai_mode == (
+            "fallback"
+        )
+
+    def test_model_is_required_once_enabled(self) -> None:
+        with pytest.raises(ConfigError, match="MUXARR_AI_MODEL is required"):
+            Settings.from_env(env(MUXARR_AI_MODE="always"))
+
+    def test_model_is_not_required_while_off(self) -> None:
+        assert Settings.from_env(env()).ai_model == ""
+
+    def test_a_keyless_local_provider_is_allowed(self) -> None:
+        settings = Settings.from_env(
+            env(
+                MUXARR_AI_MODE="fallback",
+                MUXARR_AI_MODEL="qwen2.5:7b",
+                MUXARR_AI_BASE_URL="http://127.0.0.1:11434/v1",
+            )
+        )
+
+        assert settings.ai_api_key is None
+        assert settings.ai_base_url == "http://127.0.0.1:11434/v1"
+
+    def test_entry_cap_is_at_least_one(self) -> None:
+        assert Settings.from_env(env(MUXARR_AI_MAX_ENTRIES="0")).ai_max_entries == 1

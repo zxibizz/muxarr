@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from src.domain.enums import DedupeMode
+from src.domain.enums import AiMode, DedupeMode
 from src.domain.errors import MuxarrError
 from src.domain.selection import SelectionPolicy
 
@@ -21,8 +21,11 @@ DEFAULT_HOST = "127.0.0.1"
 # The container mounts a volume here; anything else has to set MUXARR_DB_URL.
 DEFAULT_DB_URL = "sqlite+aiosqlite:////config/muxarr.db"
 
+DEFAULT_AI_BASE_URL = "https://api.openai.com/v1"
+
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 _VALID_DEDUPE: frozenset[str] = frozenset({"off", "language", "language_codec"})
+_VALID_AI_MODE: frozenset[str] = frozenset({"off", "fallback", "always", "verify"})
 
 
 class ConfigError(MuxarrError):
@@ -61,7 +64,20 @@ class Settings:
     # Emit one JSON object per record instead of the human-readable console line.
     log_json: bool = False
     db_url: str = DEFAULT_DB_URL
+    # Off by default: enabling it sends release folder and file NAMES to a third party.
+    ai_mode: AiMode = "off"
+    ai_base_url: str = DEFAULT_AI_BASE_URL
+    ai_api_key: str | None = None
+    ai_model: str = ""
+    ai_timeout_seconds: float = 30.0
+    # A season pack can hold thousands of files; above this the AI path is skipped
+    # entirely rather than sending (and paying for) an enormous listing.
+    ai_max_entries: int = 200
     extra: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def ai_enabled(self) -> bool:
+        return self.ai_mode != "off"
 
     @property
     def selection_policy(self) -> SelectionPolicy:
@@ -91,6 +107,15 @@ class Settings:
 
         scratch = source.get("MUXARR_SCRATCH_DIR", "").strip()
 
+        ai_mode = source.get("MUXARR_AI_MODE", "off").strip().lower() or "off"
+        if ai_mode not in _VALID_AI_MODE:
+            raise ConfigError(
+                f"MUXARR_AI_MODE must be one of {sorted(_VALID_AI_MODE)}, got {ai_mode!r}"
+            )
+        ai_model = source.get("MUXARR_AI_MODEL", "").strip()
+        if ai_mode != "off" and not ai_model:
+            raise ConfigError("MUXARR_AI_MODEL is required when MUXARR_AI_MODE is not 'off'")
+
         return cls(
             read_roots=roots,
             auth_token=source.get("MUXARR_TOKEN") or None,
@@ -112,6 +137,12 @@ class Settings:
             log_level=source.get("MUXARR_LOG_LEVEL", "INFO").upper(),
             log_json=_parse_bool(source, "MUXARR_LOG_JSON"),
             db_url=source.get("MUXARR_DB_URL", "").strip() or DEFAULT_DB_URL,
+            ai_mode=ai_mode,  # type: ignore[arg-type]
+            ai_base_url=source.get("MUXARR_AI_BASE_URL", "").strip() or DEFAULT_AI_BASE_URL,
+            ai_api_key=source.get("MUXARR_AI_API_KEY") or None,
+            ai_model=ai_model,
+            ai_timeout_seconds=_parse_float(source, "MUXARR_AI_TIMEOUT", 30.0),
+            ai_max_entries=max(1, _parse_int(source, "MUXARR_AI_MAX_ENTRIES", 200)),
         )
 
 
