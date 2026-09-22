@@ -96,6 +96,7 @@ def run_mux(
     if not plan.output.is_file():
         raise MuxError(f"mkvmerge reported success but produced no output at {plan.output}")
 
+    log.bind(output=plan.output).debug("mkvmerge finished, verifying the result")
     return verify(plan, source_info)
 
 

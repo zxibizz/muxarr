@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.domain.enums import AiMode, DedupeMode
+from src.settings.config import MAX_OPERATION_LOG_ENTRIES
 
 LogLevel = Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
 
@@ -29,6 +30,7 @@ class SettingsView(BaseModel):
     max_concurrent_muxes: int
     job_ttl_seconds: float
     history_max_records: int
+    operation_log_max_entries: int
 
     ai_mode: AiMode
     ai_base_url: str
@@ -61,6 +63,9 @@ class SettingsPatch(BaseModel):
     max_concurrent_muxes: int | None = Field(default=None, ge=1)
     job_ttl_seconds: float | None = Field(default=None, ge=60)
     history_max_records: int | None = Field(default=None, ge=1)
+    operation_log_max_entries: int | None = Field(
+        default=None, ge=0, le=MAX_OPERATION_LOG_ENTRIES
+    )
 
     ai_mode: AiMode | None = None
     ai_base_url: str | None = None

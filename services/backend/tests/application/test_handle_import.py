@@ -9,6 +9,7 @@ import pytest
 from src.application.interfaces.muxer import MuxPlan
 from src.application.use_cases.imports.dto import ImportRequest
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
+from src.core.logging import capture_log
 from src.domain.errors import MuxError, ProbeError
 from src.domain.media import MediaInfo, Track
 from src.domain.naming import EpisodeRef
@@ -261,7 +262,9 @@ class TestSuccessfulMux:
     ) -> None:
         outcome = use_case(settings, muxer=muxer).execute(request_for(layout))
 
-        assert outcome.added_tracks == ("subtitles:Russian",)
+        assert [(t.kind, t.label, t.source) for t in outcome.added_tracks] == [
+            ("subtitles", "Russian", "heuristic")
+        ]
 
     def test_dry_run_writes_nothing(
         self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
@@ -270,8 +273,52 @@ class TestSuccessfulMux:
 
         assert outcome.move_status == "DeferMove"
         assert outcome.reason == "dry run"
-        assert outcome.added_tracks == ("subtitles:Russian",)
+        assert [t.label for t in outcome.added_tracks] == ["Russian"]
         assert muxer.written == []
+
+
+class TestTheStoryItTells:
+    """The narrative the history shows is built from the same records stdout gets."""
+
+    def test_every_stage_of_a_successful_import_is_accounted_for(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.srt", "1\n")
+
+        with capture_log(100) as entries:
+            use_case(settings, muxer=muxer).execute(request_for(layout))
+
+        stages = [entry.stage for entry in entries if entry.stage]
+        assert stages[0] == "guard"
+        assert {"probe", "discovery", "selection", "mux", "outcome"} <= set(stages)
+
+    def test_a_rejected_sidecar_says_why(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.srt", "1\n")
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.empty.srt", "")
+
+        with capture_log(100) as entries:
+            use_case(settings, muxer=muxer).execute(request_for(layout))
+
+        selection = [e.message for e in entries if e.stage == "selection"]
+        assert any("file is empty" in message for message in selection)
+        assert any(
+            "embedding subtitles Russian" in message and "from its filename" in message
+            for message in selection
+        )
+
+    def test_a_deferral_records_the_reason_against_the_stage_that_caused_it(
+        self, layout: dict[str, Path], settings: Settings
+    ) -> None:
+        handler = use_case(settings, prober=StubProber(ProbeError("no such tool")))
+
+        with capture_log(100) as entries:
+            handler.execute(request_for(layout))
+
+        assert [e.message for e in entries if e.stage == "probe"] == [
+            "deferring to *arr: could not probe source: no such tool"
+        ]
 
 
 @pytest.mark.parametrize("transfer_mode", ["Move", "Copy", "HardLinkOrCopy"])

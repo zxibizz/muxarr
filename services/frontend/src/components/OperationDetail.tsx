@@ -1,6 +1,7 @@
 import { Badge, Code, Divider, Drawer, Group, List, Stack, Text, Title } from '@mantine/core';
-import { formatBytes, formatDuration, formatTimestamp } from '../format';
+import { explainTrack, formatBytes, formatDuration, formatTimestamp } from '../format';
 import type { Operation } from '../types';
+import { ActivityLog } from './ActivityLog';
 import { StatusBadge } from './StatusBadge';
 
 interface Props {
@@ -99,13 +100,13 @@ export function OperationDetail({ operation, onClose }: Props) {
                 None
               </Text>
             ) : (
-              <Group gap={6} wrap="wrap">
+              <List size="sm" spacing={4}>
                 {operation.added_tracks.map((track) => (
-                  <Badge key={track} variant="light" color="teal">
-                    {track}
-                  </Badge>
+                  <List.Item key={`${track.kind}:${track.file}:${track.label}`}>
+                    <Text size="sm">{explainTrack(track)}</Text>
+                  </List.Item>
                 ))}
-              </Group>
+              </List>
             )}
           </Field>
 
@@ -129,6 +130,12 @@ export function OperationDetail({ operation, onClose }: Props) {
                 ))}
               </List>
             )}
+          </Field>
+
+          <Divider />
+
+          <Field label="What happened">
+            <ActivityLog entries={operation.log} />
           </Field>
 
           <Divider />

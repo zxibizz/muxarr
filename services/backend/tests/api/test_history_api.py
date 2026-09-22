@@ -9,6 +9,7 @@ from httpx import AsyncClient
 
 from src.application.interfaces.history import HistoryRepository
 from src.core.container import AppContainer
+from src.domain.journal import LogEntry, TrackDetail
 from src.infrastructure import probing
 from tests.api.conftest import VIDEO_ONLY, auth, drain
 
@@ -112,12 +113,39 @@ class TestHistoryEndpoints:
         assert response.status_code == 422
 
     async def test_detail(self, client: AsyncClient, store: HistoryRepository) -> None:
-        operation_id = await seed(store, added_tracks=["subtitles:Russian"])
+        operation_id = await seed(
+            store,
+            added_tracks=[TrackDetail(kind="subtitles", label="Russian", source="ai")],
+            log=[
+                LogEntry(
+                    ts="2026-01-01T00:00:00Z",
+                    level="INFO",
+                    component="usecase.import",
+                    message="embedding subtitles Russian",
+                    stage="selection",
+                )
+            ],
+        )
 
         body = (await client.get(f"/v1/history/{operation_id}", headers=auth())).json()
 
         assert body["id"] == operation_id
-        assert body["added_tracks"] == ["subtitles:Russian"]
+        assert body["added_tracks"] == [
+            {
+                "kind": "subtitles",
+                "label": "Russian",
+                "language": "und",
+                "name": None,
+                "forced": False,
+                "hearing_impaired": False,
+                "variant": None,
+                "file": "",
+                "source": "ai",
+            }
+        ]
+        assert [(e["stage"], e["message"]) for e in body["log"]] == [
+            ("selection", "embedding subtitles Russian")
+        ]
 
     async def test_detail_404(self, client: AsyncClient) -> None:
         assert (await client.get("/v1/history/999", headers=auth())).status_code == 404
@@ -139,7 +167,13 @@ class TestHistoryEndpoints:
 
 class TestStatsEndpoint:
     async def test_stats(self, client: AsyncClient, store: HistoryRepository) -> None:
-        await seed(store, added_tracks=["a", "b"])
+        await seed(
+            store,
+            added_tracks=[
+                TrackDetail(kind="audio", label="a"),
+                TrackDetail(kind="subtitles", label="b"),
+            ],
+        )
         await seed(store, move_status="DeferMove")
 
         body = (await client.get("/v1/stats", headers=auth())).json()

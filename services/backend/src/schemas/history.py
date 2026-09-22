@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from src.schemas.journal import LogEntryModel, RejectedTrackModel, TrackModel
+
 
 class OperationModel(BaseModel):
     id: int
@@ -18,8 +20,9 @@ class OperationModel(BaseModel):
     transfer_mode: str = ""
     season: int | None = None
     episodes: list[int] = Field(default_factory=list)
-    added_tracks: list[str] = Field(default_factory=list)
-    rejected_tracks: list[dict[str, str]] = Field(default_factory=list)
+    added_tracks: list[TrackModel] = Field(default_factory=list)
+    rejected_tracks: list[RejectedTrackModel] = Field(default_factory=list)
+    log: list[LogEntryModel] = Field(default_factory=list)
     duration_ms: int = 0
     source_bytes: int | None = None
     output_bytes: int | None = None

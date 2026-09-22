@@ -9,6 +9,7 @@ rowcount. Two workers racing for the same row means exactly one of them sees
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast, get_args
@@ -16,10 +17,16 @@ from typing import Any, cast, get_args
 from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from src.application.interfaces.jobs import JobConflictError, JobRecord
+from src.application.interfaces.jobs import (
+    MAX_JOB_PAGE_SIZE,
+    JobConflictError,
+    JobPage,
+    JobRecord,
+)
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.db.session import DBManager
 from src.domain.enums import App, JobState, MoveStatus
+from src.domain.journal import LogEntry, RejectedTrack, TrackDetail
 from src.domain.models import Job
 
 # How many pending rows to try before giving up on a claim pass. Only matters
@@ -67,6 +74,30 @@ class SqlAlchemyJobRepository:
         async with self._db.session() as session:
             row = await session.get(Job, job_id)
             return _to_record(row) if row is not None else None
+
+    async def list(
+        self, *, state: JobState | None = None, limit: int = 20, offset: int = 0
+    ) -> JobPage:
+        limit = max(1, min(limit, MAX_JOB_PAGE_SIZE))
+        offset = max(0, offset)
+        conditions = [Job.state == state] if state else []
+        async with self._db.session() as session:
+            total = await session.scalar(select(func.count()).select_from(Job).where(*conditions))
+            rows = await session.scalars(
+                select(Job)
+                .where(*conditions)
+                .order_by(Job.created_at.desc(), Job.id.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            items = [_to_record(row) for row in rows]
+        return JobPage(items=items, total=int(total or 0), limit=limit, offset=offset)
+
+    async def save_log(self, job_id: str, entries: Sequence[LogEntry]) -> None:
+        payload = json.dumps([e.to_dict() for e in entries])
+        async with self._db.session() as session:
+            await session.execute(update(Job).where(Job.id == job_id).values(log=payload))
+            await session.commit()
 
     async def claim_next(self) -> JobRecord | None:
         async with self._db.session() as session:
@@ -185,8 +216,8 @@ def _outcome_to_json(outcome: ImportOutcome) -> dict[str, Any]:
         "media_file": str(outcome.media_file) if outcome.media_file else None,
         "extra_files": [str(p) for p in outcome.extra_files],
         "prevent_extra_import": outcome.prevent_extra_import,
-        "added_tracks": list(outcome.added_tracks),
-        "rejected_tracks": [dict(r) for r in outcome.rejected_tracks],
+        "added_tracks": [t.to_dict() for t in outcome.added_tracks],
+        "rejected_tracks": [r.to_dict() for r in outcome.rejected_tracks],
         "duration_ms": outcome.duration_ms,
         "source_bytes": outcome.source_bytes,
         "output_bytes": outcome.output_bytes,
@@ -202,8 +233,10 @@ def _outcome_from_json(payload: str) -> ImportOutcome:
         media_file=Path(media_file) if media_file else None,
         extra_files=tuple(Path(p) for p in data.get("extra_files", ())),
         prevent_extra_import=bool(data.get("prevent_extra_import", False)),
-        added_tracks=tuple(data.get("added_tracks", ())),
-        rejected_tracks=tuple(data.get("rejected_tracks", ())),
+        added_tracks=tuple(TrackDetail.from_stored(t) for t in data.get("added_tracks", ())),
+        rejected_tracks=tuple(
+            RejectedTrack.from_stored(r) for r in data.get("rejected_tracks", ())
+        ),
         duration_ms=int(data.get("duration_ms", 0)),
         source_bytes=data.get("source_bytes"),
         output_bytes=data.get("output_bytes"),
@@ -227,4 +260,5 @@ def _to_record(row: Job) -> JobRecord:
         history_id=row.history_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        log=[LogEntry.from_dict(e) for e in json.loads(row.log or "[]")],
     )

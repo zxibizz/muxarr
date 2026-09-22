@@ -13,6 +13,7 @@ from httpx import AsyncClient
 from src.api.app import create_app
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.core.container import AppContainer
+from src.domain.journal import TrackDetail
 from src.domain.naming import EpisodeRef
 from src.infrastructure import probing
 from src.settings.config import Settings
@@ -225,7 +226,7 @@ class TestImportOutcome:
             media_file=layout["destination"],
             extra_files=(layout["release"] / "leftover.srt",),
             prevent_extra_import=True,
-            added_tracks=("subtitles:Russian",),
+            added_tracks=(TrackDetail(kind="subtitles", label="Russian", language="rus"),),
         )
         stub(container, lambda _r: outcome)
 
@@ -234,7 +235,7 @@ class TestImportOutcome:
         assert result["move_status"] == "RenameRequested"
         assert result["media_file"] == str(layout["destination"])
         assert result["prevent_extra_import"] is True
-        assert result["added_tracks"] == ["subtitles:Russian"]
+        assert [t["label"] for t in result["added_tracks"]] == ["Russian"]
 
     async def test_a_completed_job_links_to_its_history_row(
         self,
