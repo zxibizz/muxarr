@@ -44,10 +44,15 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # auto: only a stable release moves `latest`. A prerelease also has its
+          # {{major}}.{{minor}} and {{major}} patterns collapsed back to the full
+          # version, so v1.2.3-rc1 can never take over `1.2`, `1` or `latest`.
+          flavor: latest=auto
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
+            type=raw,value=beta,enable=${{ contains(github.ref_name, '-') }}
           labels: |
             org.opencontainers.image.title=muxarr
             org.opencontainers.image.description=Embed external audio and subtitle tracks into video containers during Radarr/Sonarr import
