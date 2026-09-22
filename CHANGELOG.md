@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-22
+
 ### Added
 
 - **Every history entry now carries the log of the import that produced it.**
@@ -114,6 +116,7 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.2
 [0.9.1]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.0
