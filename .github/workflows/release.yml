@@ -12,15 +12,18 @@ jobs:
   verify:
     uses: ./.github/workflows/ci.yml
 
-  tag-matches-source:
+  # Cheap tag-shaped checks, before anything is published.
+  preflight:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: Tag matches the version in the source
         run: python3 .github/scripts/check_version.py "${{ github.ref_name }}"
+      - name: Release notes exist
+        run: python3 .github/scripts/changelog_section.py "${{ github.ref_name }}"
 
   publish:
-    needs: [verify, tag-matches-source]
+    needs: [verify, preflight]
     runs-on: ubuntu-latest
     permissions:
       contents: write
