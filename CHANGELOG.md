@@ -12,6 +12,30 @@ within the same major version.
 
 ## [Unreleased]
 
+### Added
+
+- **Every history entry now carries the log of the import that produced it.**
+  Opening an operation shows what muxarr did, in order: what the source already
+  contained, which sidecars were found and how each was identified, the verdict
+  and reason for every candidate, the remux itself, and the outcome — followed
+  by the full log it was distilled from. Kept per import and trimmed with the
+  history, capped by `MUXARR_OPERATION_LOG_MAX_ENTRIES` (default 500, `0`
+  disables the capture). Needs a migration, which the container runs on start.
+- **In-flight imports are visible while they run.** The history page lists jobs
+  that have not settled yet and follows their log live, which is also the only
+  way to read a job that failed before it could write a history entry. Backed
+  by `GET /v1/jobs` and `GET /v1/jobs/{id}/detail`.
+
+### Changed
+
+- Embedded tracks are recorded as structured data — kind, label, language,
+  flags, file and how it was identified — instead of a display string with an
+  uninformative `[ai]` suffix. The UI marks an AI-identified track with a dot
+  and explains it in full in the operation detail. Entries written by earlier
+  versions still render. `added_tracks` and `rejected_tracks` in
+  `GET /v1/history` and `GET /v1/jobs/{id}` are objects rather than strings;
+  the shim protocol on `GET /v1/jobs/{id}/protocol` is unchanged.
+
 ## [0.9.1] - 2026-09-22
 
 ### Added

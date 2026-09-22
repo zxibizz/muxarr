@@ -23,6 +23,7 @@ from src.application.use_cases.history.operations import (
 from src.application.use_cases.imports.await_job import AwaitJobUseCase
 from src.application.use_cases.imports.enqueue_import import EnqueueImportUseCase
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
+from src.application.use_cases.imports.list_jobs import ListJobsUseCase
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
 from src.application.use_cases.settings.read import GetSettingsUseCase
 from src.application.use_cases.settings.test_ai import TestAiProviderUseCase
@@ -179,11 +180,16 @@ class AppContainer:
         return AwaitJobUseCase(self.jobs)
 
     @cached_property
+    def list_jobs(self) -> ListJobsUseCase:
+        return ListJobsUseCase(self.jobs)
+
+    @cached_property
     def run_import_job(self) -> RunImportJobUseCase:
         return RunImportJobUseCase(
             jobs=self.jobs,
             history=self.history,
             handler=self.handle_import,
+            log_max_entries=self.settings.operation_log_max_entries,
         )
 
     @cached_property

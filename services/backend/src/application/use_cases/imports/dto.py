@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.domain.enums import App, MoveStatus
+from src.domain.journal import RejectedTrack, TrackDetail
 from src.domain.naming import EpisodeRef, parse_episode_marker
 
 OUTPUT_SUFFIX = ".mkv"
@@ -54,9 +55,9 @@ class ImportOutcome:
     media_file: Path | None = None
     extra_files: tuple[Path, ...] = ()
     prevent_extra_import: bool = False
-    added_tracks: tuple[str, ...] = ()
+    added_tracks: tuple[TrackDetail, ...] = ()
     # Why each discovered sidecar was passed over; the history UI shows these.
-    rejected_tracks: tuple[dict[str, str], ...] = ()
+    rejected_tracks: tuple[RejectedTrack, ...] = ()
     duration_ms: int = 0
     source_bytes: int | None = None
     output_bytes: int | None = None

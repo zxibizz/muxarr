@@ -73,6 +73,7 @@ def _view(container: AppContainer) -> SettingsView:
         max_concurrent_muxes=settings.max_concurrent_muxes,
         job_ttl_seconds=settings.job_ttl_seconds,
         history_max_records=settings.history_max_records,
+        operation_log_max_entries=settings.operation_log_max_entries,
         ai_mode=settings.ai_mode,
         ai_base_url=settings.ai_base_url,
         ai_model=settings.ai_model,

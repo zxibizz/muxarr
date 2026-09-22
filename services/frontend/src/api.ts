@@ -4,6 +4,9 @@ import type {
   Health,
   HistoryFilters,
   HistoryPage,
+  Job,
+  JobPage,
+  JobState,
   Operation,
   ServiceSettings,
   SettingsPatch,
@@ -100,6 +103,14 @@ export const api = {
   },
 
   operation: (id: number) => request<Operation>(`/v1/history/${id}`),
+
+  jobs: (state?: JobState, limit = 20, offset = 0) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (state) params.set('state', state);
+    return request<JobPage>(`/v1/jobs?${params.toString()}`);
+  },
+
+  job: (id: string) => request<Job>(`/v1/jobs/${encodeURIComponent(id)}/detail`),
 
   clearHistory: () => request<{ deleted: number }>('/v1/history', { method: 'DELETE' }),
 

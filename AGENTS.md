@@ -63,7 +63,14 @@ alembic/                 under services/backend/
     never `%s` interpolation and never `logging.getLogger`. `LogComponent` is a
     closed enum so a mistyped component fails a type check. stdlib records from
     uvicorn, alembic and sqlalchemy are rerouted by `InterceptHandler`.
-15. **Comments explain why, not what.**
+15. **Everything logged during an import is stored with it.** `capture_log` in
+    `core/logging.py` scopes a sink to one job, so a record is both a stdout line
+    and part of what the history entry shows. A record carrying `stage=` (a
+    `LogStage`) is a step of the narrative; the rest is the trail beneath it.
+    Bind a message's context rather than passing kwargs when the message is
+    built with an f-string -- loguru formats it, and a brace in a filename would
+    otherwise blow up.
+16. **Comments explain why, not what.**
 
 ## Commands
 

@@ -26,6 +26,7 @@ from src.application.interfaces.ai import ChatCompleter
 from src.application.interfaces.track_source import TrackDiscovery
 from src.core.logging import get_logger
 from src.domain.enums import UNDETERMINED, AiMode, LogComponent
+from src.domain.journal import LogStage
 from src.domain.language import normalise_language
 from src.domain.media import ExternalTrack
 from src.domain.naming import EpisodeRef
@@ -33,6 +34,10 @@ from src.infrastructure.ai import prompt as prompt_builder
 from src.infrastructure.filesystem.track_discovery import classify
 
 log = get_logger(LogComponent.INFRA_AI)
+
+# Steps of the AI decision belong in the operation's narrative: it is the part a
+# user is least able to reconstruct from the filenames alone.
+note = log.bind(stage=LogStage.AI.value)
 
 # Track names and dub tags end up in the Matroska header and in an mkvmerge argv.
 MAX_LABEL_CHARS = 120
@@ -66,22 +71,30 @@ class AiAssistedTrackDiscovery:
     ) -> list[ExternalTrack]:
         found = self._heuristic.discover(video_path, episode=episode)
         if not self._should_consult(found):
+            if self._mode != "off":
+                note.bind(mode=self._mode).info(
+                    "the filenames were conclusive, so the AI provider was not consulted"
+                )
             return found
 
+        note.bind(mode=self._mode, heuristic_tracks=len(found)).info(
+            "asking the AI provider to identify the sidecar files"
+        )
         proposed = self._consult(video_path, episode=episode)
         if proposed is None:
+            note.bind(tracks=len(found)).info("keeping the filename result")
             return found
 
         if self._mode == "verify":
             _log_disagreement(found, proposed)
+            note.info("verify mode: the filename result is the one being used")
             return found
 
-        log.info(
-            "ai discovery accepted",
+        note.bind(
             video=video_path.name,
             heuristic_tracks=len(found),
             ai_tracks=len(proposed),
-        )
+        ).info(f"using the AI provider's {len(proposed)} track(s) instead of the filename result")
         return proposed
 
     def _should_consult(self, found: Sequence[ExternalTrack]) -> bool:
@@ -97,17 +110,19 @@ class AiAssistedTrackDiscovery:
     ) -> list[ExternalTrack] | None:
         built = prompt_builder.build(video_path, episode=episode, max_entries=self._max_entries)
         if built is None:
+            note.bind(max_entries=self._max_entries).info(
+                "nothing to ask about: no candidate files, or too many to send"
+            )
             return None
 
+        note.bind(candidates=len(built.index)).debug("sending the candidate file list")
         try:
             reply = self._completer.complete(
                 system=built.system, user=built.user, timeout=self._timeout
             )
         except Exception as exc:  # noqa: BLE001 - a bad API call must never fail an import
-            log.warning(
-                "ai discovery unavailable, keeping the filename heuristic",
-                video=video_path.name,
-                error=str(exc),
+            note.bind(video=video_path.name, error=str(exc)).warning(
+                "the AI provider could not be reached"
             )
             return None
 
@@ -201,14 +216,15 @@ def _log_disagreement(found: Sequence[ExternalTrack], proposed: Sequence[Externa
     heuristic = {_fingerprint(t) for t in found}
     ai = {_fingerprint(t) for t in proposed}
     if heuristic == ai:
-        log.info("ai discovery agrees with the filename heuristic", tracks=len(found))
+        note.bind(tracks=len(found)).info(
+            "the AI provider agrees with what the filenames said"
+        )
         return
 
-    log.warning(
-        "ai discovery disagrees with the filename heuristic",
+    note.bind(
         only_heuristic=sorted(heuristic - ai),
         only_ai=sorted(ai - heuristic),
-    )
+    ).warning("the AI provider disagrees with what the filenames said")
 
 
 def _fingerprint(track: ExternalTrack) -> str:

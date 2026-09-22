@@ -4,9 +4,13 @@ import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import type {
+  AddedTrack,
   AiTestResult,
   Health,
   HistoryPage,
+  Job,
+  JobPage,
+  LogEntry,
   Operation,
   ServiceSettings,
   Stats,
@@ -35,6 +39,7 @@ export function someSettings(overrides: Partial<ServiceSettings> = {}): ServiceS
     max_concurrent_muxes: 1,
     job_ttl_seconds: 3600,
     history_max_records: 200,
+    operation_log_max_entries: 500,
     ai_mode: 'off',
     ai_base_url: 'https://api.openai.com/v1',
     ai_model: '',
@@ -43,6 +48,52 @@ export function someSettings(overrides: Partial<ServiceSettings> = {}): ServiceS
     ai_api_key_set: false,
     log_level: 'INFO',
     locked: [],
+    ...overrides,
+  };
+}
+
+export function aTrack(overrides: Partial<AddedTrack> = {}): AddedTrack {
+  return {
+    kind: 'subtitles',
+    label: 'English',
+    language: 'eng',
+    name: 'English',
+    forced: false,
+    hearing_impaired: false,
+    variant: null,
+    file: 'English.srt',
+    source: 'heuristic',
+    ...overrides,
+  };
+}
+
+export function aLogEntry(overrides: Partial<LogEntry> = {}): LogEntry {
+  return {
+    ts: '2026-09-22T10:00:00+00:00',
+    level: 'INFO',
+    component: 'usecase.import',
+    message: 'embedding subtitles English',
+    stage: 'selection',
+    context: {},
+    ...overrides,
+  };
+}
+
+export function aJob(overrides: Partial<Job> = {}): Job {
+  return {
+    id: 'job-1',
+    state: 'running',
+    error: null,
+    history_id: null,
+    app: 'sonarr',
+    title: 'Show S01E02.mkv',
+    source_path: '/downloads/Show.S01E02/Show.S01E02.mkv',
+    destination_path: '/media/Show/Season 01/Show - S01E02.mkv',
+    transfer_mode: 'Move',
+    dry_run: false,
+    created_at: '2026-09-22T10:00:00+00:00',
+    updated_at: '2026-09-22T10:00:05+00:00',
+    log: [aLogEntry()],
     ...overrides,
   };
 }
@@ -61,8 +112,12 @@ export function anOperation(overrides: Partial<Operation> = {}): Operation {
     transfer_mode: 'Move',
     season: 1,
     episodes: [1],
-    added_tracks: ['English (SRT)', 'Russian (AC3)'],
+    added_tracks: [
+      aTrack(),
+      aTrack({ kind: 'audio', label: 'Russian', language: 'rus', file: 'rus.mka', source: 'ai' }),
+    ],
     rejected_tracks: [],
+    log: [aLogEntry()],
     duration_ms: 12_000,
     source_bytes: 1024,
     output_bytes: 2048,
@@ -76,6 +131,7 @@ interface Responses {
   stats?: Stats;
   system?: SystemStatus;
   history?: HistoryPage;
+  jobs?: JobPage;
   settings?: ServiceSettings;
   aiTest?: AiTestResult;
   status?: number;
@@ -101,6 +157,7 @@ export function stubFetch(responses: Responses = {}) {
       queue: { pending: 0, running: 0, succeeded: 1, failed: 0 },
     },
     history = { items: [anOperation()], total: 1, limit: 25, offset: 0 },
+    jobs = { items: [], total: 0, limit: 20, offset: 0 },
     settings = someSettings(),
     aiTest = { ok: true, message: 'tiny replied', latency_ms: 120 },
   } = responses;
@@ -109,6 +166,9 @@ export function stubFetch(responses: Responses = {}) {
     if (path.startsWith('/healthz')) return health;
     if (path.startsWith('/v1/stats')) return stats;
     if (path.startsWith('/v1/system')) return system;
+    // A single job, not the page: /v1/jobs/{id}/detail.
+    if (path.startsWith('/v1/jobs/')) return jobs.items[0] ?? aJob();
+    if (path.startsWith('/v1/jobs')) return jobs;
     if (path.startsWith('/v1/settings/ai/test')) return aiTest;
     if (path.startsWith('/v1/settings')) return settings;
     return history;

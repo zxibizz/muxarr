@@ -15,7 +15,7 @@ import os
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 
-from src.settings.config import _TRUTHY, ConfigError, Settings
+from src.settings.config import _TRUTHY, MAX_OPERATION_LOG_ENTRIES, ConfigError, Settings
 
 # loguru's levels; ``from_env`` accepts anything, but a typo chosen in a dropdown
 # would silence the daemon with no way to notice.
@@ -49,7 +49,7 @@ def _as_bool(env: str, raw: str) -> object:
     return raw.strip().lower() in _TRUTHY
 
 
-def _as_int(minimum: int) -> Callable[[str, str], object]:
+def _as_int(minimum: int, maximum: int | None = None) -> Callable[[str, str], object]:
     def parse(env: str, raw: str) -> object:
         try:
             value = int(raw.strip())
@@ -57,6 +57,8 @@ def _as_int(minimum: int) -> Callable[[str, str], object]:
             raise ConfigError(f"{env} must be an integer, got {raw!r}") from exc
         if value < minimum:
             raise ConfigError(f"{env} must be at least {minimum}, got {value}")
+        if maximum is not None and value > maximum:
+            raise ConfigError(f"{env} must be at most {maximum}, got {value}")
         return value
 
     return parse
@@ -101,6 +103,12 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("max_concurrent_muxes", "MUXARR_MAX_CONCURRENT", "queue", _as_int(1)),
     FieldSpec("job_ttl_seconds", "MUXARR_JOB_TTL", "queue", _as_float(60.0)),
     FieldSpec("history_max_records", "MUXARR_HISTORY_MAX_RECORDS", "queue", _as_int(1)),
+    FieldSpec(
+        "operation_log_max_entries",
+        "MUXARR_OPERATION_LOG_MAX_ENTRIES",
+        "queue",
+        _as_int(0, MAX_OPERATION_LOG_ENTRIES),
+    ),
     FieldSpec("ai_mode", "MUXARR_AI_MODE", "ai", _AI_MODE),
     FieldSpec("ai_base_url", "MUXARR_AI_BASE_URL", "ai", _as_text),
     FieldSpec("ai_api_key", "MUXARR_AI_API_KEY", "ai", _as_optional_text, secret=True),

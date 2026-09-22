@@ -123,6 +123,7 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_MAX_CONCURRENT` | `1` | ✓ | Simultaneous remuxes, in the worker |
 | `MUXARR_JOB_TTL` | `3600` | ✓ | Seconds a finished job stays readable |
 | `MUXARR_HISTORY_MAX_RECORDS` | `200` | ✓ | Newest operations kept; older ones are trimmed |
+| `MUXARR_OPERATION_LOG_MAX_ENTRIES` | `500` | ✓ | Log lines stored to explain one import; `0` records none |
 | `MUXARR_MAX_POLL_WAIT` | `60` | | Ceiling on how long one poll is held open |
 | `MUXARR_SCRATCH_DIR` | destination dir | | Only change for NFS/SMB/union FS |
 | `MUXARR_DEDUPE` | `language_codec` | ✓ | `off`, `language`, `language_codec` |

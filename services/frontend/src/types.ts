@@ -1,8 +1,48 @@
 export type MoveStatus = 'DeferMove' | 'MoveComplete' | 'RenameRequested';
 
+export type TrackKind = 'video' | 'audio' | 'subtitles';
+
+/** Whether a filename told muxarr what this track was, or a language model did. */
+export type TrackSource = 'heuristic' | 'ai';
+
+export interface AddedTrack {
+  kind: TrackKind;
+  label: string;
+  language: string;
+  name: string | null;
+  forced: boolean;
+  hearing_impaired: boolean;
+  variant: string | null;
+  file: string;
+  source: TrackSource;
+}
+
 export interface RejectedTrack {
   track: string;
   reason: string;
+  kind: TrackKind;
+  language: string;
+  source: TrackSource;
+}
+
+export type LogStage =
+  | 'guard'
+  | 'probe'
+  | 'discovery'
+  | 'ai'
+  | 'selection'
+  | 'mux'
+  | 'placement'
+  | 'outcome';
+
+export interface LogEntry {
+  ts: string;
+  level: string;
+  component: string;
+  message: string;
+  // Set on the records that make up the narrative; null on the rest.
+  stage: LogStage | null;
+  context: Record<string, string>;
 }
 
 export interface Operation {
@@ -18,12 +58,38 @@ export interface Operation {
   transfer_mode: string;
   season: number | null;
   episodes: number[];
-  added_tracks: string[];
+  added_tracks: AddedTrack[];
   rejected_tracks: RejectedTrack[];
+  log: LogEntry[];
   duration_ms: number;
   source_bytes: number | null;
   output_bytes: number | null;
   dry_run: boolean;
+}
+
+export type JobState = 'pending' | 'running' | 'succeeded' | 'failed';
+
+export interface Job {
+  id: string;
+  state: JobState;
+  error: string | null;
+  history_id: number | null;
+  app: string;
+  title: string;
+  source_path: string;
+  destination_path: string;
+  transfer_mode: string;
+  dry_run: boolean;
+  created_at: string;
+  updated_at: string;
+  log: LogEntry[];
+}
+
+export interface JobPage {
+  items: Job[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface HistoryPage {
@@ -100,6 +166,7 @@ export interface EditableSettings {
   max_concurrent_muxes: number;
   job_ttl_seconds: number;
   history_max_records: number;
+  operation_log_max_entries: number;
 
   ai_mode: AiMode;
   ai_base_url: string;

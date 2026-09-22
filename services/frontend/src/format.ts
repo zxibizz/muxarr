@@ -1,5 +1,6 @@
-const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+import type { AddedTrack } from './types';
 
+const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 export function formatBytes(bytes: number | null): string {
   if (bytes === null || Number.isNaN(bytes)) return '—';
   if (bytes < 1024) return `${bytes} B`;
@@ -26,6 +27,12 @@ export function formatTimestamp(iso: string): string {
   return Number.isNaN(when.getTime()) ? iso : when.toLocaleString();
 }
 
+/** Wall-clock time only; log lines are all from the same import. */
+export function formatClock(iso: string): string {
+  const when = new Date(iso);
+  return Number.isNaN(when.getTime()) ? iso : when.toLocaleTimeString();
+}
+
 export function formatRelative(iso: string): string {
   const when = new Date(iso).getTime();
   if (Number.isNaN(when)) return iso;
@@ -41,4 +48,20 @@ export function formatRelative(iso: string): string {
 export function shortenPath(path: string): string {
   const parts = path.split('/').filter(Boolean);
   return parts.length <= 2 ? path : `…/${parts.slice(-2).join('/')}`;
+}
+
+/** Why an embedded track looks the way it does, in one line. */
+export function explainTrack(track: AddedTrack): string {
+  const parts = [`${track.kind} · ${track.label}`];
+  if (track.language && track.language !== track.label) parts.push(`(${track.language})`);
+  if (track.forced) parts.push('· forced');
+  if (track.hearing_impaired) parts.push('· hearing impaired');
+  if (track.variant) parts.push(`· ${track.variant}`);
+  parts.push(
+    track.source === 'ai'
+      ? '— identified by the AI provider'
+      : '— identified from its filename',
+  );
+  if (track.file) parts.push(`from ${track.file}`);
+  return parts.join(' ');
 }

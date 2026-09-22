@@ -23,6 +23,10 @@ DEFAULT_DB_URL = "sqlite+aiosqlite:////config/muxarr.db"
 
 DEFAULT_AI_BASE_URL = "https://api.openai.com/v1"
 
+# The log is stored inline on the row it explains, so it is capped well below
+# anything that would make the history table awkward to read back.
+MAX_OPERATION_LOG_ENTRIES = 5000
+
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 _VALID_DEDUPE: frozenset[str] = frozenset({"off", "language", "language_codec"})
 _VALID_AI_MODE: frozenset[str] = frozenset({"off", "fallback", "always", "verify"})
@@ -51,6 +55,8 @@ class Settings:
     max_poll_wait_seconds: float = 60.0
     # The history is a recent-activity log, not an archive; the worker trims it.
     history_max_records: int = 200
+    # How many log records are kept to explain one import. 0 stops the capture.
+    operation_log_max_entries: int = 500
     scratch_dir: Path | None = None
     dedupe: DedupeMode = "language_codec"
     skip_image_subtitles: bool = False
@@ -125,6 +131,10 @@ class Settings:
             job_ttl_seconds=_parse_float(source, "MUXARR_JOB_TTL", 60 * 60.0),
             max_poll_wait_seconds=_parse_float(source, "MUXARR_MAX_POLL_WAIT", 60.0),
             history_max_records=max(1, _parse_int(source, "MUXARR_HISTORY_MAX_RECORDS", 200)),
+            operation_log_max_entries=min(
+                MAX_OPERATION_LOG_ENTRIES,
+                max(0, _parse_int(source, "MUXARR_OPERATION_LOG_MAX_ENTRIES", 500)),
+            ),
             scratch_dir=Path(scratch) if scratch else None,
             dedupe=dedupe,  # type: ignore[arg-type]
             skip_image_subtitles=_parse_bool(source, "MUXARR_SKIP_IMAGE_SUBTITLES"),

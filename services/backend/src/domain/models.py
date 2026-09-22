@@ -39,6 +39,9 @@ class Operation(Base):
     episodes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     added_tracks: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
     rejected_tracks: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
+    # Every log record the import emitted, as JSON. Rows written before this
+    # column existed keep the empty list and render as "no log recorded".
+    log: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     source_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -69,6 +72,10 @@ class Job(Base):
     outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     history_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The same log the operation ends up with, flushed while the job is still
+    # running so the UI can follow it. This copy dies with the job's TTL; the
+    # operation keeps the durable one.
+    log: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
 
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)

@@ -61,16 +61,28 @@ def discover(
         return []
 
     sibling_video_count = count_videos(root)
+    log.bind(folder=root, videos=sibling_video_count, episode=episode).debug(
+        "scanning the release folder for sidecars"
+    )
 
     tracks: list[ExternalTrack] = []
     for path, context in sorted(index_candidates(root)):
         if path == video_path:
             continue
         if not belongs_to(path, episode=episode, sibling_video_count=sibling_video_count):
+            log.bind(file=path.name).debug("ignoring a file that belongs to another episode")
             continue
         track = _to_external_track(path, video_stem=video_path.stem, context=context)
-        if track is not None:
-            tracks.append(track)
+        if track is None:
+            log.bind(file=path.name).debug("ignoring a file that is not an embeddable track")
+            continue
+        log.bind(
+            file=track.path.name,
+            language=track.language,
+            title=track.name,
+            folders="/".join(context),
+        ).debug(f"filenames suggest {track.kind} in {track.language}")
+        tracks.append(track)
     return tracks
 
 

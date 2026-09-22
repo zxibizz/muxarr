@@ -14,13 +14,16 @@ when a mux may have half-written a file.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.domain.enums import TERMINAL_JOB_STATES, JobState
 from src.domain.errors import MuxarrError
+from src.domain.journal import LogEntry
+
+MAX_JOB_PAGE_SIZE = 200
 
 
 class JobConflictError(MuxarrError):
@@ -38,10 +41,19 @@ class JobRecord:
     history_id: int | None = None
     created_at: str = ""
     updated_at: str = ""
+    log: list[LogEntry] = field(default_factory=list)
 
     @property
     def done(self) -> bool:
         return self.state in TERMINAL_JOB_STATES
+
+
+@dataclass(frozen=True, slots=True)
+class JobPage:
+    items: list[JobRecord]
+    total: int
+    limit: int
+    offset: int
 
 
 class JobRepository(Protocol):
@@ -56,6 +68,25 @@ class JobRepository(Protocol):
         ...
 
     async def get(self, job_id: str) -> JobRecord | None: ...
+
+    async def list(
+        self, *, state: JobState | None = None, limit: int = 20, offset: int = 0
+    ) -> JobPage:
+        """Recent jobs, newest first.
+
+        This is how a job that never reached the history is inspected: a failed
+        one writes no operation row, so its log is the only account of it.
+        """
+        ...
+
+    async def save_log(self, job_id: str, entries: Sequence[LogEntry]) -> None:
+        """Replace the job's captured log.
+
+        Called while the job runs so the UI can follow it, which is why it takes
+        the whole buffer rather than a delta -- the writer already holds it, and
+        a blob rewrite keeps the row consistent without a second table.
+        """
+        ...
 
     async def claim_next(self) -> JobRecord | None:
         """Atomically move the oldest pending job to ``running``."""

@@ -2,14 +2,18 @@ import { Alert, Group, Pagination, Stack } from '@mantine/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useAuthGate } from '../auth-context';
+import { ActiveJobs } from '../components/ActiveJobs';
 import { Filters } from '../components/Filters';
 import { HistoryTable } from '../components/HistoryTable';
+import { JobDetail } from '../components/JobDetail';
 import { OperationDetail } from '../components/OperationDetail';
 import { StatsCards } from '../components/StatsCards';
-import type { HistoryFilters, Operation, Stats } from '../types';
+import type { HistoryFilters, Job, Operation, Stats } from '../types';
 
 const PAGE_SIZE = 25;
 const POLL_INTERVAL_MS = 10_000;
+// The newest jobs are the unfinished ones; anything older has a history row.
+const JOB_WINDOW = 20;
 
 export function HistoryPage() {
   const { needsToken, retryKey, reportError } = useAuthGate();
@@ -23,6 +27,8 @@ export function HistoryPage() {
     query: '',
   });
   const [selected, setSelected] = useState<Operation | null>(null);
+  const [unsettled, setUnsettled] = useState<Job[]>([]);
+  const [watched, setWatched] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,13 +39,15 @@ export function HistoryPage() {
   const refresh = useCallback(async () => {
     const { filters: active, page: activePage } = requestRef.current;
     try {
-      const [historyPage, nextStats] = await Promise.all([
+      const [historyPage, nextStats, jobs] = await Promise.all([
         api.history(active, PAGE_SIZE, (activePage - 1) * PAGE_SIZE),
         api.stats(),
+        api.jobs(undefined, JOB_WINDOW),
       ]);
       setOperations(historyPage.items);
       setTotal(historyPage.total);
       setStats(nextStats);
+      setUnsettled(jobs.items.filter((job) => job.state !== 'succeeded'));
       setError(null);
     } catch (caught) {
       if (!reportError(caught)) {
@@ -80,6 +88,8 @@ export function HistoryPage() {
     <Stack gap="lg">
       <StatsCards stats={stats} />
 
+      <ActiveJobs jobs={unsettled} onSelect={setWatched} />
+
       {error && (
         <Alert color="red" title="Could not load history">
           {error}
@@ -105,6 +115,7 @@ export function HistoryPage() {
       )}
 
       <OperationDetail operation={selected} onClose={() => setSelected(null)} />
+      <JobDetail job={watched} onClose={() => setWatched(null)} />
     </Stack>
   );
 }

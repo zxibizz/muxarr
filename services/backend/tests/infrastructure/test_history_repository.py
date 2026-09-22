@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+from src.db.session import DBManager
+from src.domain.journal import LogEntry, RejectedTrack, TrackDetail
+from src.domain.models import Operation
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 
 Store = SqlAlchemyHistoryRepository
+
+
+def a_track(**overrides: object) -> TrackDetail:
+    payload: dict[str, object] = {"kind": "subtitles", "label": "Russian", "language": "rus"}
+    payload.update(overrides)
+    return TrackDetail(**payload)  # type: ignore[arg-type]
 
 
 async def add(store: Store, **overrides: object) -> int:
@@ -25,8 +34,20 @@ async def test_record_returns_an_id(history: Store) -> None:
 async def test_round_trip(history: Store) -> None:
     operation_id = await add(
         history,
-        added_tracks=["subtitles:Russian"],
-        rejected_tracks=[{"track": "eng.srt", "reason": "already present in container"}],
+        added_tracks=[a_track(file="rus.srt", source="ai")],
+        rejected_tracks=[
+            RejectedTrack(track="eng.srt", reason="already present in container", language="eng")
+        ],
+        log=[
+            LogEntry(
+                ts="2026-01-01T00:00:00Z",
+                level="INFO",
+                component="usecase.import",
+                message="embedding subtitles",
+                stage="selection",
+                context={"file": "rus.srt"},
+            )
+        ],
         episodes=[2, 3],
         season=1,
         duration_ms=1234,
@@ -37,12 +58,35 @@ async def test_round_trip(history: Store) -> None:
     found = await history.get(operation_id)
 
     assert found is not None
-    assert found.added_tracks == ["subtitles:Russian"]
-    assert found.rejected_tracks == [{"track": "eng.srt", "reason": "already present in container"}]
+    assert found.added_tracks == [a_track(file="rus.srt", source="ai")]
+    assert found.rejected_tracks == [
+        RejectedTrack(track="eng.srt", reason="already present in container", language="eng")
+    ]
+    assert [(e.stage, e.message, e.context) for e in found.log] == [
+        ("selection", "embedding subtitles", {"file": "rus.srt"})
+    ]
     assert found.episodes == [2, 3]
     assert found.season == 1
     assert found.duration_ms == 1234
     assert found.muxed is True
+
+
+async def test_tracks_stored_before_they_were_structured_still_read_back(
+    db: DBManager, history: Store
+) -> None:
+    """Rows written by an older muxarr hold a display string, not an object."""
+    operation_id = await add(history)
+    async with db.session() as session:
+        row = await session.get(Operation, operation_id)
+        assert row is not None
+        row.added_tracks = '["audio:Russian [ai]"]'
+        await session.commit()
+
+    found = await history.get(operation_id)
+
+    assert found is not None
+    assert found.added_tracks == [TrackDetail(kind="audio", label="Russian", source="ai")]
+    assert found.log == []
 
 
 async def test_get_unknown_id_returns_none(history: Store) -> None:
@@ -142,8 +186,8 @@ class TestStats:
         assert (stats.total, stats.muxed, stats.deferred, stats.tracks_added) == (0, 0, 0, 0)
 
     async def test_counts_and_tracks(self, history: Store) -> None:
-        await add(history, added_tracks=["a", "b"])
-        await add(history, added_tracks=["c"])
+        await add(history, added_tracks=[a_track(), a_track(label="English")])
+        await add(history, added_tracks=[a_track()])
         await add(history, move_status="DeferMove")
 
         stats = await history.stats()

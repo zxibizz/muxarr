@@ -50,6 +50,7 @@ const ENV_VARS: Record<SettingsField, string> = {
   max_concurrent_muxes: 'MUXARR_MAX_CONCURRENT',
   job_ttl_seconds: 'MUXARR_JOB_TTL',
   history_max_records: 'MUXARR_HISTORY_MAX_RECORDS',
+  operation_log_max_entries: 'MUXARR_OPERATION_LOG_MAX_ENTRIES',
   ai_mode: 'MUXARR_AI_MODE',
   ai_base_url: 'MUXARR_AI_BASE_URL',
   ai_model: 'MUXARR_AI_MODEL',
@@ -280,6 +281,14 @@ export function SettingsPage() {
             min={1}
             {...form.getInputProps('history_max_records')}
             {...lockProps('history_max_records')}
+          />
+          <NumberInput
+            label="Log lines kept per import"
+            description="The explanation shown on a history entry. 0 records none."
+            min={0}
+            max={5000}
+            {...form.getInputProps('operation_log_max_entries')}
+            {...lockProps('operation_log_max_entries')}
           />
         </SettingsSection>
 

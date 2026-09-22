@@ -3,6 +3,10 @@
 One process, one sink: everything goes to stdout, which is where `docker logs`
 and a dev terminal both look. There is no log file and no /logs endpoint, so
 nothing here rotates or retains.
+
+:func:`capture_log` is the one exception, and it is scoped rather than global:
+it keeps the records of a single import so they can be stored with the job and
+the history row it produces.
 """
 
 from __future__ import annotations
@@ -10,14 +14,19 @@ from __future__ import annotations
 import inspect
 import logging
 import sys
+from contextlib import contextmanager, suppress
+from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from src.domain.enums import LogComponent
+from src.domain.journal import LogEntry
 
 if TYPE_CHECKING:
-    from loguru import Logger, Record
+    from collections.abc import Iterator
+
+    from loguru import Logger, Message, Record
 else:
     Logger = logger.__class__
 
@@ -34,6 +43,9 @@ CONSOLE_FORMAT = (
 )
 
 _RESERVED = ("component", "context")
+
+# Also dropped from a captured entry's context: it is a field of its own there.
+_CAPTURE_RESERVED = (*_RESERVED, "stage")
 
 # These configure their own handlers with propagate=False, so clearing the root
 # handler is not enough to capture them -- uvicorn in particular would keep
@@ -141,4 +153,73 @@ def get_logger(component: LogComponent, **extra: object) -> Logger:
     return logger.bind(component=component.value, **extra)
 
 
-__all__ = ["configure_logging", "get_logger", "logger"]
+_capture: ContextVar[list[LogEntry] | None] = ContextVar("muxarr_log_capture", default=None)
+
+
+def _to_entry(record: Record) -> LogEntry:
+    extra = record["extra"]
+    stage = extra.get("stage")
+    return LogEntry(
+        ts=record["time"].isoformat(),
+        level=record["level"].name,
+        component=str(extra.get("component", "")),
+        message=record["message"],
+        stage=str(stage) if stage is not None else None,
+        # An absent value is dropped rather than rendered as "None", which reads
+        # as a value in the UI.
+        context={
+            str(k): str(v)
+            for k, v in extra.items()
+            if k not in _CAPTURE_RESERVED and v is not None
+        },
+    )
+
+
+@contextmanager
+def capture_log(limit: int) -> Iterator[list[LogEntry]]:
+    """Collect every record emitted inside this scope into the yielded list.
+
+    The scope is a context variable rather than a thread: ``asyncio.to_thread``
+    copies the context, so the synchronous mux running on a worker thread logs
+    into the same list as the coroutine that started it. The sink filters on the
+    identity of that list, so two imports running at once never see each other's
+    records.
+
+    Captures at DEBUG whatever the console level is -- the history UI is where
+    the detail is wanted, and making it depend on how chatty stdout is would
+    leave the interesting imports unexplained.
+    """
+    buffer: list[LogEntry] = []
+    if limit <= 0:
+        yield buffer
+        return
+
+    def sink(message: Message) -> None:
+        if _capture.get() is not buffer or len(buffer) >= limit:
+            return
+        record = message.record
+        if len(buffer) == limit - 1:
+            buffer.append(
+                LogEntry(
+                    ts=record["time"].isoformat(),
+                    level="WARNING",
+                    component=LogComponent.CORE.value,
+                    message=f"log truncated after {limit} entries",
+                )
+            )
+            return
+        buffer.append(_to_entry(record))
+
+    sink_id = logger.add(sink, level="DEBUG", format="{message}", backtrace=False, diagnose=False)
+    token = _capture.set(buffer)
+    try:
+        yield buffer
+    finally:
+        _capture.reset(token)
+        # A settings change re-runs configure_logging, which clears every
+        # handler including this one.
+        with suppress(ValueError):
+            logger.remove(sink_id)
+
+
+__all__ = ["capture_log", "configure_logging", "get_logger", "logger"]

@@ -2,6 +2,7 @@ import { Badge, Center, Group, Loader, Stack, Table, Text, Tooltip } from '@mant
 import { formatDuration, formatRelative, formatTimestamp, shortenPath } from '../format';
 import type { Operation } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { TrackBadge } from './TrackBadge';
 
 interface Props {
   operations: Operation[];
@@ -81,9 +82,7 @@ export function HistoryTable({ operations, loading, onSelect }: Props) {
                 ) : (
                   <Group gap={4} wrap="wrap">
                     {operation.added_tracks.map((track) => (
-                      <Badge key={track} size="sm" variant="light" color="teal">
-                        {track}
-                      </Badge>
+                      <TrackBadge key={`${track.kind}:${track.file}:${track.label}`} track={track} />
                     ))}
                   </Group>
                 )}
