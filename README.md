@@ -106,36 +106,51 @@ local storage.
 
 ## Configuration
 
-All settings are environment variables on the **daemon**:
+Most settings can be changed from the **Settings** page in the web UI, which
+takes effect within a few seconds — no restart, in either process. The rest are
+environment variables on the **daemon**.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `MUXARR_READ_ROOTS` | *required* | Colon-separated paths muxarr may read |
-| `MUXARR_TOKEN` | *unset* | Bearer token; unauthenticated if unset |
-| `MUXARR_HOST` / `MUXARR_PORT` | `127.0.0.1` / `8710` | Bind address for `src.cli serve`. Ignored in the container image, where uvicorn binds `127.0.0.1:8000` and nginx serves `:8710` |
-| `MUXARR_MAX_CONCURRENT` | `1` | Simultaneous remuxes, in the worker |
-| `MUXARR_JOB_TTL` | `3600` | Seconds a finished job stays readable |
-| `MUXARR_HISTORY_MAX_RECORDS` | `200` | Newest operations kept; older ones are trimmed |
-| `MUXARR_MAX_POLL_WAIT` | `60` | Ceiling on how long one poll is held open |
-| `MUXARR_SCRATCH_DIR` | destination dir | Only change for NFS/SMB/union FS |
-| `MUXARR_DEDUPE` | `language_codec` | `off`, `language`, `language_codec` |
-| `MUXARR_SKIP_IMAGE_SUBTITLES` | `false` | Exclude PGS/VobSub |
-| `MUXARR_SKIP_UNDETERMINED` | `false` | Exclude tracks with unknown language |
-| `MUXARR_MAX_TRACKS` | `24` | Cap on embedded tracks |
-| `MUXARR_MUX_TIMEOUT` | `14400` | Seconds before a single mkvmerge run is killed |
-| `MUXARR_FREE_SPACE_FACTOR` | `1.05` | Free space required before a mux, as a multiple of the expected output |
-| `MUXARR_SUB_CHARSET` | *unset* | Force a `--sub-charset` for text subtitles, e.g. `windows-1251` |
-| `MUXARR_PRESERVE_OWNERSHIP` | `true` | chown output to match the source |
-| `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | Where the history lives |
-| `MUXARR_LOG_LEVEL` | `INFO` | |
-| `MUXARR_LOG_JSON` | `false` | One JSON object per record, for log shippers |
-| `MUXARR_AI_MODE` | `off` | `off`, `fallback`, `always`, `verify` — see [AI mode](#ai-mode) |
-| `MUXARR_AI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint |
-| `MUXARR_AI_API_KEY` | *unset* | Omit it for a local provider that needs no key |
-| `MUXARR_AI_MODEL` | *unset* | Required once `MUXARR_AI_MODE` is not `off` |
-| `MUXARR_AI_TIMEOUT` | `30` | Seconds before the request is abandoned |
-| `MUXARR_AI_MAX_ENTRIES` | `200` | Skip the call entirely above this many sidecars |
-| `PUID` / `PGID` | `1000` / `1000` | uid/gid the services drop to |
+A variable that is actually set in your compose file **wins and locks the
+field**: the UI renders it read-only and names the variable, so compose stays
+the single source of truth for anything you have configured there. Leave a
+variable out to manage that setting from the UI instead.
+
+| Variable | Default | UI | Meaning |
+| --- | --- | --- | --- |
+| `MUXARR_READ_ROOTS` | *required* | | Colon-separated paths muxarr may read |
+| `MUXARR_TOKEN` | *unset* | | Bearer token; unauthenticated if unset |
+| `MUXARR_HOST` / `MUXARR_PORT` | `127.0.0.1` / `8710` | | Bind address for `src.cli serve`. Ignored in the container image, where uvicorn binds `127.0.0.1:8000` and nginx serves `:8710` |
+| `MUXARR_MAX_CONCURRENT` | `1` | ✓ | Simultaneous remuxes, in the worker |
+| `MUXARR_JOB_TTL` | `3600` | ✓ | Seconds a finished job stays readable |
+| `MUXARR_HISTORY_MAX_RECORDS` | `200` | ✓ | Newest operations kept; older ones are trimmed |
+| `MUXARR_MAX_POLL_WAIT` | `60` | | Ceiling on how long one poll is held open |
+| `MUXARR_SCRATCH_DIR` | destination dir | | Only change for NFS/SMB/union FS |
+| `MUXARR_DEDUPE` | `language_codec` | ✓ | `off`, `language`, `language_codec` |
+| `MUXARR_SKIP_IMAGE_SUBTITLES` | `false` | ✓ | Exclude PGS/VobSub |
+| `MUXARR_SKIP_UNDETERMINED` | `false` | ✓ | Exclude tracks with unknown language |
+| `MUXARR_MAX_TRACKS` | `24` | ✓ | Cap on embedded tracks |
+| `MUXARR_MUX_TIMEOUT` | `14400` | ✓ | Seconds before a single mkvmerge run is killed |
+| `MUXARR_FREE_SPACE_FACTOR` | `1.05` | ✓ | Free space required before a mux, as a multiple of the expected output |
+| `MUXARR_SUB_CHARSET` | *unset* | ✓ | Force a `--sub-charset` for text subtitles, e.g. `windows-1251` |
+| `MUXARR_PRESERVE_OWNERSHIP` | `true` | ✓ | chown output to match the source |
+| `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | | Where the history lives |
+| `MUXARR_LOG_LEVEL` | `INFO` | ✓ | |
+| `MUXARR_LOG_JSON` | `false` | | One JSON object per record, for log shippers |
+| `MUXARR_AI_MODE` | `off` | ✓ | `off`, `fallback`, `always`, `verify` — see [AI mode](#ai-mode) |
+| `MUXARR_AI_BASE_URL` | `https://api.openai.com/v1` | ✓ | Any OpenAI-compatible endpoint |
+| `MUXARR_AI_API_KEY` | *unset* | ✓ | Omit it for a local provider that needs no key |
+| `MUXARR_AI_MODEL` | *unset* | ✓ | Required once `MUXARR_AI_MODE` is not `off` |
+| `MUXARR_AI_TIMEOUT` | `30` | ✓ | Seconds before the request is abandoned |
+| `MUXARR_AI_MAX_ENTRIES` | `200` | ✓ | Skip the call entirely above this many sidecars |
+| `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
+
+Read roots, the database URL, the bind address, the API token and the scratch
+directory stay environment-only on purpose: they decide what muxarr is allowed
+to touch and how it is reached, which is not something an HTTP request should
+be able to move.
+
+The AI key is write-only over HTTP. The UI can set or clear it and the daemon
+will say whether one is stored, but it is never sent back to the browser.
 
 And on the **shim**:
 

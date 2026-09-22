@@ -116,6 +116,8 @@ class TestAuth:
             history=container.history,
             jobs=container.jobs,
             worker_state=container.worker_state,
+            settings_store=container.settings_store,
+            env={},
         )
         app = create_app(open_container.settings, open_container)
 

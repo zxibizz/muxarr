@@ -89,7 +89,13 @@ class OpenAICompatibleChatCompleter:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
         try:
-            with httpx.Client(timeout=timeout, transport=self._transport) as client:
+            with httpx.Client(
+                timeout=timeout,
+                transport=self._transport,
+                # The base URL is operator-supplied; a redirect would let a
+                # provider bounce this request at an address we never vetted.
+                follow_redirects=False,
+            ) as client:
                 response = client.post(self._url, json=payload, headers=headers)
         except httpx.HTTPError as exc:
             raise AiError(f"could not reach {self._url}: {exc}") from exc
@@ -109,6 +115,24 @@ class OpenAICompatibleChatCompleter:
         if not isinstance(data, dict):
             raise AiError(f"{self._url} returned {type(data).__name__}, expected an object")
         return data
+
+
+class OpenAICompatibleCompleterFactory:
+    """Builds completers for credentials the container has not been given.
+
+    The settings page tests what the user has typed, which is by definition not
+    the configuration the container was wired with.
+    """
+
+    def __init__(self, transport: httpx.BaseTransport | None = None) -> None:
+        self._transport = transport
+
+    def create(
+        self, *, base_url: str, model: str, api_key: str | None
+    ) -> OpenAICompatibleChatCompleter:
+        return OpenAICompatibleChatCompleter(
+            base_url=base_url, model=model, api_key=api_key, transport=self._transport
+        )
 
 
 def _content(data: dict[str, Any]) -> str:

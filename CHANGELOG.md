@@ -14,6 +14,24 @@ within the same major version.
 
 ### Added
 
+- A **Settings page** in the web UI. Track selection, muxing, queue and
+  retention, AI and the log level can now be changed from the browser and take
+  effect within seconds — in both the API and the worker process, with no
+  restart. Read roots, the database URL, the bind address, the API token and
+  the scratch directory stay environment-only: they decide what muxarr may
+  touch and how it is reached.
+  A variable that is actually set in the environment **wins and locks its
+  field**, which is rendered read-only and names the variable, so an existing
+  compose file remains the source of truth for whatever it configures.
+  Backed by `GET`/`PATCH /v1/settings`; overrides live in a new `app_settings`
+  table, so this needs a migration (the container runs it on start).
+- A **Test provider** button for the AI settings, backed by
+  `POST /v1/settings/ai/test`. It probes the endpoint, model and key currently
+  typed into the form — so a key can be checked before it is saved — and
+  reports the provider's own error when it fails. The stored key is used when
+  the field is left blank. The AI key is write-only over HTTP: the daemon
+  reports whether one is set and never sends it back.
+
 - A `beta` image tag, moved by every prerelease. `latest` continues to track
   stable releases only.
 

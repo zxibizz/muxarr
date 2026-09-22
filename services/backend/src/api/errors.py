@@ -12,10 +12,14 @@ from fastapi.responses import JSONResponse
 from src.application.interfaces.jobs import JobConflictError
 from src.application.use_cases.history.exceptions import OperationNotFoundError
 from src.domain.errors import MuxarrError
+from src.settings.config import ConfigError
+from src.settings.mutable import SettingsLockedError
 
 DOMAIN_ERROR_MAP: dict[type[MuxarrError], int] = {
     OperationNotFoundError: status.HTTP_404_NOT_FOUND,
     JobConflictError: status.HTTP_409_CONFLICT,
+    SettingsLockedError: status.HTTP_409_CONFLICT,
+    ConfigError: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 

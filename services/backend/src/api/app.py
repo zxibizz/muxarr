@@ -37,6 +37,12 @@ def create_app(settings: Settings, container: AppContainer | None = None) -> Fas
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
+            # The stored overrides only exist once migrations have run; a fresh
+            # database is normal, so this must never keep the API from starting.
+            await resolved.sync_settings()
+        except Exception:
+            log.exception("could not load the stored settings; using the environment")
+        try:
             yield
         finally:
             await resolved.shutdown()

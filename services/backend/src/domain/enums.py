@@ -44,6 +44,8 @@ class LogComponent(StrEnum):
 
     API = "api"
     CLI = "cli"
+    # The composition root, which both processes build.
+    CORE = "core"
     WORKER = "worker"
 
     USECASE_IMPORT = "usecase.import"
@@ -56,3 +58,4 @@ class LogComponent(StrEnum):
     INFRA_PLACEMENT = "infra.placement"
     INFRA_PROBE = "infra.probe"
     INFRA_PROCESS = "infra.process"
+    INFRA_SETTINGS = "infra.settings"
