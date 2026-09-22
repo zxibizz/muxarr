@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-22
+
 ### Added
 
 - A **Settings page** in the web UI. Track selection, muxing, queue and
@@ -31,12 +33,8 @@ within the same major version.
   reports the provider's own error when it fails. The stored key is used when
   the field is left blank. The AI key is write-only over HTTP: the daemon
   reports whether one is set and never sends it back.
-
 - A `beta` image tag, moved by every prerelease. `latest` continues to track
   stable releases only.
-
-### Added
-
 - Optional **AI mode** for sidecar discovery (`MUXARR_AI_MODE`, off by default).
   When a release layout defeats the filename rules, a model behind any
   OpenAI-compatible endpoint can match and label the sidecars instead. Four
@@ -79,5 +77,6 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.0

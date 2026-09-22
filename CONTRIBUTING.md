@@ -100,6 +100,29 @@ database with real data in it. Test the downgrade too.
 - Add a line to the `Unreleased` section of [CHANGELOG.md](CHANGELOG.md).
 - Update the config table in the README if you add an environment variable.
 
+## Releasing
+
+The version lives in four files and CI refuses a tag that disagrees with them,
+so never bump by hand:
+
+```bash
+python3 .github/scripts/bump_version.py 1.2.3
+```
+
+That rewrites all four, retitles `Unreleased` as the new release and moves the
+CHANGELOG links. Read the section it opened — it becomes the release notes
+verbatim — then commit and tag that commit:
+
+```bash
+git commit -am "Release v1.2.3"
+git tag -a v1.2.3 -m v1.2.3
+git push origin main v1.2.3
+```
+
+A release candidate is cut from the bumped commit without a further bump:
+`v1.2.3-rc1` is accepted against sources that say `1.2.3`, publishes the `beta`
+image tag, and never moves `latest`.
+
 ## Reporting bugs
 
 Open an issue with the bug template. The single most useful thing you can

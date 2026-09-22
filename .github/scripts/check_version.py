@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Assert the three version mirrors agree, and optionally match a release tag.
+"""Assert the version mirrors agree, and optionally match a release tag.
 
-The version is declared in three files because none of them can import the
+The version is declared in several files because none of them can import the
 others: the backend package, the frontend bundle and the Python distribution
 metadata. This is the guard that keeps them from drifting.
+`bump_version.py` moves them all at once.
 
 Usage:
-    check_version.py            # the three files agree
+    check_version.py            # the files agree
     check_version.py v1.2.3     # ...and match this git tag
 
 A prerelease tag matches the release it is a candidate for, so v1.2.3-rc1 is
@@ -47,11 +48,24 @@ def from_package_json() -> str:
     return version
 
 
+def from_package_lock() -> str:
+    # npm records the root version twice and `npm ci` trusts the lockfile, so a
+    # half-bumped lock is a real failure, not a cosmetic one.
+    data = json.loads((ROOT / "services/frontend/package-lock.json").read_text())
+    versions = {data["version"], data["packages"][""]["version"]}
+    if len(versions) != 1:
+        raise SystemExit(f"package-lock.json disagrees with itself: {sorted(versions)}")
+    version = versions.pop()
+    assert isinstance(version, str)
+    return version
+
+
 def main(argv: list[str]) -> int:
     found = {
         "services/backend/pyproject.toml": from_pyproject(),
         "services/backend/src/__init__.py": from_init(),
         "services/frontend/package.json": from_package_json(),
+        "services/frontend/package-lock.json": from_package_lock(),
     }
 
     if argv:
