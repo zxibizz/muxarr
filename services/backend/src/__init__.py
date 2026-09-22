@@ -2,4 +2,5 @@
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# Mirrored in pyproject.toml and services/frontend/package.json; CI asserts they agree.
+__version__ = "0.9.0"

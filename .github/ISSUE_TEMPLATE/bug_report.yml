@@ -1,0 +1,88 @@
+name: Bug report
+description: Something went wrong with an import, the daemon or the UI.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        muxarr logs the decision it made for every import and why. The logs plus
+        `GET /v1/system` answer most questions on their own, so please include both.
+
+        Security issues go through [private reporting](https://github.com/zxibizz/muxarr/security/advisories/new)
+        instead of this form.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        1. Sonarr imports a release containing ...
+        2. muxarr logs ...
+        3. The resulting file has ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: muxarr version
+      description: The `version` field from `curl http://muxarr:8710/healthz`, or your image tag.
+    validations:
+      required: true
+
+  - type: textarea
+    id: system
+    attributes:
+      label: GET /v1/system output
+      description: >
+        `curl -H "Authorization: Bearer $MUXARR_TOKEN" http://muxarr:8710/v1/system`.
+        Worker liveness and queue depth explain a surprising number of reports.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: muxarr logs
+      description: >
+        `docker logs muxarr` around the time of the import. Redact paths if you
+        need to, but keep them recognisable — path mismatches are a common cause.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >
+        How muxarr is deployed, the relevant `MUXARR_*` variables (not the token),
+        and the `mkvmerge --version` from inside the container.
+      placeholder: |
+        Deployment: docker compose, ghcr.io/zxibizz/muxarr:0.9.0
+        Host: Ubuntu 24.04, x86_64
+        Storage: local ext4 / NFS / mergerfs / ...
+        MUXARR_READ_ROOTS=/downloads:/media
+        MUXARR_DEDUPE=language_codec
+        mkvmerge v...
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: Every media path is mounted at the same path in the *arr containers and in muxarr.
+          required: true
+        - label: I am running the latest release.
+          required: false

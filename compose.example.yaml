@@ -15,10 +15,12 @@ x-media:
 
 services:
   muxarr:
-    build:
-      context: .
-      dockerfile: Dockerfile.all-in-one
-    image: muxarr:latest
+    # Pin a version rather than latest, so a restart never changes the version
+    # underneath you. Swap for the build block below to run from a checkout.
+    image: ghcr.io/zxibizz/muxarr:0.9.0
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.all-in-one
     container_name: muxarr
     restart: unless-stopped
     environment:

@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 // `npm run dev` talks to a daemon started with `python -m src.cli serve`;
 // compose.dev.yaml points VITE_API_PROXY_TARGET at the backend service.
@@ -10,6 +10,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: false,
   },
   server: {
     // Containers on macOS/Windows bind mounts do not receive inotify events.
