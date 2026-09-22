@@ -3,7 +3,7 @@
 # Single container: nginx serves the SPA on :8710 and reverse-proxies the API to
 # uvicorn on :8000, both supervised by s6-overlay.
 
-FROM node:22-alpine AS frontend
+FROM node:26-alpine AS frontend
 
 WORKDIR /app
 COPY services/frontend/package.json services/frontend/package-lock.json* ./
