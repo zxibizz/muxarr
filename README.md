@@ -129,6 +129,12 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | Where the history lives |
 | `MUXARR_LOG_LEVEL` | `INFO` | |
 | `MUXARR_LOG_JSON` | `false` | One JSON object per record, for log shippers |
+| `MUXARR_AI_MODE` | `off` | `off`, `fallback`, `always`, `verify` — see [AI mode](#ai-mode) |
+| `MUXARR_AI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint |
+| `MUXARR_AI_API_KEY` | *unset* | Omit it for a local provider that needs no key |
+| `MUXARR_AI_MODEL` | *unset* | Required once `MUXARR_AI_MODE` is not `off` |
+| `MUXARR_AI_TIMEOUT` | `30` | Seconds before the request is abandoned |
+| `MUXARR_AI_MAX_ENTRIES` | `200` | Skip the call entirely above this many sidecars |
 | `PUID` / `PGID` | `1000` / `1000` | uid/gid the services drop to |
 
 And on the **shim**:
@@ -141,6 +147,71 @@ And on the **shim**:
 | `MUXARR_POLL_WAIT` | `25` | Seconds the daemon holds each poll open |
 | `MUXARR_POLL_INTERVAL` | `5` | Back-off after a failed request |
 | `MUXARR_MAX_RETRIES` | `10` | Consecutive request failures tolerated |
+
+## AI mode
+
+muxarr normally matches sidecars by filename: episode markers, language tags and
+folder names. That covers most releases, but not all of them — a folder called
+`Zvuk 1/` holding an untagged `.mka` is unattributable by any rule, and a season
+pack whose subtitles are numbered rather than named is ambiguous by design.
+
+AI mode hands that decision to a language model. It is **off by default** and
+never required.
+
+```yaml
+environment:
+  MUXARR_AI_MODE: fallback
+  MUXARR_AI_MODEL: gpt-4o-mini
+  MUXARR_AI_API_KEY: sk-...
+```
+
+Any OpenAI-compatible endpoint works, so nothing has to leave your machine:
+
+```yaml
+environment:
+  MUXARR_AI_MODE: fallback
+  MUXARR_AI_BASE_URL: http://ollama:11434/v1
+  MUXARR_AI_MODEL: qwen2.5:7b
+  # no API key needed
+```
+
+### Modes
+
+| Mode | Behaviour |
+| --- | --- |
+| `off` | Never calls out. The default. |
+| `fallback` | Calls only when the filename rules found nothing, or left a track's language as `und`. Costs nothing on the imports that already work. |
+| `always` | Calls on every import; a valid answer wins. |
+| `verify` | Calls on every import but **keeps the filename answer**, logging any disagreement. Use it to judge a model against your own library before trusting it. |
+
+### What is sent
+
+One request per import, containing only **names**:
+
+- the video's filename
+- the filenames of other videos in the same folder
+- the candidate sidecar paths, *relative to the release folder*, with byte sizes
+- the season/episode numbers, when Sonarr supplied them
+
+Never the contents of any file, never an absolute path — so nothing about your
+library layout above the release folder is disclosed either.
+
+### What it is allowed to decide
+
+The reply is treated as untrusted input:
+
+- a proposed file must be one muxarr already listed on disk; the model cannot
+  introduce a path, and a reply naming anything else is discarded
+- whether a track is audio or subtitles comes from its extension, not the model
+- an unrecognised language becomes `und` rather than a guess
+- track names and dub tags are stripped of control characters and length-capped
+
+If the provider is slow, unreachable, or answers with nonsense, muxarr logs a
+warning and uses the filename result. An import is never failed because an API
+call was.
+
+Tracks the model chose are marked `[ai]` in the history, so you can tell them
+apart in the UI.
 
 ## Troubleshooting
 
@@ -182,7 +253,15 @@ volume is mounted. `docker exec sonarr ls /config/scripts` should list them.
 **The output is missing a sidecar you expected.**
 Open the import in the UI. Rejected sidecars are listed with the reason —
 usually de-duplication (`MUXARR_DEDUPE`), an image-subtitle or undetermined
--language skip, or the track cap (`MUXARR_MAX_TRACKS`).
+-language skip, or the track cap (`MUXARR_MAX_TRACKS`). If the reason is that
+nothing was found at all, the layout may be one the filename rules cannot read;
+try [AI mode](#ai-mode).
+
+**AI mode is enabled but nothing changes.**
+In `fallback` mode the model is only consulted when the filename rules came up
+short, which is the point. Grep the logs for `infra.ai` to see whether it was
+called and what it replied; in `verify` mode it is called every time but never
+allowed to change the outcome.
 
 ## Upgrading
 

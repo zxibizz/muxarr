@@ -34,3 +34,7 @@ class InsufficientSpaceError(MuxarrError):
 
 class PathNotAllowedError(MuxarrError):
     """A path resolved outside its permitted root."""
+
+
+class AiError(MuxarrError):
+    """The AI provider could not be reached, or did not answer usefully."""

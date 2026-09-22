@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from src.domain.codecs import AUDIO_EXTENSIONS, SUBTITLE_EXTENSIONS, normalise_codec
-from src.domain.enums import UNDETERMINED, TrackKind
+from src.domain.enums import UNDETERMINED, TrackKind, TrackSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +74,8 @@ class ExternalTrack:
     variant: str | None = None
     # VobSub ships as a .sub/.idx pair; mkvmerge is handed the .idx and reads both.
     companion: Path | None = None
+    # Whether a filename told us this, or a language model did.
+    source: TrackSource = "heuristic"
 
     @property
     def codec_family(self) -> str:

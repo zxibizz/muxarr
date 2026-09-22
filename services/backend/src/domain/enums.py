@@ -16,6 +16,14 @@ UNDETERMINED = "und"
 
 DedupeMode = Literal["off", "language", "language_codec"]
 
+# How much of sidecar discovery an LLM is allowed to decide. "verify" is a shadow
+# mode: the heuristic answer still wins, disagreements are only logged.
+AiMode = Literal["off", "fallback", "always", "verify"]
+
+# Where a candidate track came from; surfaced in the history so a human can tell
+# an inferred match from a filename-derived one.
+TrackSource = Literal["heuristic", "ai"]
+
 # The three verdicts Radarr/Sonarr understand on an import script's stdout.
 MoveStatus = Literal["DeferMove", "MoveComplete", "RenameRequested"]
 
@@ -41,6 +49,7 @@ class LogComponent(StrEnum):
     USECASE_IMPORT = "usecase.import"
     USECASE_JOBS = "usecase.jobs"
 
+    INFRA_AI = "infra.ai"
     INFRA_DISCOVERY = "infra.discovery"
     INFRA_JOBS = "infra.jobs"
     INFRA_MUX = "infra.mux"

@@ -193,4 +193,5 @@ def _size_of(path: Path | None) -> int | None:
 
 def _describe(track: ExternalTrack) -> str:
     label = track.name or track.language
-    return f"{track.kind}:{label}"
+    suffix = " [ai]" if track.source == "ai" else ""
+    return f"{track.kind}:{label}{suffix}"
