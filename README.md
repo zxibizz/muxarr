@@ -1,5 +1,9 @@
 # muxarr
 
+[![CI](https://github.com/zxibizz/muxarr/actions/workflows/ci.yml/badge.svg)](https://github.com/zxibizz/muxarr/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![ghcr.io](https://img.shields.io/badge/ghcr.io-zxibizz%2Fmuxarr-blue?logo=docker&logoColor=white)](https://github.com/zxibizz/muxarr/pkgs/container/muxarr)
+
 Embeds external audio and subtitle tracks into video containers at the moment
 Radarr/Sonarr import a download, using the **Import Using Script** hook.
 
@@ -69,8 +73,10 @@ local storage.
 ## Setup
 
 1. **Deploy.** Copy `compose.example.yaml` to `compose.yaml`, set `MUXARR_TOKEN`
-   in a `.env` file, and adjust the volume paths. Set `PUID`/`PGID` to the uid
-   that owns your library — muxarr creates the final file, so it must match.
+   in a `.env` file, and adjust the volume paths. The image is published at
+   `ghcr.io/zxibizz/muxarr` — pin a version tag rather than `latest`. Set
+   `PUID`/`PGID` to the uid that owns your library — muxarr creates the final
+   file, so it must match.
 
    > Every media path must be mounted at the **same path** in the \*arr
    > containers and in muxarr. Radarr/Sonarr pass absolute paths; if they mean
@@ -106,7 +112,7 @@ All settings are environment variables on the **daemon**:
 | --- | --- | --- |
 | `MUXARR_READ_ROOTS` | *required* | Colon-separated paths muxarr may read |
 | `MUXARR_TOKEN` | *unset* | Bearer token; unauthenticated if unset |
-| `MUXARR_HOST` / `MUXARR_PORT` | `0.0.0.0` / `8710` | Bind address |
+| `MUXARR_HOST` / `MUXARR_PORT` | `127.0.0.1` / `8710` | Bind address for `src.cli serve`. Ignored in the container image, where uvicorn binds `127.0.0.1:8000` and nginx serves `:8710` |
 | `MUXARR_MAX_CONCURRENT` | `1` | Simultaneous remuxes, in the worker |
 | `MUXARR_JOB_TTL` | `3600` | Seconds a finished job stays readable |
 | `MUXARR_HISTORY_MAX_RECORDS` | `200` | Newest operations kept; older ones are trimmed |
@@ -116,6 +122,9 @@ All settings are environment variables on the **daemon**:
 | `MUXARR_SKIP_IMAGE_SUBTITLES` | `false` | Exclude PGS/VobSub |
 | `MUXARR_SKIP_UNDETERMINED` | `false` | Exclude tracks with unknown language |
 | `MUXARR_MAX_TRACKS` | `24` | Cap on embedded tracks |
+| `MUXARR_MUX_TIMEOUT` | `14400` | Seconds before a single mkvmerge run is killed |
+| `MUXARR_FREE_SPACE_FACTOR` | `1.05` | Free space required before a mux, as a multiple of the expected output |
+| `MUXARR_SUB_CHARSET` | *unset* | Force a `--sub-charset` for text subtitles, e.g. `windows-1251` |
 | `MUXARR_PRESERVE_OWNERSHIP` | `true` | chown output to match the source |
 | `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | Where the history lives |
 | `MUXARR_LOG_LEVEL` | `INFO` | |
@@ -132,6 +141,70 @@ And on the **shim**:
 | `MUXARR_POLL_WAIT` | `25` | Seconds the daemon holds each poll open |
 | `MUXARR_POLL_INTERVAL` | `5` | Back-off after a failed request |
 | `MUXARR_MAX_RETRIES` | `10` | Consecutive request failures tolerated |
+
+## Troubleshooting
+
+Start with the logs. muxarr writes one line per import saying what it decided
+and why, and the same reasoning is in the UI under each row. `docker logs
+muxarr` and `GET /v1/system` answer most questions between them.
+
+**Every import is skipped, and the reason mentions read roots.**
+The paths Radarr/Sonarr handed over do not exist inside the muxarr container, or
+exist at a different path. Both sides must mount the same library at the same
+path. Check with `docker exec muxarr ls <the path from the log line>`, and make
+sure `MUXARR_READ_ROOTS` covers both the download and the library path.
+
+**`worker_alive` is `false` and jobs pile up in `pending`.**
+The worker process is not running or cannot reach the database. It heartbeats
+every 5s and is considered stale after 30s. Look for worker lines in the
+container logs; a crash loop usually means `/config` is not writable by
+`PUID:PGID`.
+
+**Imports fail after roughly a minute, and Radarr/Sonarr report a script error.**
+The reverse proxy is cutting the long poll. nginx's `proxy_read_timeout` must be
+greater than `MUXARR_MAX_POLL_WAIT`; if you put your own proxy in front of
+muxarr, raise its read timeout too.
+
+**`required binary not found on PATH: mkvmerge`.**
+Only relevant outside the official image, which ships mkvtoolnix. Install
+`mkvtoolnix` wherever the worker runs — the API does not need it.
+
+**The muxed file lands with the wrong owner, or the mux fails on permissions.**
+`PUID`/`PGID` must match the uid that owns your library, the same values your
+\*arr containers use. muxarr creates the output file itself.
+
+**Nothing happens at all on import.**
+Check that the shim is actually wired up: *Settings → Media Management → show
+Advanced → Importing → Import Using Script*, with the path pointing at
+`/config/scripts/muxarr-import-radarr.sh` (or `-sonarr.sh`), and that the shims
+volume is mounted. `docker exec sonarr ls /config/scripts` should list them.
+
+**The output is missing a sidecar you expected.**
+Open the import in the UI. Rejected sidecars are listed with the reason —
+usually de-duplication (`MUXARR_DEDUPE`), an image-subtitle or undetermined
+-language skip, or the track cap (`MUXARR_MAX_TRACKS`).
+
+## Upgrading
+
+Pin a version tag rather than `latest`, so a restart never changes the version
+underneath you:
+
+```yaml
+image: ghcr.io/zxibizz/muxarr:0.9.0
+```
+
+Then:
+
+1. Read the [changelog](CHANGELOG.md) for the versions you are crossing.
+2. Back up `/config/muxarr.db` if the history matters to you.
+3. Pull the new tag and recreate the container. Migrations run automatically on
+   every start, before the API or worker come up.
+4. The shims are republished from the image on every start, so the \*arr
+   containers pick up the new ones with no action — as long as they depend on
+   muxarr being *healthy* and the shims volume is not mounted over.
+
+Downgrading across a migration is not supported: bring the old database back
+from your backup instead.
 
 ## Repository layout
 
@@ -204,3 +277,15 @@ cd services/frontend && npm install && npm run dev
 
 `mkvtoolnix` is required at runtime. `ffmpeg` is optional, used as a probe
 fallback and to generate test fixtures.
+
+## Contributing
+
+Bug reports, feature requests and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development loop and the handful of
+architectural rules the test suite enforces, and
+[SECURITY.md](SECURITY.md) for the threat model and how to report a
+vulnerability privately.
+
+## Licence
+
+[MIT](LICENSE).

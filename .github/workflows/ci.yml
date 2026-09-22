@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Called by release.yml so a tag cannot publish an image that would not have
+  # passed on main.
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Without these, eleven mux/probe tests skip instead of running, which is
+      # exactly the set most likely to break.
+      - name: Install media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mkvtoolnix ffmpeg
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/backend/uv.lock
+
+      - name: Install dependencies
+        working-directory: services/backend
+        run: uv sync --frozen
+
+      - name: Lint
+        working-directory: services/backend
+        run: uv run ruff check .
+
+      - name: Typecheck
+        working-directory: services/backend
+        run: uv run python -m mypy
+
+      # test_shim.py spawns a real /bin/sh and HTTP servers, and resolves the
+      # shims relative to the repo root, so this must run from a full checkout.
+      - name: Test
+        working-directory: services/backend
+        run: uv run pytest -q
+
+      - name: Check migrations apply from empty
+        working-directory: services/backend
+        env:
+          MUXARR_READ_ROOTS: /tmp
+          MUXARR_DB_URL: sqlite+aiosqlite:///./ci-check.db
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: services/frontend
+        run: npm run lint
+
+      - name: Test
+        working-directory: services/frontend
+        run: npm run test
+
+      # `build` runs tsc --noEmit first, so this is the typecheck too.
+      - name: Build
+        working-directory: services/frontend
+        run: npm run build
+
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versions agree
+        run: python3 .github/scripts/check_version.py
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only: publishing happens from release.yml on a tag.
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.all-in-one
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

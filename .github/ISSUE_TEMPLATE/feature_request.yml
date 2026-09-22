@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a capability muxarr does not have.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things muxarr will not do, so you can save the typing: it never
+        transcodes (stream-copy only, by design), and it never writes to the
+        download folder.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that muxarr makes hard or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+      description: A setting, an endpoint, a UI affordance — whatever shape you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: A concrete example
+      description: >
+        A real release layout, filename or track set this would handle. Concrete
+        examples are what turn a feature request into a test case.
+      placeholder: |
+        Release/
+          Show.S01E01.1080p.mkv
+          Subs/
+            2_English.srt
+            3_English.forced.srt
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+    validations:
+      required: false
