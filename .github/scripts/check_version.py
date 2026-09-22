@@ -8,6 +8,9 @@ metadata. This is the guard that keeps them from drifting.
 Usage:
     check_version.py            # the three files agree
     check_version.py v1.2.3     # ...and match this git tag
+
+A prerelease tag matches the release it is a candidate for, so v1.2.3-rc1 is
+accepted while the sources still say 1.2.3.
 """
 
 from __future__ import annotations
@@ -44,13 +47,6 @@ def from_package_json() -> str:
     return version
 
 
-def from_package_json() -> str:
-    data = json.loads((ROOT / "services/frontend/package.json").read_text())
-    version = data["version"]
-    assert isinstance(version, str)
-    return version
-
-
 def main(argv: list[str]) -> int:
     found = {
         "services/backend/pyproject.toml": from_pyproject(),
@@ -59,7 +55,8 @@ def main(argv: list[str]) -> int:
     }
 
     if argv:
-        found["git tag"] = argv[0].removeprefix("refs/tags/").removeprefix("v")
+        tag = argv[0].removeprefix("refs/tags/").removeprefix("v")
+        found["git tag"] = tag.split("-", 1)[0]
 
     distinct = set(found.values())
     if len(distinct) == 1:
