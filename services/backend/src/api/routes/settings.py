@@ -79,6 +79,7 @@ def _view(container: AppContainer) -> SettingsView:
         ai_model=settings.ai_model,
         ai_timeout_seconds=settings.ai_timeout_seconds,
         ai_max_entries=settings.ai_max_entries,
+        ai_name_tracks=settings.ai_name_tracks,
         ai_api_key_set=bool(settings.ai_api_key),
         log_level=settings.log_level,
         locked=sorted(container.locked),

@@ -115,6 +115,7 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("ai_model", "MUXARR_AI_MODEL", "ai", _as_text),
     FieldSpec("ai_timeout_seconds", "MUXARR_AI_TIMEOUT", "ai", _as_float(1.0)),
     FieldSpec("ai_max_entries", "MUXARR_AI_MAX_ENTRIES", "ai", _as_int(1)),
+    FieldSpec("ai_name_tracks", "MUXARR_AI_NAME_TRACKS", "ai", _as_bool),
     FieldSpec("log_level", "MUXARR_LOG_LEVEL", "logging", _LOG_LEVEL),
 )
 

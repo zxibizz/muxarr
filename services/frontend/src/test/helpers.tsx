@@ -45,6 +45,7 @@ export function someSettings(overrides: Partial<ServiceSettings> = {}): ServiceS
     ai_model: '',
     ai_timeout_seconds: 30,
     ai_max_entries: 200,
+    ai_name_tracks: false,
     ai_api_key_set: false,
     log_level: 'INFO',
     locked: [],

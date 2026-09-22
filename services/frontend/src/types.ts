@@ -173,6 +173,7 @@ export interface EditableSettings {
   ai_model: string;
   ai_timeout_seconds: number;
   ai_max_entries: number;
+  ai_name_tracks: boolean;
 
   log_level: LogLevel;
 }

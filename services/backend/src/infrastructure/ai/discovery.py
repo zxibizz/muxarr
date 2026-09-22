@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ from src.application.interfaces.track_source import TrackDiscovery
 from src.core.logging import get_logger
 from src.domain.enums import UNDETERMINED, AiMode, LogComponent
 from src.domain.journal import LogStage
-from src.domain.language import normalise_language
+from src.domain.language import build_title, normalise_language
 from src.domain.media import ExternalTrack
 from src.domain.naming import EpisodeRef
 from src.infrastructure.ai import prompt as prompt_builder
@@ -58,6 +59,7 @@ class AiAssistedTrackDiscovery:
         max_entries: int = 200,
         timeout: float = 30.0,
         max_tracks: int = 24,
+        name_tracks: bool = False,
     ) -> None:
         self._heuristic = heuristic
         self._completer = completer
@@ -65,6 +67,7 @@ class AiAssistedTrackDiscovery:
         self._max_entries = max_entries
         self._timeout = timeout
         self._max_tracks = max_tracks
+        self._name_tracks = name_tracks
 
     def discover(
         self, video_path: Path, *, episode: EpisodeRef | None = None
@@ -90,6 +93,11 @@ class AiAssistedTrackDiscovery:
             note.info("verify mode: the filename result is the one being used")
             return found
 
+        # The filenames already settled which files to embed; the provider was asked
+        # only for the labels, so it does not get to change the selection.
+        if self._name_tracks and found and not self._wants_ai_selection(found):
+            return _renamed(found, proposed)
+
         note.bind(
             video=video_path.name,
             heuristic_tracks=len(found),
@@ -102,7 +110,12 @@ class AiAssistedTrackDiscovery:
             return False
         if self._mode in ("always", "verify"):
             return True
-        # fallback: only when the filenames did not settle it on their own.
+        return self._name_tracks or self._wants_ai_selection(found)
+
+    def _wants_ai_selection(self, found: Sequence[ExternalTrack]) -> bool:
+        """fallback mode: the filenames did not settle it on their own."""
+        if self._mode != "fallback":
+            return True
         return not found or any(track.language == UNDETERMINED for track in found)
 
     def _consult(
@@ -187,14 +200,26 @@ def _to_track(item: Any, *, index: Mapping[str, Path]) -> ExternalTrack | None:
         return None
     kind, companion = classified
 
+    language = _language(item.get("language"))
+    forced = item.get("forced") is True
+    hearing_impaired = item.get("hearing_impaired") is True
+    variant = _label(item.get("variant"))
+
     return ExternalTrack(
         path=path,
         kind=kind,
-        language=_language(item.get("language")),
-        name=_label(item.get("title")),
-        forced=item.get("forced") is True,
-        hearing_impaired=item.get("hearing_impaired") is True,
-        variant=_label(item.get("variant")),
+        language=language,
+        # A model that answers with a null title should not cost the track its name.
+        name=_label(item.get("title"))
+        or build_title(
+            language,
+            forced=forced,
+            hearing_impaired=hearing_impaired,
+            variant=variant,
+        ),
+        forced=forced,
+        hearing_impaired=hearing_impaired,
+        variant=variant,
         companion=companion,
         source="ai",
     )
@@ -210,6 +235,26 @@ def _label(raw: Any) -> str | None:
     if not isinstance(raw, str):
         return None
     return " ".join(_CONTROL.sub(" ", raw).split())[:MAX_LABEL_CHARS] or None
+
+
+def _renamed(
+    found: Sequence[ExternalTrack], proposed: Sequence[ExternalTrack]
+) -> list[ExternalTrack]:
+    """Take only the track names from ``proposed``, keyed by the file they describe."""
+    titles = {track.path: track.name for track in proposed if track.name}
+    tracks = [
+        replace(t, name=titles[t.path]) if t.path in titles and titles[t.path] != t.name else t
+        for t in found
+    ]
+
+    changed = sum(1 for before, after in zip(found, tracks, strict=True) if before is not after)
+    if changed:
+        note.bind(renamed=changed, tracks=len(tracks)).info(
+            f"the AI provider named {changed} of {len(tracks)} track(s)"
+        )
+    else:
+        note.bind(tracks=len(tracks)).info("the AI provider had no better name for any track")
+    return tracks
 
 
 def _log_disagreement(found: Sequence[ExternalTrack], proposed: Sequence[ExternalTrack]) -> None:

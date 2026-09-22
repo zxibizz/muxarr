@@ -158,6 +158,7 @@ class AppContainer:
             max_entries=settings.ai_max_entries,
             timeout=settings.ai_timeout_seconds,
             max_tracks=settings.max_external_tracks,
+            name_tracks=settings.ai_name_tracks,
         )
 
     @cached_property

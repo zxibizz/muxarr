@@ -143,6 +143,7 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_AI_MODEL` | *unset* | ✓ | Required once `MUXARR_AI_MODE` is not `off` |
 | `MUXARR_AI_TIMEOUT` | `30` | ✓ | Seconds before the request is abandoned |
 | `MUXARR_AI_MAX_ENTRIES` | `200` | ✓ | Skip the call entirely above this many sidecars |
+| `MUXARR_AI_NAME_TRACKS` | `false` | ✓ | Let the provider write the track names — see [Track names](#track-names) |
 | `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
 
 Read roots, the database URL, the bind address, the API token and the scratch
@@ -228,6 +229,31 @@ call was.
 
 Tracks the model chose are marked `[ai]` in the history, so you can tell them
 apart in the UI.
+
+### Track names
+
+The name a player shows in its track menu (`--track-name`) is normally built
+from the filename: `Russian (Dublyajnaya, SDH)`. That is accurate but literal —
+it can only repeat tokens that were already in the path.
+
+`MUXARR_AI_NAME_TRACKS: true` hands the labelling to the provider:
+
+```yaml
+environment:
+  MUXARR_AI_MODE: fallback
+  MUXARR_AI_MODEL: gpt-4o-mini
+  MUXARR_AI_NAME_TRACKS: "true"
+```
+
+It changes two things. The provider is now consulted on **every** import, not
+only the ones the filenames could not settle — so a release that used to cost
+nothing now costs a request. And when the filenames did settle the selection,
+only the names come back from the reply: which files are embedded, their
+languages and their forced/SDH flags all still come from disk. The model can
+relabel a track, never swap one.
+
+It does nothing in `off` mode, and nothing in `verify` mode, which stays a
+shadow mode that writes no decision of its own.
 
 ## Troubleshooting
 

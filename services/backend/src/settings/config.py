@@ -79,6 +79,9 @@ class Settings:
     # A season pack can hold thousands of files; above this the AI path is skipped
     # entirely rather than sending (and paying for) an enormous listing.
     ai_max_entries: int = 200
+    # Let the provider write the track names even on releases the filenames already
+    # settled, which costs a request per import that would otherwise be free.
+    ai_name_tracks: bool = False
     extra: Mapping[str, str] = field(default_factory=dict)
 
     @property
@@ -153,6 +156,7 @@ class Settings:
             ai_model=ai_model,
             ai_timeout_seconds=_parse_float(source, "MUXARR_AI_TIMEOUT", 30.0),
             ai_max_entries=max(1, _parse_int(source, "MUXARR_AI_MAX_ENTRIES", 200)),
+            ai_name_tracks=_parse_bool(source, "MUXARR_AI_NAME_TRACKS"),
         )
 
 

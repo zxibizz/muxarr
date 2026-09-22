@@ -56,6 +56,7 @@ const ENV_VARS: Record<SettingsField, string> = {
   ai_model: 'MUXARR_AI_MODEL',
   ai_timeout_seconds: 'MUXARR_AI_TIMEOUT',
   ai_max_entries: 'MUXARR_AI_MAX_ENTRIES',
+  ai_name_tracks: 'MUXARR_AI_NAME_TRACKS',
   log_level: 'MUXARR_LOG_LEVEL',
 };
 
@@ -348,6 +349,12 @@ export function SettingsPage() {
             min={1}
             {...form.getInputProps('ai_max_entries')}
             {...lockProps('ai_max_entries')}
+          />
+          <Switch
+            label="Let the provider name the tracks"
+            description="Asks on every import, even when the filenames were conclusive, and uses the provider's label as the track name. Selection stays with the filenames. Ignored in verify mode."
+            {...form.getInputProps('ai_name_tracks', { type: 'checkbox' })}
+            {...lockProps('ai_name_tracks')}
           />
           <AiTestButton form={form} apiKey={apiKey} keyStored={current.ai_api_key_set} />
         </SettingsSection>

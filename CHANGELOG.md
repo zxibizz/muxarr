@@ -25,6 +25,13 @@ within the same major version.
   that have not settled yet and follows their log live, which is also the only
   way to read a job that failed before it could write a history entry. Backed
   by `GET /v1/jobs` and `GET /v1/jobs/{id}/detail`.
+- **AI-written track names** (`MUXARR_AI_NAME_TRACKS`, default off). The label a
+  player shows for an embedded track is normally assembled from the filename;
+  with this on, the provider writes it instead. It only relabels: which files
+  are embedded, their languages and their forced/SDH flags still come from disk
+  whenever the filenames were conclusive. The provider is consulted on every
+  import as a result, so this costs a request per import. Ignored in `verify`
+  mode.
 
 ### Changed
 
@@ -35,6 +42,12 @@ within the same major version.
   versions still render. `added_tracks` and `rejected_tracks` in
   `GET /v1/history` and `GET /v1/jobs/{id}` are objects rather than strings;
   the shim protocol on `GET /v1/jobs/{id}/protocol` is unchanged.
+
+### Fixed
+
+- An AI-identified track whose reply carried no title was embedded with no name
+  at all. It now falls back to the name built from the language and flags, so an
+  AI-selected track is never labelled worse than a filename-selected one.
 
 ## [0.9.1] - 2026-09-22
 

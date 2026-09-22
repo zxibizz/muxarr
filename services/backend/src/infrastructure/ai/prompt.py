@@ -40,7 +40,7 @@ Reply with JSON only, in exactly this shape:
 {"tracks": [{"file": "<path copied verbatim from the candidate list>",
              "kind": "audio" | "subtitles",
              "language": "<ISO 639-2/B code, or \\"und\\">",
-             "title": "<short human-readable label, or null>",
+             "title": "<English language name>[ (<qualifiers>)], or null",
              "forced": true | false,
              "hearing_impaired": true | false,
              "variant": "<dub or release group tag, or null>"}]}
@@ -54,6 +54,16 @@ complete or correct a path. Omit anything you are unsure about.
 gets written permanently into the user's library.
 - "variant" only distinguishes two dubs of the SAME language, usually a studio or \
 group name, often taken from the containing folder. Otherwise null.
+- "title" is the player's track-menu label. It must be the English language \
+name on its own, or that name followed by exactly one parenthesis of \
+qualifiers: "English", "Russian (Forced)", "Russian (Kubik, SDH)".
+- The qualifiers are, in this order and separated by ", ": the "variant" tag \
+verbatim, then "Forced" when "forced" is true, then "SDH" when \
+"hearing_impaired" is true. Nothing else may appear, and a qualifier whose \
+field you did not set must be left out.
+- Never put a filename, codec, resolution, episode number or any other \
+punctuation in "title". Use null when the language is "und" and there are no \
+qualifiers.
 - "forced" marks tracks covering only foreign dialogue or on-screen signs.
 - "hearing_impaired" marks SDH/CC subtitles.
 - A language folder name applies to every file inside it.
