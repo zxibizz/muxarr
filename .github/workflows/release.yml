@@ -52,6 +52,8 @@ jobs:
             org.opencontainers.image.title=muxarr
             org.opencontainers.image.description=Embed external audio and subtitle tracks into video containers during Radarr/Sonarr import
             org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
 
       - id: build
         uses: docker/build-push-action@v6

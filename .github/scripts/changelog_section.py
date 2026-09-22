@@ -14,19 +14,26 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def section(version: str) -> str:
-    heading = f"## [{version}]"
     lines = (ROOT / "CHANGELOG.md").read_text().splitlines()
 
-    try:
-        start = next(i for i, line in enumerate(lines) if line.startswith(heading))
-    except StopIteration:
-        raise SystemExit(f"no '{heading}' section in CHANGELOG.md") from None
+    # A prerelease has no heading of its own; fall back to the release it leads to.
+    candidates = [version]
+    if "-" in version:
+        candidates.append(version.split("-", 1)[0])
 
-    end = next(
-        (i for i, line in enumerate(lines[start + 1 :], start + 1) if line.startswith("## ")),
-        len(lines),
-    )
-    return "\n".join(lines[start + 1 : end]).strip()
+    for candidate in candidates:
+        heading = f"## [{candidate}]"
+        start = next((i for i, line in enumerate(lines) if line.startswith(heading)), None)
+        if start is None:
+            continue
+        end = next(
+            (i for i, line in enumerate(lines[start + 1 :], start + 1) if line.startswith("## ")),
+            len(lines),
+        )
+        return "\n".join(lines[start + 1 : end]).strip()
+
+    wanted = " or ".join(f"'## [{c}]'" for c in candidates)
+    raise SystemExit(f"no {wanted} section in CHANGELOG.md")
 
 
 def main(argv: list[str]) -> int:
