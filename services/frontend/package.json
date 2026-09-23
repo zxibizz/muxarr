@@ -30,7 +30,7 @@
     "eslint": "^9.19.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.18",
-    "globals": "^15.14.0",
+    "globals": "^17.12.0",
     "jsdom": "^26.0.0",
     "postcss": "^8.5.3",
     "postcss-preset-mantine": "^1.17.0",
