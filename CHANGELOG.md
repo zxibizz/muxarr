@@ -12,6 +12,18 @@ within the same major version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The image no longer fails to start after the Python 3.14 base-image bump.**
+  The dependencies were still installed for Python 3.11, so the 3.14
+  interpreter could not import any of them. They are now installed on the same
+  base image the container runs, and the build fails if they don't import.
+
+### Changed
+
+- Runtime is Python 3.14. Frontend toolchain moved to Vite 8, Vitest 5,
+  ESLint 10 and jsdom 30, and the router to react-router 7.
+
 ## [0.9.2] - 2026-09-22
 
 ### Added
