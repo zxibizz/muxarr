@@ -5,7 +5,7 @@ import type { SettingsFormApi } from '../useSettingsForm';
 
 export function LoggingSection({ field, bind }: SettingsFormApi) {
   return (
-    <SettingsSection id="logging" title="Logging">
+    <SettingsSection title="Logging">
       <SettingRow
         binding={field('log_level')}
         label="Level"

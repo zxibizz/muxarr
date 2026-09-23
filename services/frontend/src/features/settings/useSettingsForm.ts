@@ -4,7 +4,8 @@ import { notifications } from '@mantine/notifications';
 import { useCallback, useState } from 'react';
 import { useUpdateSettings } from '../../api/queries';
 import type { EditableSettings, ServiceSettings, SettingsField, SettingsPatch } from '../../api/types';
-import { API_KEY_ENV, ENV_VARS, FIELDS, editableFrom } from './fields';
+import { API_KEY_ENV, ENV_VARS, FIELDS, SECTIONS, editableFrom } from './fields';
+import type { LockableField, SectionId } from './fields';
 
 type InputProps = ReturnType<UseFormReturnType<EditableSettings>['getInputProps']>;
 
@@ -22,9 +23,6 @@ export interface SettingsFormApi {
     disabled: boolean;
   };
 }
-
-// The key is write-only, so it is not part of the form, but its variable can still pin it.
-type LockableField = SettingsField | 'ai_api_key';
 
 export function useSettingsForm(settings: ServiceSettings) {
   const update = useUpdateSettings();
@@ -98,6 +96,13 @@ export function useSettingsForm(settings: ServiceSettings) {
     setApiKey('');
   };
 
+  const dirtySection = (id: SectionId) => {
+    const section = SECTIONS.find((candidate) => candidate.id === id);
+    return (section?.fields ?? []).some((name: LockableField) =>
+      name === 'ai_api_key' ? apiKey.trim() !== '' : form.isDirty(name),
+    );
+  };
+
   const api: SettingsFormApi = { form, field, bind };
 
   return {
@@ -110,6 +115,7 @@ export function useSettingsForm(settings: ServiceSettings) {
     saving: update.isPending,
     saveError: update.error,
     dirty: form.isDirty() || apiKey.trim() !== '',
+    dirtySection,
     locked,
   };
 }

@@ -5,7 +5,6 @@ import type { SettingsFormApi } from '../useSettingsForm';
 export function QueueSection({ field, bind }: SettingsFormApi) {
   return (
     <SettingsSection
-      id="queue"
       title="Queue and retention"
       description="How much work runs at once, and how long records are kept."
     >

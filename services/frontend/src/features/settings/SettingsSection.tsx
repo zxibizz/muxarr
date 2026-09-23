@@ -1,20 +1,18 @@
 import { Box, Card, Code, Flex, Stack, Text, Title } from '@mantine/core';
 import { IconLock } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
-import type { SectionId } from './fields';
 import classes from './settings.module.css';
 import type { FieldBinding } from './useSettingsForm';
 
 interface SectionProps {
-  id: SectionId;
   title: string;
   description?: ReactNode;
   children: ReactNode;
 }
 
-export function SettingsSection({ id, title, description, children }: SectionProps) {
+export function SettingsSection({ title, description, children }: SectionProps) {
   return (
-    <Card id={id} padding={0} style={{ scrollMarginTop: 24 }}>
+    <Card padding={0}>
       <Stack gap={2} px="lg" pt="lg" pb="xs">
         <Title order={2}>{title}</Title>
         {description && (

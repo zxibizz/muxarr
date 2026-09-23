@@ -36,9 +36,11 @@ within the same major version.
   chips, and an operation drawer split into Overview, Tracks and What happened.
   Rows open from the keyboard, the history search is debounced, clearing the
   history asks first, and a banner on every page says when the worker is
-  offline. Settings are laid out as label-and-control rows with a section index,
-  a pinned variable is named next to its field, and changes collect in a sticky
-  save bar instead of saving on a button at the bottom of the page.
+  offline. Settings are laid out as label-and-control rows split into tabs (a
+  burger menu on phones, the open tab kept in `?section=`), a tab holding
+  unsaved edits is marked, a pinned variable is named next to its field, and
+  changes collect in a sticky save bar instead of saving on a button at the
+  bottom of the page.
 - **Every passed-over sidecar carries a reason code** (`code` on
   `rejected_tracks` in the JSON API: `already_present`, `language_not_kept`,
   `file_missing`, ...), which the UI shows as a label. Older rows keep their

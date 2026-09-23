@@ -2,11 +2,16 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { renderRouted, someSettings, stubFetch } from '../../test/helpers';
+import { FIELDS, SECTIONS } from './fields';
 import { SettingsPage } from './SettingsPage';
 
-async function loaded() {
-  renderRouted(<SettingsPage />, '/settings');
+async function loaded(route = '/settings') {
+  renderRouted(<SettingsPage />, route);
   return screen.findByLabelText(/maximum external tracks/i);
+}
+
+async function openSection(name: RegExp) {
+  await userEvent.click(screen.getByRole('tab', { name }));
 }
 
 function patchBody(fetchStub: ReturnType<typeof stubFetch>) {
@@ -98,6 +103,7 @@ describe('SettingsPage', () => {
   it('reports only whether a key is stored, never the key', async () => {
     stubFetch({ settings: someSettings({ ai_api_key_set: true }) });
     await loaded();
+    await openSection(/^ai track discovery/i);
 
     expect(screen.getByLabelText(/^api key/i)).toHaveAttribute('placeholder', 'a key is stored');
   });
@@ -105,9 +111,70 @@ describe('SettingsPage', () => {
   it('pins the API key by its own variable', async () => {
     stubFetch({ settings: someSettings({ locked: ['ai_api_key'] }) });
     await loaded();
+    await openSection(/^ai track discovery/i);
 
     expect(screen.getByLabelText(/^api key/i)).toBeDisabled();
     expect(document.getElementById('setting-ai_mode')).not.toBeDisabled();
+  });
+});
+
+describe('the settings sections', () => {
+  it('shows one section at a time', async () => {
+    stubFetch();
+    await loaded();
+    const panel = () => within(screen.getByRole('tabpanel'));
+    expect(panel().queryByLabelText(/mux timeout/i)).not.toBeInTheDocument();
+
+    await openSection(/^muxing/i);
+
+    expect(panel().getByLabelText(/mux timeout/i)).toBeVisible();
+    expect(panel().queryByLabelText(/maximum external tracks/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the section named in the URL', async () => {
+    stubFetch();
+    await loaded('/settings?section=ai');
+
+    expect(screen.getByRole('tab', { name: /^ai track discovery/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('falls back to track selection for an unknown section', async () => {
+    stubFetch();
+    expect(await loaded('/settings?section=nope')).toBeVisible();
+  });
+
+  it('keeps an edit across a section switch and marks where it is', async () => {
+    stubFetch();
+    await loaded();
+
+    await editMaxTracks('3');
+    await openSection(/^muxing/i);
+
+    expect(screen.getByRole('tab', { name: /^track selection.*unsaved changes/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^muxing$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+
+    await openSection(/^track selection/i);
+    expect(screen.getByLabelText(/maximum external tracks/i)).toHaveValue('3');
+  });
+
+  it('switches section from the burger menu', async () => {
+    stubFetch();
+    await loaded();
+
+    await userEvent.click(screen.getByRole('button', { name: /settings sections/i }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /^muxing/i }));
+
+    expect(screen.getByLabelText(/mux timeout/i)).toBeVisible();
+  });
+
+  it('places every setting in exactly one section', () => {
+    const placed = SECTIONS.flatMap((section) => [...section.fields]);
+
+    expect([...placed].sort()).toEqual([...FIELDS, 'ai_api_key'].sort());
   });
 });
 
@@ -115,6 +182,7 @@ describe('the AI provider test', () => {
   it('stays disabled until there is something to test', async () => {
     stubFetch();
     await loaded();
+    await openSection(/^ai track discovery/i);
 
     expect(screen.getByRole('button', { name: /test provider/i })).toBeDisabled();
   });
@@ -125,6 +193,7 @@ describe('the AI provider test', () => {
       aiTest: { ok: true, message: 'tiny replied', latency_ms: 42 },
     });
     await loaded();
+    await openSection(/^ai track discovery/i);
 
     await userEvent.click(screen.getByRole('button', { name: /test provider/i }));
 

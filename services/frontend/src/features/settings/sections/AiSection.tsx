@@ -16,7 +16,6 @@ export function AiSection({ form, field, bind, apiKey, onApiKeyChange, keyStored
 
   return (
     <SettingsSection
-      id="ai"
       title="AI track discovery"
       description="Optional. When enabled, release folder and file names are sent to the provider."
     >

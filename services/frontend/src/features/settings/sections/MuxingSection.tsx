@@ -4,7 +4,7 @@ import type { SettingsFormApi } from '../useSettingsForm';
 
 export function MuxingSection({ field, bind }: SettingsFormApi) {
   return (
-    <SettingsSection id="muxing" title="Muxing" description="How the remux itself behaves.">
+    <SettingsSection title="Muxing" description="How the remux itself behaves.">
       <SettingRow
         binding={field('mux_timeout_seconds')}
         label="Mux timeout"

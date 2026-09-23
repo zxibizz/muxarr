@@ -1,19 +1,27 @@
-import { Alert, Button, Grid, Group, NavLink, Paper, Skeleton, Stack, Text } from '@mantine/core';
+import { Alert, Button, Group, Paper, Skeleton, Stack, Tabs, Text } from '@mantine/core';
 import { IconAlertTriangle, IconLock } from '@tabler/icons-react';
+import { useSearchParams } from 'react-router';
 import { describeError } from '../../api/client';
 import { useSettings } from '../../api/queries';
 import type { ServiceSettings } from '../../api/types';
 import { PageHeader } from '../../components/PageHeader';
-import { SECTIONS } from './fields';
+import { isSectionId } from './fields';
+import type { SectionId } from './fields';
+import { SectionMenu, SectionTabs } from './SectionNav';
 import { AiSection } from './sections/AiSection';
 import { LoggingSection } from './sections/LoggingSection';
 import { MuxingSection } from './sections/MuxingSection';
 import { QueueSection } from './sections/QueueSection';
 import { SelectionSection } from './sections/SelectionSection';
-import classes from './settings.module.css';
 import { useSettingsForm } from './useSettingsForm';
 
-function SettingsForm({ settings }: { settings: ServiceSettings }) {
+interface FormProps {
+  settings: ServiceSettings;
+  section: SectionId;
+  onSectionChange: (id: SectionId) => void;
+}
+
+function SettingsForm({ settings, section, onSectionChange }: FormProps) {
   const editor = useSettingsForm(settings);
   const saveError = describeError(editor.saveError);
   const pinned = settings.locked.length;
@@ -34,17 +42,38 @@ function SettingsForm({ settings }: { settings: ServiceSettings }) {
           </Alert>
         )}
 
-        <SelectionSection {...editor.api} />
-        <MuxingSection {...editor.api} />
-        <QueueSection {...editor.api} />
-        <AiSection
-          {...editor.api}
-          apiKey={editor.apiKey}
-          onApiKeyChange={editor.setApiKey}
-          keyStored={settings.ai_api_key_set}
-          onClearKey={() => void editor.clearKey()}
-        />
-        <LoggingSection {...editor.api} />
+        <Tabs
+          value={section}
+          onChange={(value) => {
+            if (isSectionId(value)) onSectionChange(value);
+          }}
+          keepMounted
+        >
+          <SectionTabs dirty={editor.dirtySection} />
+          <SectionMenu current={section} onChange={onSectionChange} dirty={editor.dirtySection} />
+
+          <Tabs.Panel value="selection" pt="lg">
+            <SelectionSection {...editor.api} />
+          </Tabs.Panel>
+          <Tabs.Panel value="muxing" pt="lg">
+            <MuxingSection {...editor.api} />
+          </Tabs.Panel>
+          <Tabs.Panel value="queue" pt="lg">
+            <QueueSection {...editor.api} />
+          </Tabs.Panel>
+          <Tabs.Panel value="ai" pt="lg">
+            <AiSection
+              {...editor.api}
+              apiKey={editor.apiKey}
+              onApiKeyChange={editor.setApiKey}
+              keyStored={settings.ai_api_key_set}
+              onClearKey={() => void editor.clearKey()}
+            />
+          </Tabs.Panel>
+          <Tabs.Panel value="logging" pt="lg">
+            <LoggingSection {...editor.api} />
+          </Tabs.Panel>
+        </Tabs>
 
         {editor.dirty && (
           <Paper
@@ -77,6 +106,11 @@ function SettingsForm({ settings }: { settings: ServiceSettings }) {
 export function SettingsPage() {
   const settings = useSettings();
   const loadError = describeError(settings.error);
+  const [params, setParams] = useSearchParams();
+  const requested = params.get('section');
+  const section: SectionId = isSectionId(requested) ? requested : 'selection';
+  // replace: switching tabs should not fill the Back history.
+  const showSection = (id: SectionId) => setParams({ section: id }, { replace: true });
 
   return (
     <Stack gap="xl">
@@ -85,35 +119,18 @@ export function SettingsPage() {
         description="Changes apply to the next import. Nothing needs restarting."
       />
 
-      <Grid gap="xl">
-        <Grid.Col span={{ base: 12, md: 3 }} visibleFrom="md">
-          <Stack gap={2} className={classes.nav}>
-            {SECTIONS.map((section) => (
-              <NavLink
-                key={section.id}
-                component="a"
-                href={`#${section.id}`}
-                label={section.title}
-                variant="subtle"
-              />
-            ))}
-          </Stack>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 9 }}>
-          {loadError ? (
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Could not load settings">
-              {loadError}
-            </Alert>
-          ) : settings.data ? (
-            <SettingsForm settings={settings.data} />
-          ) : (
-            <Stack gap="lg">
-              <Skeleton height={320} radius="lg" />
-              <Skeleton height={200} radius="lg" />
-            </Stack>
-          )}
-        </Grid.Col>
-      </Grid>
+      {loadError ? (
+        <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Could not load settings">
+          {loadError}
+        </Alert>
+      ) : settings.data ? (
+        <SettingsForm settings={settings.data} section={section} onSectionChange={showSection} />
+      ) : (
+        <Stack gap="lg">
+          <Skeleton height={36} radius="md" />
+          <Skeleton height={320} radius="lg" />
+        </Stack>
+      )}
     </Stack>
   );
 }

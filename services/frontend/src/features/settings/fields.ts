@@ -29,15 +29,65 @@ export const FIELDS = Object.keys(ENV_VARS) as SettingsField[];
 
 export const API_KEY_ENV = 'MUXARR_AI_API_KEY';
 
+// The key is write-only, so it is not part of the form, but its variable can still pin it.
+export type LockableField = SettingsField | 'ai_api_key';
+
+interface Section {
+  id: string;
+  title: string;
+  fields: readonly LockableField[];
+}
+
 export const SECTIONS = [
-  { id: 'selection', title: 'Track selection' },
-  { id: 'muxing', title: 'Muxing' },
-  { id: 'queue', title: 'Queue and retention' },
-  { id: 'ai', title: 'AI track discovery' },
-  { id: 'logging', title: 'Logging' },
-] as const;
+  {
+    id: 'selection',
+    title: 'Track selection',
+    fields: [
+      'dedupe',
+      'keep_audio_languages',
+      'keep_subtitle_languages',
+      'max_external_tracks',
+      'sub_charset',
+      'skip_image_subtitles',
+      'skip_undetermined_language',
+    ],
+  },
+  {
+    id: 'muxing',
+    title: 'Muxing',
+    fields: ['mux_timeout_seconds', 'free_space_factor', 'preserve_ownership'],
+  },
+  {
+    id: 'queue',
+    title: 'Queue and retention',
+    fields: [
+      'max_concurrent_muxes',
+      'job_ttl_seconds',
+      'history_max_records',
+      'operation_log_max_entries',
+    ],
+  },
+  {
+    id: 'ai',
+    title: 'AI track discovery',
+    fields: [
+      'ai_mode',
+      'ai_base_url',
+      'ai_model',
+      'ai_api_key',
+      'ai_timeout_seconds',
+      'ai_max_entries',
+      'ai_name_tracks',
+    ],
+  },
+  { id: 'logging', title: 'Logging', fields: ['log_level'] },
+] as const satisfies readonly Section[];
 
 export type SectionId = (typeof SECTIONS)[number]['id'];
+
+export function isSectionId(value: string | null): value is SectionId {
+  return SECTIONS.some((section) => section.id === value);
+}
 
 export const DEDUPE_OPTIONS = [
   { value: 'language_codec', label: 'By language and codec' },

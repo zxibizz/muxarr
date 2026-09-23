@@ -6,7 +6,6 @@ import type { SettingsFormApi } from '../useSettingsForm';
 export function SelectionSection({ field, bind }: SettingsFormApi) {
   return (
     <SettingsSection
-      id="selection"
       title="Track selection"
       description="Which external tracks get embedded, and which of the source's own tracks are dropped."
     >
