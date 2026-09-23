@@ -21,9 +21,41 @@ within the same major version.
   with no sidecars is now remuxed when there is something to strip. An import
   that would lose every audio track is left to *arr instead. Each operation
   lists the tracks it removed (a new `removed_tracks` column, migrated on start).
+- **A redesigned web UI.** A sidebar layout with a live worker indicator, a
+  **System** page (worker, queue, daemon), icon-led stat cards, compact track
+  chips, and an operation drawer split into Overview, Tracks and What happened.
+  Rows open from the keyboard, the history search is debounced, clearing the
+  history asks first, and a banner on every page says when the worker is
+  offline. Settings are laid out as label-and-control rows with a section index,
+  a pinned variable is named next to its field, and changes collect in a sticky
+  save bar instead of saving on a button at the bottom of the page.
+- **Every passed-over sidecar carries a reason code** (`code` on
+  `rejected_tracks` in the JSON API: `already_present`, `language_not_kept`,
+  `file_missing`, ...), which the UI shows as a label. Older rows keep their
+  text reason and a `null` code.
+- `python -m src.cli openapi` prints the API schema; the UI's types are
+  generated from it.
+
+### Changed
+
+- The UI now runs on React 19, Mantine 9 and TanStack Query, which replaces
+  three hand-rolled polling loops.
+- The README was cut to what a new user needs; the configuration reference,
+  troubleshooting, upgrading and architecture moved to `docs/`.
+- The two shims are rendered from one template (`scripts/src/`), so a fix can
+  no longer land in one and not the other. Their behaviour is unchanged.
+- `make` targets for the common loops, a pre-commit config, `.editorconfig`, and
+  `ruff format` enforced in CI.
 
 ### Fixed
 
+- **A sidecar that disappeared before muxing is no longer handed back to *arr**
+  as an extra file.
+- **An `MUXARR_AI_API_KEY` set in the environment now pins the key field** in
+  the UI; it used to be tied to `MUXARR_AI_MODE` instead, so saving could fail
+  with a 409.
+- **The version guard now covers the image tags pinned in the docs**, which had
+  drifted to three different releases.
 - **Sidecars in a Matroska container (`.mka`) are now addressed by their real
   track number.** mkvmerge keeps a file's own numbering, so a `.mka` whose track
   is not numbered 0 had its language, title and flags silently ignored, and the

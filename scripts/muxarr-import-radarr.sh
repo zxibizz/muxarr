@@ -1,4 +1,5 @@
 #!/bin/sh
+# Generated from scripts/src/muxarr-import.sh.in by scripts/build_shims.py. Edit that.
 #
 # muxarr import shim for Radarr.
 #

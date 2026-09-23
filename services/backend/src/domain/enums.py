@@ -7,7 +7,7 @@ or argv boundary as a bare string, and mypy already rejects a typo in either.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, get_args
 
 TrackKind = Literal["video", "audio", "subtitles"]
 
@@ -15,10 +15,12 @@ TrackKind = Literal["video", "audio", "subtitles"]
 UNDETERMINED = "und"
 
 DedupeMode = Literal["off", "language", "language_codec"]
+DEDUPE_MODES: tuple[DedupeMode, ...] = get_args(DedupeMode)
 
 # How much of sidecar discovery an LLM is allowed to decide. "verify" is a shadow
 # mode: the heuristic answer still wins, disagreements are only logged.
 AiMode = Literal["off", "fallback", "always", "verify"]
+AI_MODES: tuple[AiMode, ...] = get_args(AiMode)
 
 # Where a candidate track came from; surfaced in the history so a human can tell
 # an inferred match from a filename-derived one.
@@ -28,6 +30,19 @@ TrackSource = Literal["heuristic", "ai"]
 MoveStatus = Literal["DeferMove", "MoveComplete", "RenameRequested"]
 
 App = Literal["radarr", "sonarr"]
+
+# Why a discovered sidecar was not embedded. Code keys off these, never the prose.
+RejectCode = Literal[
+    "image_subtitle",
+    "undetermined_language",
+    "language_not_kept",
+    "already_present",
+    "track_limit",
+    "file_missing",
+    "file_empty",
+    "uninspectable",
+    "no_tracks",
+]
 
 JobState = Literal["pending", "running", "succeeded", "failed"]
 

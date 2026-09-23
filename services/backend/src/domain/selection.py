@@ -9,13 +9,35 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.domain.codecs import IMAGE_SUBTITLE_FAMILIES
-from src.domain.enums import DedupeMode, TrackKind
+from src.domain.enums import DedupeMode, RejectCode, TrackKind
 from src.domain.language import normalise_language
 from src.domain.media import ExternalTrack, MediaInfo, Track
 
 _KIND_ORDER: dict[TrackKind, int] = {"video": 0, "audio": 1, "subtitles": 2}
 
-LANGUAGE_NOT_KEPT = "language is not in the keep list"
+REJECT_REASONS: dict[RejectCode, str] = {
+    "image_subtitle": "image-based subtitle excluded by policy",
+    "undetermined_language": "language could not be determined",
+    "language_not_kept": "language is not in the keep list",
+    "already_present": "already present in container",
+    "track_limit": "max_external_tracks reached",
+    "file_missing": "file disappeared before muxing",
+    "file_empty": "file is empty",
+    "uninspectable": "the file could not be inspected",
+    "no_tracks": "the file holds no track mkvmerge can read",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class Rejection:
+    track: ExternalTrack
+    code: RejectCode
+    detail: str = ""
+
+    @property
+    def reason(self) -> str:
+        base = REJECT_REASONS[self.code]
+        return f"{base}: {self.detail}" if self.detail else base
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +100,7 @@ def prune(existing: MediaInfo, policy: SelectionPolicy | None = None) -> Pruning
 @dataclass(frozen=True, slots=True)
 class Selection:
     accepted: tuple[ExternalTrack, ...]
-    rejected: tuple[tuple[ExternalTrack, str], ...]
+    rejected: tuple[Rejection, ...]
 
     def __bool__(self) -> bool:
         return bool(self.accepted)
@@ -98,12 +120,12 @@ def select(
     }
 
     accepted: list[ExternalTrack] = []
-    rejected: list[tuple[ExternalTrack, str]] = []
+    rejected: list[Rejection] = []
 
     for candidate in _ordered(candidates):
-        reason = _reject_reason(candidate, policy)
-        if reason is not None:
-            rejected.append((candidate, reason))
+        code = _policy_rejection(candidate, policy)
+        if code is not None:
+            rejected.append(Rejection(candidate, code))
             continue
 
         signature = _signature(
@@ -116,11 +138,11 @@ def select(
             policy,
         )
         if signature is not None and signature in seen:
-            rejected.append((candidate, "already present in container"))
+            rejected.append(Rejection(candidate, "already_present"))
             continue
 
         if len(accepted) >= policy.max_external_tracks:
-            rejected.append((candidate, "max_external_tracks reached"))
+            rejected.append(Rejection(candidate, "track_limit"))
             continue
 
         accepted.append(candidate)
@@ -130,17 +152,13 @@ def select(
     return Selection(accepted=tuple(accepted), rejected=tuple(rejected))
 
 
-def _reject_reason(candidate: ExternalTrack, policy: SelectionPolicy) -> str | None:
+def _policy_rejection(candidate: ExternalTrack, policy: SelectionPolicy) -> RejectCode | None:
     if policy.skip_image_subtitles and candidate.codec_family in IMAGE_SUBTITLE_FAMILIES:
-        return "image-based subtitle excluded by policy"
+        return "image_subtitle"
     if policy.skip_undetermined_language and candidate.language == "und":
-        return "language could not be determined"
+        return "undetermined_language"
     if not policy.keeps(candidate.kind, candidate.language):
-        return LANGUAGE_NOT_KEPT
-    if not candidate.path.is_file():
-        return "file disappeared before muxing"
-    if candidate.path.stat().st_size == 0:
-        return "file is empty"
+        return "language_not_kept"
     return None
 
 

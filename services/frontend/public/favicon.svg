@@ -1,12 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="muxarr">
-  <rect width="64" height="64" rx="14" fill="#1a1b1e"/>
-  <!-- Three sidecar tracks converging into one container. -->
-  <g fill="none" stroke="#5c7cfa" stroke-width="5" stroke-linecap="round">
-    <path d="M14 20 H30"/>
-    <path d="M14 32 H30"/>
-    <path d="M14 44 H30"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8967f5"/>
+      <stop offset="1" stop-color="#4426ab"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <!-- Sidecar tracks converging into one container. -->
+  <g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round">
+    <path d="M13 19 C26 19 28 32 38 32" stroke-opacity=".55"/>
+    <path d="M13 32 H38" stroke-opacity=".85"/>
+    <path d="M13 45 C26 45 28 32 38 32" stroke-opacity=".55"/>
   </g>
-  <path d="M30 20 Q40 20 40 32 Q40 44 30 44" fill="none" stroke="#5c7cfa" stroke-width="5"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M40 32 H51" fill="none" stroke="#e9ecef" stroke-width="7" stroke-linecap="round"/>
+  <path d="M38 32 H51" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
 </svg>

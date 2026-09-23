@@ -1,7 +1,8 @@
 import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import type {
   AddedTrack,
@@ -12,18 +13,39 @@ import type {
   JobPage,
   LogEntry,
   Operation,
+  RejectedTrack,
   ServiceSettings,
   Stats,
   SystemStatus,
-} from '../types';
+} from '../api/types';
+import { AppProviders } from '../app/AppProviders';
+import { theme } from '../app/theme';
 
-export function renderWithMantine(ui: ReactElement) {
-  return render(<MantineProvider defaultColorScheme="dark">{ui}</MantineProvider>);
+/** Everything main.tsx provides except the router, so App can bring its own. */
+export function renderWithProviders(ui: ReactElement) {
+  return render(
+    <MantineProvider theme={theme} forceColorScheme="dark">
+      <Notifications />
+      <AppProviders>{ui}</AppProviders>
+    </MantineProvider>,
+  );
 }
 
-/** For a page rendered on its own, outside App's own BrowserRouter. */
+/** For a page rendered on its own, outside App's BrowserRouter. */
 export function renderRouted(ui: ReactElement, route = '/') {
-  return renderWithMantine(<MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>);
+  return renderWithProviders(<MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>);
+}
+
+export function aRejection(overrides: Partial<RejectedTrack> = {}): RejectedTrack {
+  return {
+    track: 'eng.srt',
+    reason: 'already present in container',
+    kind: 'subtitles',
+    language: 'eng',
+    source: 'heuristic',
+    code: 'already_present',
+    ...overrides,
+  };
 }
 
 export function someSettings(overrides: Partial<ServiceSettings> = {}): ServiceSettings {
@@ -86,6 +108,7 @@ export function aJob(overrides: Partial<Job> = {}): Job {
   return {
     id: 'job-1',
     state: 'running',
+    result: null,
     error: null,
     history_id: null,
     app: 'sonarr',
@@ -148,7 +171,14 @@ export function stubFetch(responses: Responses = {}) {
   const {
     status = 200,
     statusByPath = {},
-    health = { status: 'ok', version: '0.9.0', read_roots: ['/media'], auth_required: true },
+    health = {
+      status: 'ok',
+      version: '0.9.0',
+      read_roots: ['/media'],
+      auth_required: true,
+      worker_seen_at: '2026-09-22T10:00:00+00:00',
+      worker_alive: true,
+    },
     stats = { total: 1, muxed: 1, deferred: 0, tracks_added: 2, last_24h: 1 },
     system = {
       version: '0.9.0',

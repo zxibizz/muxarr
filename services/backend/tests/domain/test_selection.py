@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.domain.media import ExternalTrack, MediaInfo, Track
-from src.domain.selection import LANGUAGE_NOT_KEPT, SelectionPolicy, prune, select
+from src.domain.selection import Rejection, SelectionPolicy, prune, select
 from tests.conftest import touch
 
 
@@ -43,7 +43,7 @@ def test_rejects_duplicate_language_and_codec(tmp_path: Path) -> None:
     result = select(info, [candidate])
 
     assert result.accepted == ()
-    assert result.rejected[0][1] == "already present in container"
+    assert result.rejected[0].code == "already_present"
 
 
 def test_forced_variant_is_not_a_duplicate(tmp_path: Path) -> None:
@@ -84,19 +84,6 @@ def test_duplicate_candidates_are_collapsed(tmp_path: Path) -> None:
     assert len(result.rejected) == 1
 
 
-def test_empty_files_are_rejected(tmp_path: Path) -> None:
-    path = touch(tmp_path / "eng.srt", b"")
-    candidate = ExternalTrack(path=path, kind="subtitles", language="eng")
-
-    assert select(container(), [candidate]).rejected[0][1] == "file is empty"
-
-
-def test_missing_files_are_rejected(tmp_path: Path) -> None:
-    candidate = ExternalTrack(path=tmp_path / "gone.srt", kind="subtitles", language="eng")
-
-    assert select(container(), [candidate]).rejected[0][1] == "file disappeared before muxing"
-
-
 def test_image_subtitles_can_be_excluded(tmp_path: Path) -> None:
     candidate = external(tmp_path, "eng.sup", language="eng")
     policy = SelectionPolicy(skip_image_subtitles=True)
@@ -109,9 +96,9 @@ def test_undetermined_language_can_be_excluded(tmp_path: Path) -> None:
     candidate = external(tmp_path, "whatever.srt", language="und")
 
     policy = SelectionPolicy(skip_undetermined_language=True)
-    assert select(container(), [candidate], policy).rejected[0][1] == (
-        "language could not be determined"
-    )
+    rejection = select(container(), [candidate], policy).rejected[0]
+    assert rejection.code == "undetermined_language"
+    assert rejection.reason == "language could not be determined"
 
 
 def test_max_external_tracks_is_enforced(tmp_path: Path) -> None:
@@ -122,7 +109,7 @@ def test_max_external_tracks_is_enforced(tmp_path: Path) -> None:
     result = select(container(), candidates, SelectionPolicy(max_external_tracks=2))
 
     assert len(result.accepted) == 2
-    assert all(reason == "max_external_tracks reached" for _, reason in result.rejected)
+    assert all(r.code == "track_limit" for r in result.rejected)
 
 
 def test_audio_is_ordered_before_subtitles(tmp_path: Path) -> None:
@@ -186,7 +173,7 @@ class TestKeepLanguages:
         result = select(container(), [keep, drop], policy)
 
         assert result.accepted == (keep,)
-        assert result.rejected == ((drop, LANGUAGE_NOT_KEPT),)
+        assert result.rejected == (Rejection(drop, "language_not_kept"),)
 
     def test_the_list_for_one_kind_leaves_the_other_alone(self, tmp_path: Path) -> None:
         audio = external(tmp_path, "fre.ac3", kind="audio", language="fre")

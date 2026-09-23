@@ -1,73 +1,27 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from src.application.interfaces.muxer import MuxPlan
 from src.application.use_cases.imports.dto import ImportRequest
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
 from src.core.logging import capture_log
 from src.domain.errors import MuxError, ProbeError
-from src.domain.media import MediaInfo, Track
+from src.domain.media import ExternalTrack, MediaInfo, Track
 from src.domain.naming import EpisodeRef
 from src.domain.paths import PathGuard
-from src.domain.selection import LANGUAGE_NOT_KEPT
+from src.domain.selection import REJECT_REASONS
 from src.infrastructure.filesystem.placement import FilesystemPlacement
 from src.infrastructure.filesystem.track_discovery import FilesystemTrackDiscovery
 from src.settings.config import Settings
 from tests.conftest import touch
+from tests.stubs import StubDiscovery, StubMuxer, StubProber
 
-VIDEO_ONLY = MediaInfo(
-    path=Path("/x.mkv"),
-    container="Matroska",
-    tracks=(Track(index=0, kind="video", codec_id="V_MPEG4/ISO/AVC"),),
-)
-
-
-class StubProber:
-    def __init__(
-        self,
-        error: Exception | None = None,
-        *,
-        empty: Sequence[Path] = (),
-        infos: Mapping[Path, MediaInfo] | None = None,
-    ) -> None:
-        self._error = error
-        self._empty = set(empty)
-        self._infos = dict(infos or {})
-
-    def probe(self, path: Path) -> MediaInfo:
-        if self._error is not None:
-            raise self._error
-        if path in self._empty:
-            return MediaInfo(path=path, container="Matroska", tracks=())
-        return self._infos.get(path, VIDEO_ONLY)
-
-
-class StubMuxer:
-    """Writes the staged output instead of shelling out to mkvmerge."""
-
-    def __init__(self, error: Exception | None = None) -> None:
-        self.written: list[Path] = []
-        self.plans: list[MuxPlan] = []
-        self._error = error
-
-    def supports_modern_flags(self) -> bool:
-        return True
-
-    def run(self, plan: MuxPlan, source_info: MediaInfo, *, timeout: float) -> MediaInfo:
-        self.plans.append(plan)
-        if self._error is not None:
-            raise self._error
-        plan.output.parent.mkdir(parents=True, exist_ok=True)
-        plan.output.write_bytes(b"muxed")
-        self.written.append(plan.output)
-        return source_info
+LANGUAGE_NOT_KEPT = REJECT_REASONS["language_not_kept"]
 
 
 @pytest.fixture
@@ -103,12 +57,13 @@ def use_case(
     *,
     prober: StubProber | None = None,
     muxer: StubMuxer | None = None,
+    tracks: StubDiscovery | None = None,
 ) -> HandleImportUseCase:
     return HandleImportUseCase(
         settings=settings,
         guard=PathGuard.from_roots(settings.read_roots),
         prober=prober or StubProber(),
-        tracks=FilesystemTrackDiscovery(),
+        tracks=tracks or FilesystemTrackDiscovery(),
         muxer=muxer or StubMuxer(),
         placement=FilesystemPlacement(),
     )
@@ -215,9 +170,7 @@ class TestDeferPaths:
         assert outcome.move_status == "DeferMove"
         assert "no external tracks" in outcome.reason
 
-    def test_all_candidates_rejected(
-        self, layout: dict[str, Path], settings: Settings
-    ) -> None:
+    def test_all_candidates_rejected(self, layout: dict[str, Path], settings: Settings) -> None:
         touch(layout["release"] / "Some.Movie.2024.1080p-GRP.eng.srt", b"")
 
         outcome = use_case(settings).execute(request_for(layout))
@@ -306,8 +259,27 @@ class TestUnreadableSidecars:
 
         assert outcome.move_status == "RenameRequested"
         assert [t.path for t in muxer.plans[0].tracks] == [good]
-        assert [r.reason for r in outcome.rejected_tracks] == [
-            "the file holds no track mkvmerge can read"
+        assert [(r.code, r.reason) for r in outcome.rejected_tracks] == [
+            ("no_tracks", "the file holds no track mkvmerge can read")
+        ]
+
+    def test_a_sidecar_that_cannot_be_inspected_says_why(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        sidecar = touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.srt", "1\n")
+
+        class FailsOnSidecar(StubProber):
+            def probe(self, path: Path) -> MediaInfo:
+                if path == sidecar:
+                    raise ProbeError("garbled")
+                return super().probe(path)
+
+        outcome = use_case(settings, prober=FailsOnSidecar(), muxer=muxer).execute(
+            request_for(layout)
+        )
+
+        assert [(r.code, r.reason) for r in outcome.rejected_tracks] == [
+            ("uninspectable", "the file could not be inspected: garbled")
         ]
 
     def test_it_defers_when_that_leaves_nothing(
@@ -321,6 +293,36 @@ class TestUnreadableSidecars:
         assert outcome.move_status == "DeferMove"
         assert "nothing worth embedding" in outcome.reason
         assert muxer.written == []
+
+
+class TestVanishedSidecars:
+    def test_a_missing_sidecar_is_rejected_and_not_handed_back(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        good = touch(layout["release"] / "movie.rus.srt", "1\n")
+        gone = layout["release"] / "movie.eng.srt"
+        discovery = StubDiscovery(
+            ExternalTrack(path=good, kind="subtitles", language="rus"),
+            ExternalTrack(path=gone, kind="subtitles", language="eng"),
+        )
+
+        outcome = use_case(settings, muxer=muxer, tracks=discovery).execute(request_for(layout))
+
+        assert outcome.move_status == "RenameRequested"
+        assert [(r.track, r.code) for r in outcome.rejected_tracks] == [
+            ("movie.eng.srt", "file_missing")
+        ]
+        assert outcome.extra_files == ()
+
+    def test_an_empty_sidecar_is_rejected(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.srt", "1\n")
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.eng.srt", b"")
+
+        outcome = use_case(settings, muxer=muxer).execute(request_for(layout))
+
+        assert [r.code for r in outcome.rejected_tracks] == ["file_empty"]
 
 
 MULTI_LANGUAGE = MediaInfo(
@@ -371,9 +373,7 @@ class TestKeepLanguages:
     def test_a_kind_with_nothing_to_strip_is_left_alone(
         self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
     ) -> None:
-        handler = self.handler(
-            layout, settings, muxer, audio=("eng", "fre"), subtitles=("eng",)
-        )
+        handler = self.handler(layout, settings, muxer, audio=("eng", "fre"), subtitles=("eng",))
 
         handler.execute(request_for(layout))
 
@@ -448,8 +448,7 @@ class TestKeepLanguages:
             handler.execute(request_for(layout))
 
         assert any(
-            e.stage == "selection" and "stripping source audio fre" in e.message
-            for e in entries
+            e.stage == "selection" and "stripping source audio fre" in e.message for e in entries
         )
 
 

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from src.application.interfaces.jobs import JobRecord
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
+from src.domain.enums import App, JobState, MoveStatus
+from src.schemas.base import WireModel
 from src.schemas.journal import LogEntryModel, RejectedTrackModel, RemovedTrackModel, TrackModel
 
 # Constrained so a job id cannot smuggle path separators into the URL or control
@@ -18,7 +19,7 @@ JOB_ID_PATTERN = r"^[A-Za-z0-9._:-]{8,128}$"
 
 class ImportPayload(BaseModel):
     job_id: str = Field(pattern=JOB_ID_PATTERN)
-    app: Literal["radarr", "sonarr"]
+    app: App
     source_path: str
     destination_path: str
     transfer_mode: str = "Move"
@@ -37,8 +38,8 @@ class ImportPayload(BaseModel):
         return fingerprint(self.model_dump(exclude={"job_id"}))
 
 
-class ImportResult(BaseModel):
-    move_status: str
+class ImportResult(WireModel):
+    move_status: MoveStatus
     reason: str
     media_file: str | None = None
     extra_files: list[str] = Field(default_factory=list)
@@ -65,9 +66,9 @@ class ImportResult(BaseModel):
         )
 
 
-class JobModel(BaseModel):
+class JobModel(WireModel):
     id: str
-    state: str
+    state: JobState
     result: ImportResult | None = None
     error: str | None = None
     history_id: int | None = None
@@ -90,7 +91,7 @@ class JobDetailModel(JobModel):
     always been -- it polls this route on a loop and cares about four fields.
     """
 
-    app: str
+    app: App
     title: str
     source_path: str
     destination_path: str
@@ -121,7 +122,7 @@ class JobDetailModel(JobModel):
         )
 
 
-class JobPageModel(BaseModel):
+class JobPageModel(WireModel):
     items: list[JobDetailModel]
     total: int
     limit: int

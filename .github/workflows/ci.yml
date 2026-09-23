@@ -40,7 +40,9 @@ jobs:
 
       - name: Lint
         working-directory: services/backend
-        run: uv run ruff check .
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
 
       - name: Typecheck
         working-directory: services/backend
@@ -75,6 +77,14 @@ jobs:
       - name: Install dependencies
         working-directory: services/frontend
         run: npm ci
+
+      # The backend suite checks openapi.json against the live app; this checks
+      # the TypeScript generated from it.
+      - name: API types are current
+        working-directory: services/frontend
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.gen.ts
 
       - name: Lint
         working-directory: services/frontend

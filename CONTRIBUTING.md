@@ -15,39 +15,41 @@ test suite enforces. Most review comments on a first PR are one of those rules.
 
 ```sh
 git clone https://github.com/zxibizz/muxarr.git
-cd muxarr/services/backend
-uv sync
+cd muxarr
+make setup          # uv sync + npm ci
+pre-commit install  # optional; runs ruff, eslint and the shim checks on commit
 ```
 
-You need [uv](https://docs.astral.sh/uv/) and Python 3.11+. `mkvtoolnix` is
-required to run the mux tests; `ffmpeg` is optional and used as a probe fallback
-and to generate fixtures. Without them, eleven tests skip rather than fail.
+You need [uv](https://docs.astral.sh/uv/), Python 3.11+ and Node 22.
+`mkvtoolnix` is required to run the mux tests; `ffmpeg` is optional and used as
+a probe fallback and to generate fixtures. Without them, a dozen tests skip
+rather than fail.
 
 The loop:
 
 ```sh
-uv run ruff check .          # lint
-uv run python -m mypy        # strict, src/ only
-uv run pytest -q             # ~30s
-```
-
-The frontend:
-
-```sh
-cd services/frontend
-npm install
-npm run lint
-npm run test
-npm run build
+make check          # everything CI runs, both halves
+make test-backend   # just pytest (~35s; the shim tests spawn real /bin/sh)
+make test-frontend  # just vitest
 ```
 
 Or run the whole stack with hot reload on both sides, in one container that
 already has mkvtoolnix and ffmpeg:
 
 ```sh
-docker compose -f compose.dev.yaml up --build
-docker compose -f compose.dev.yaml run --rm muxarr pytest -q
+make dev                                                  # UI on :5173
+docker compose -f compose.dev.yaml run --rm muxarr pytest -q  # full suite, nothing skipped
 ```
+
+### Generated files
+
+Two things are generated and committed, and a test fails if either drifts:
+
+- **The UI's API types.** Change a response model in `services/backend/src/schemas/`
+  and run `make gen-api`, which rewrites `services/frontend/openapi.json` and
+  `src/api/schema.gen.ts`.
+- **The shims.** Edit `scripts/src/muxarr-import.sh.in`, never the rendered
+  `scripts/muxarr-import-*.sh`, then run `make shims`.
 
 ## The rules that will get a PR sent back
 
@@ -93,23 +95,23 @@ database with real data in it. Test the downgrade too.
 ## Pull requests
 
 - One topic per PR.
-- `ruff`, `mypy` and `pytest` all green; CI runs the same three plus the
-  frontend build.
+- `make check` green; CI runs the same checks plus the image build.
 - New behaviour comes with a test. Bug fixes come with the test that fails
   without the fix.
 - Add a line to the `Unreleased` section of [CHANGELOG.md](CHANGELOG.md).
-- Update the config table in the README if you add an environment variable.
+- Update the table in [docs/configuration.md](docs/configuration.md) if you add
+  an environment variable.
 
 ## Releasing
 
-The version lives in four files and CI refuses a tag that disagrees with them,
-so never bump by hand:
+The version lives in four files, and is pinned as an image tag in the docs; CI
+refuses a tag that disagrees with any of them, so never bump by hand:
 
 ```bash
 python3 .github/scripts/bump_version.py 1.2.3
 ```
 
-That rewrites all four, retitles `Unreleased` as the new release and moves the
+That rewrites all of them, retitles `Unreleased` as the new release and moves the
 CHANGELOG links. Read the section it opened — it becomes the release notes
 verbatim — then commit and tag that commit:
 

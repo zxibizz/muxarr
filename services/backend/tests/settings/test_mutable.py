@@ -34,9 +34,7 @@ class TestApply:
         ("raw", "expected"),
         [("true", True), ("false", False), ("1", True), ("no", False)],
     )
-    def test_booleans_round_trip_through_their_string_form(
-        self, raw: str, expected: bool
-    ) -> None:
+    def test_booleans_round_trip_through_their_string_form(self, raw: str, expected: bool) -> None:
         assert apply_overrides(BASE, {"preserve_ownership": raw}).preserve_ownership is expected
 
     def test_an_empty_string_clears_an_optional_field(self) -> None:
@@ -114,9 +112,7 @@ class TestRendering:
             ((), ""),
         ],
     )
-    def test_values_render_to_their_environment_form(
-        self, value: object, expected: str
-    ) -> None:
+    def test_values_render_to_their_environment_form(self, value: object, expected: str) -> None:
         assert to_raw(value) == expected
 
     def test_every_field_names_a_real_setting(self) -> None:

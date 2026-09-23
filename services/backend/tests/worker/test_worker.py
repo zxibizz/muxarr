@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from src.application.interfaces.history import NewOperation
 from src.application.interfaces.jobs import JobRecord
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
 from src.db.session import DBManager
@@ -153,12 +154,14 @@ async def test_history_is_trimmed_to_the_cap_while_idle(
     """Nothing else ever deletes an operation, so the table would grow forever."""
     for index in range(5):
         await history.record(
-            app="radarr",
-            title=f"{index}.mkv",
-            move_status="DeferMove",
-            reason="no external tracks",
-            source_path=f"/downloads/{index}.mkv",
-            destination_path=f"/library/{index}.mkv",
+            NewOperation(
+                app="radarr",
+                title=f"{index}.mkv",
+                move_status="DeferMove",
+                reason="no external tracks",
+                source_path=f"/downloads/{index}.mkv",
+                destination_path=f"/library/{index}.mkv",
+            )
         )
 
     await run_briefly(

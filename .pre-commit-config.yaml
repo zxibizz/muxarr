@@ -1,0 +1,36 @@
+# pre-commit install
+# Only the fast checks; mypy and the test suites stay in `make check` and CI.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+        exclude: ^services/frontend/(openapi\.json|src/api/schema\.gen\.ts)$
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: check-yaml
+      - id: check-merge-conflict
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^services/backend/
+      - id: ruff-format
+        files: ^services/backend/
+
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd services/frontend && npx eslint --max-warnings=0 .'
+        language: system
+        files: ^services/frontend/.*\.(ts|tsx|js)$
+        pass_filenames: false
+      - id: shims
+        name: shims match their template
+        entry: python3 scripts/build_shims.py --check
+        language: system
+        files: ^scripts/
+        pass_filenames: false

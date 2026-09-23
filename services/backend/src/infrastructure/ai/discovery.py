@@ -133,7 +133,7 @@ class AiAssistedTrackDiscovery:
             reply = self._completer.complete(
                 system=built.system, user=built.user, timeout=self._timeout
             )
-        except Exception as exc:  # noqa: BLE001 - a bad API call must never fail an import
+        except Exception as exc:
             note.bind(video=video_path.name, error=str(exc)).warning(
                 "the AI provider could not be reached"
             )
@@ -143,9 +143,7 @@ class AiAssistedTrackDiscovery:
         return tracks or None
 
 
-def materialise(
-    reply: str, *, index: Mapping[str, Path], max_tracks: int
-) -> list[ExternalTrack]:
+def materialise(reply: str, *, index: Mapping[str, Path], max_tracks: int) -> list[ExternalTrack]:
     """Validate a model reply into tracks, dropping anything that does not check out."""
     tracks: list[ExternalTrack] = []
     seen: set[Path] = set()
@@ -261,9 +259,7 @@ def _log_disagreement(found: Sequence[ExternalTrack], proposed: Sequence[Externa
     heuristic = {_fingerprint(t) for t in found}
     ai = {_fingerprint(t) for t in proposed}
     if heuristic == ai:
-        note.bind(tracks=len(found)).info(
-            "the AI provider agrees with what the filenames said"
-        )
+        note.bind(tracks=len(found)).info("the AI provider agrees with what the filenames said")
         return
 
     note.bind(

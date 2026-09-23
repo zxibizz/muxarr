@@ -48,9 +48,7 @@ class TestCreation:
         assert job.id == "job-1"
         assert job.state == "pending"
 
-    async def test_the_same_id_and_request_re_attaches(
-        self, jobs: SqlAlchemyJobRepository
-    ) -> None:
+    async def test_the_same_id_and_request_re_attaches(self, jobs: SqlAlchemyJobRepository) -> None:
         first, _ = await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
         second, created = await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
@@ -91,9 +89,7 @@ class TestClaiming:
     async def test_an_empty_queue_claims_nothing(self, jobs: SqlAlchemyJobRepository) -> None:
         assert await jobs.claim_next() is None
 
-    async def test_a_claimed_job_is_not_claimed_twice(
-        self, jobs: SqlAlchemyJobRepository
-    ) -> None:
+    async def test_a_claimed_job_is_not_claimed_twice(self, jobs: SqlAlchemyJobRepository) -> None:
         await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
         assert await jobs.claim_next() is not None
@@ -204,27 +200,21 @@ class TestPruning:
 
         assert await jobs.prune(3600) == 0
 
-    async def test_expired_finished_jobs_are_dropped(
-        self, jobs: SqlAlchemyJobRepository
-    ) -> None:
+    async def test_expired_finished_jobs_are_dropped(self, jobs: SqlAlchemyJobRepository) -> None:
         await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
         await jobs.succeed("job-1", OUTCOME, None)
 
         assert await jobs.prune(-1) == 1
         assert await jobs.get("job-1") is None
 
-    async def test_unfinished_jobs_are_never_pruned(
-        self, jobs: SqlAlchemyJobRepository
-    ) -> None:
+    async def test_unfinished_jobs_are_never_pruned(self, jobs: SqlAlchemyJobRepository) -> None:
         await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
 
         assert await jobs.prune(-1) == 0
 
 
 class TestCounts:
-    async def test_an_empty_queue_reports_every_state(
-        self, jobs: SqlAlchemyJobRepository
-    ) -> None:
+    async def test_an_empty_queue_reports_every_state(self, jobs: SqlAlchemyJobRepository) -> None:
         """A missing key would make the dashboard render a gap, not a zero."""
         assert await jobs.counts_by_state() == {
             "pending": 0,
@@ -249,9 +239,7 @@ class TestCounts:
         assert counts["running"] == 0
         assert counts["succeeded"] == 1
 
-    async def test_states_are_counted_independently(
-        self, jobs: SqlAlchemyJobRepository
-    ) -> None:
+    async def test_states_are_counted_independently(self, jobs: SqlAlchemyJobRepository) -> None:
         await jobs.create_or_get("job-1", FINGERPRINT, REQUEST)
         await jobs.create_or_get("job-2", OTHER_FINGERPRINT, OTHER_REQUEST)
         await jobs.fail("job-1", "boom")

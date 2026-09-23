@@ -23,6 +23,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# Docs that pin the published image; a stale tag there sends users to an old release.
+IMAGE_TAG_FILES = (
+    Path("README.md"),
+    Path("docs/upgrading.md"),
+    Path("compose.example.yaml"),
+    Path(".github/ISSUE_TEMPLATE/bug_report.yml"),
+)
+IMAGE_TAG = r"ghcr\.io/zxibizz/muxarr:(\d+\.\d+\.\d+)\b"
+
 
 def _match(path: Path, pattern: str) -> str:
     text = (ROOT / path).read_text()
@@ -60,12 +69,21 @@ def from_package_lock() -> str:
     return version
 
 
+def image_tags() -> dict[str, str]:
+    found: dict[str, str] = {}
+    for path in IMAGE_TAG_FILES:
+        for index, tag in enumerate(re.findall(IMAGE_TAG, (ROOT / path).read_text())):
+            found[f"{path} (image tag {index + 1})"] = tag
+    return found
+
+
 def main(argv: list[str]) -> int:
     found = {
         "services/backend/pyproject.toml": from_pyproject(),
         "services/backend/src/__init__.py": from_init(),
         "services/frontend/package.json": from_package_json(),
         "services/frontend/package-lock.json": from_package_lock(),
+        **image_tags(),
     }
 
     if argv:

@@ -85,12 +85,52 @@ _SIGNS_TOKENS = frozenset({"signs", "songs", "nadpisi", "надписи", "ти�
 # Release-metadata noise that must never be mistaken for a group/variant name.
 _NOISE_TOKENS = frozenset(
     {
-        "1080p", "2160p", "480p", "576p", "720p", "4k", "8bit", "10bit",
-        "aac", "ac3", "avc", "dts", "eac3", "flac", "h264", "h265", "hevc",
-        "mp3", "opus", "truehd", "x264", "x265", "xvid",
-        "bd", "bdrip", "bluray", "brrip", "dvdrip", "hdtv", "web", "webdl", "webrip",
-        "ass", "idx", "mka", "mkv", "srt", "ssa", "sub", "sup",
-        "audio", "dub", "sound", "track", "звук", "озвучка",
+        "1080p",
+        "2160p",
+        "480p",
+        "576p",
+        "720p",
+        "4k",
+        "8bit",
+        "10bit",
+        "aac",
+        "ac3",
+        "avc",
+        "dts",
+        "eac3",
+        "flac",
+        "h264",
+        "h265",
+        "hevc",
+        "mp3",
+        "opus",
+        "truehd",
+        "x264",
+        "x265",
+        "xvid",
+        "bd",
+        "bdrip",
+        "bluray",
+        "brrip",
+        "dvdrip",
+        "hdtv",
+        "web",
+        "webdl",
+        "webrip",
+        "ass",
+        "idx",
+        "mka",
+        "mkv",
+        "srt",
+        "ssa",
+        "sub",
+        "sup",
+        "audio",
+        "dub",
+        "sound",
+        "track",
+        "звук",
+        "озвучка",
     }
 )
 
@@ -156,9 +196,7 @@ def infer(
 
     signs = bool(_SIGNS_TOKENS & combined)
     forced = (
-        signs
-        or bool(_FORCED_TOKENS & combined)
-        or ("foreign" in combined and "parts" in combined)
+        signs or bool(_FORCED_TOKENS & combined) or ("foreign" in combined and "parts" in combined)
     )
     hearing_impaired = bool(_HEARING_IMPAIRED_TOKENS & combined)
 

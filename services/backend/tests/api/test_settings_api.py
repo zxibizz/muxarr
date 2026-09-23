@@ -45,9 +45,7 @@ class TestRead:
 
 class TestWrite:
     async def test_a_change_is_persisted_and_echoed(self, client: AsyncClient) -> None:
-        response = await client.patch(
-            "/v1/settings", json={"dedupe": "language"}, headers=auth()
-        )
+        response = await client.patch("/v1/settings", json={"dedupe": "language"}, headers=auth())
 
         assert response.status_code == 200, response.text
         assert response.json()["dedupe"] == "language"
@@ -83,9 +81,7 @@ class TestWrite:
         assert response.status_code == 422
 
     async def test_enabling_ai_without_a_model_is_refused(self, client: AsyncClient) -> None:
-        response = await client.patch(
-            "/v1/settings", json={"ai_mode": "fallback"}, headers=auth()
-        )
+        response = await client.patch("/v1/settings", json={"ai_mode": "fallback"}, headers=auth())
 
         assert response.status_code == 422
         assert "ai_model" in response.json()["detail"]
@@ -170,9 +166,7 @@ class TestEnvironmentLock:
     async def test_writing_a_pinned_field_conflicts(self, pinned: AppContainer) -> None:
         """Compose stays the source of truth for whoever wrote it there."""
         async for client in _client_for(create_app(pinned.settings, pinned)):
-            response = await client.patch(
-                "/v1/settings", json={"dedupe": "off"}, headers=auth()
-            )
+            response = await client.patch("/v1/settings", json={"dedupe": "off"}, headers=auth())
 
             assert response.status_code == 409
             assert "MUXARR_DEDUPE" in response.json()["detail"]
@@ -199,13 +193,9 @@ class TestAiProbe:
             env={},
         )
 
-    async def test_a_reachable_provider_reports_ok(
-        self, settings: Settings, db: DBManager
-    ) -> None:
+    async def test_a_reachable_provider_reports_ok(self, settings: Settings, db: DBManager) -> None:
         def handler(_: httpx.Request) -> httpx.Response:
-            return httpx.Response(
-                200, json={"choices": [{"message": {"content": '{"ok": true}'}}]}
-            )
+            return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]})
 
         container = self._client_with(handler, settings, db)
         async for client in _client_for(create_app(container.settings, container)):
@@ -246,9 +236,7 @@ class TestAiProbe:
 
         def handler(request: httpx.Request) -> httpx.Response:
             seen.append(request.headers.get("Authorization"))
-            return httpx.Response(
-                200, json={"choices": [{"message": {"content": '{"ok": true}'}}]}
-            )
+            return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]})
 
         stored = Settings(
             read_roots=settings.read_roots,

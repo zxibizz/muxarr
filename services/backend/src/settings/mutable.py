@@ -15,9 +15,10 @@ import os
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 
+from src.domain.enums import AI_MODES, DEDUPE_MODES
 from src.settings.config import (
-    _TRUTHY,
     MAX_OPERATION_LOG_ENTRIES,
+    TRUTHY,
     ConfigError,
     Settings,
     parse_languages,
@@ -52,7 +53,7 @@ def _as_optional_text(env: str, raw: str) -> object:
 
 def _as_bool(env: str, raw: str) -> object:
     del env
-    return raw.strip().lower() in _TRUTHY
+    return raw.strip().lower() in TRUTHY
 
 
 def _as_int(minimum: int, maximum: int | None = None) -> Callable[[str, str], object]:
@@ -93,8 +94,8 @@ def _as_choice(*choices: str, lower: bool = True) -> Callable[[str, str], object
     return parse
 
 
-_DEDUPE = _as_choice("off", "language", "language_codec")
-_AI_MODE = _as_choice("off", "fallback", "always", "verify")
+_DEDUPE = _as_choice(*DEDUPE_MODES)
+_AI_MODE = _as_choice(*AI_MODES)
 _LOG_LEVEL = _as_choice(*_LOG_LEVELS, lower=False)
 
 FIELDS: tuple[FieldSpec, ...] = (
@@ -103,9 +104,7 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("skip_undetermined_language", "MUXARR_SKIP_UNDETERMINED", "selection", _as_bool),
     FieldSpec("max_external_tracks", "MUXARR_MAX_TRACKS", "selection", _as_int(1)),
     FieldSpec("sub_charset", "MUXARR_SUB_CHARSET", "selection", _as_optional_text),
-    FieldSpec(
-        "keep_audio_languages", "MUXARR_KEEP_AUDIO_LANGUAGES", "selection", parse_languages
-    ),
+    FieldSpec("keep_audio_languages", "MUXARR_KEEP_AUDIO_LANGUAGES", "selection", parse_languages),
     FieldSpec(
         "keep_subtitle_languages", "MUXARR_KEEP_SUBTITLE_LANGUAGES", "selection", parse_languages
     ),

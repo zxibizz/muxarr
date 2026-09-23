@@ -10,6 +10,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rolldownOptions: {
+      output: {
+        // Dependencies change far less often than the app, so they cache separately.
+        advancedChunks: {
+          groups: [
+            { name: 'mantine', test: /node_modules[\\/]@mantine/ },
+            { name: 'vendor', test: /node_modules/ },
+          ],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

@@ -238,9 +238,7 @@ def _outcome_from_json(payload: str) -> ImportOutcome:
         rejected_tracks=tuple(
             RejectedTrack.from_stored(r) for r in data.get("rejected_tracks", ())
         ),
-        removed_tracks=tuple(
-            RemovedTrack.from_stored(r) for r in data.get("removed_tracks", ())
-        ),
+        removed_tracks=tuple(RemovedTrack.from_stored(r) for r in data.get("removed_tracks", ())),
         duration_ms=int(data.get("duration_ms", 0)),
         source_bytes=data.get("source_bytes"),
         output_bytes=data.get("output_bytes"),

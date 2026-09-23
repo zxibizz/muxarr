@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies.auth import authorise, get_container
-from src.application.use_cases.settings.test_ai import AiProbe
+from src.application.use_cases.settings.probe_ai import AiProbe
 from src.core.container import AppContainer
 from src.schemas.settings import AiTestRequest, AiTestResult, SettingsPatch, SettingsView
 from src.settings.mutable import to_raw
@@ -33,16 +33,14 @@ async def update_settings(
     patch: SettingsPatch,
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> SettingsView:
-    changes = {
-        name: to_raw(value) for name, value in patch.model_dump(exclude_unset=True).items()
-    }
+    changes = {name: to_raw(value) for name, value in patch.model_dump(exclude_unset=True).items()}
     await container.update_settings.execute(changes)
     await container.sync_settings()
     return _view(container)
 
 
 @router.post("/settings/ai/test", response_model=AiTestResult)
-async def test_ai_provider(
+async def probe_ai_provider(
     request: AiTestRequest,
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> AiTestResult:
@@ -55,7 +53,7 @@ async def test_ai_provider(
         timeout=request.timeout_seconds,
     )
     # The completer is blocking httpx; the loop still has long-polls to serve.
-    result = await asyncio.to_thread(container.test_ai_provider.execute, probe)
+    result = await asyncio.to_thread(container.probe_ai_provider.execute, probe)
     return AiTestResult(ok=result.ok, message=result.message, latency_ms=result.latency_ms)
 
 

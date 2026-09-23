@@ -77,6 +77,5 @@ def _start_logging(settings: Settings) -> None:
     configure_logging(level=settings.log_level, serialize=settings.log_json)
     if settings.auth_token is None:
         log.warning(
-            "MUXARR_TOKEN is not set; the API is unauthenticated. "
-            "Bind to a private network only."
+            "MUXARR_TOKEN is not set; the API is unauthenticated. Bind to a private network only."
         )

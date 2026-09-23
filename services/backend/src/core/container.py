@@ -25,8 +25,8 @@ from src.application.use_cases.imports.enqueue_import import EnqueueImportUseCas
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
 from src.application.use_cases.imports.list_jobs import ListJobsUseCase
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
+from src.application.use_cases.settings.probe_ai import ProbeAiProviderUseCase
 from src.application.use_cases.settings.read import GetSettingsUseCase
-from src.application.use_cases.settings.test_ai import TestAiProviderUseCase
 from src.application.use_cases.settings.update import UpdateSettingsUseCase
 from src.application.use_cases.system.status import GetSystemStatusUseCase
 from src.core.logging import configure_logging, get_logger
@@ -243,8 +243,8 @@ class AppContainer:
         )
 
     @cached_property
-    def test_ai_provider(self) -> TestAiProviderUseCase:
-        return TestAiProviderUseCase(completers=self.completers)
+    def probe_ai_provider(self) -> ProbeAiProviderUseCase:
+        return ProbeAiProviderUseCase(completers=self.completers)
 
     async def shutdown(self) -> None:
         # Only touch the engine if something actually opened it.

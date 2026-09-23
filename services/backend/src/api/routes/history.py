@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from src.api.dependencies.auth import authorise, get_container
 from src.application.interfaces.history import MAX_PAGE_SIZE
 from src.core.container import AppContainer
-from src.schemas.history import HistoryPage, OperationModel, StatsModel
+from src.schemas.history import ClearedModel, HistoryPage, OperationModel, StatsModel
 
 router = APIRouter(prefix="/v1", tags=["history"], dependencies=[Depends(authorise)])
 
@@ -44,11 +44,11 @@ async def get_operation(
     return OperationModel(**asdict(found))
 
 
-@router.delete("/history")
+@router.delete("/history", response_model=ClearedModel)
 async def clear_history(
     container: Annotated[AppContainer, Depends(get_container)],
-) -> dict[str, int]:
-    return {"deleted": await container.clear_history.execute()}
+) -> ClearedModel:
+    return ClearedModel(deleted=await container.clear_history.execute())
 
 
 @router.get("/stats", response_model=StatsModel)

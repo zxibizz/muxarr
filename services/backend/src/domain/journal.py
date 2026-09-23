@@ -17,8 +17,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import get_args
 
-from src.domain.enums import UNDETERMINED, TrackKind, TrackSource
+from src.domain.enums import UNDETERMINED, RejectCode, TrackKind, TrackSource
 
 
 class LogStage(StrEnum):
@@ -39,6 +40,7 @@ class LogStage(StrEnum):
 
 
 _STAGES = frozenset(stage.value for stage in LogStage)
+_REJECT_CODES: frozenset[str] = frozenset(get_args(RejectCode))
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,9 +75,7 @@ class LogEntry:
             message=str(payload.get("message", "")),
             stage=str(stage) if isinstance(stage, str) and stage in _STAGES else None,
             context=(
-                {str(k): str(v) for k, v in context.items()}
-                if isinstance(context, Mapping)
-                else {}
+                {str(k): str(v) for k, v in context.items()} if isinstance(context, Mapping) else {}
             ),
         )
 
@@ -153,6 +153,8 @@ class RejectedTrack:
     kind: TrackKind = "subtitles"
     language: str = UNDETERMINED
     source: TrackSource = "heuristic"
+    # None on rows written before codes existed.
+    code: RejectCode | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -161,6 +163,7 @@ class RejectedTrack:
             "kind": self.kind,
             "language": self.language,
             "source": self.source,
+            "code": self.code,
         }
 
     @classmethod
@@ -169,12 +172,14 @@ class RejectedTrack:
             return cls(track=str(payload), reason="")
         kind = payload.get("kind")
         source = payload.get("source")
+        code = payload.get("code")
         return cls(
             track=str(payload.get("track", "")),
             reason=str(payload.get("reason", "")),
             kind=kind if kind in ("video", "audio", "subtitles") else "subtitles",
             language=str(payload.get("language", UNDETERMINED)),
             source="ai" if source == "ai" else "heuristic",
+            code=code if code in _REJECT_CODES else None,
         )
 
 

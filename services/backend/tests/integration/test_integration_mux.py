@@ -62,10 +62,23 @@ def make_video(path: Path, *, container: str = "mkv") -> Path:
     target = path.with_suffix(f".{container}")
     _run(
         [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", "testsrc=duration=1:size=128x72:rate=5",
-            "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
-            "-c:v", "mpeg4", "-c:a", "ac3", "-shortest",
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=1:size=128x72:rate=5",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "ac3",
+            "-shortest",
             str(target),
         ]
     )
@@ -76,9 +89,17 @@ def make_audio(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     _run(
         [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", "sine=frequency=880:duration=1",
-            "-c:a", "ac3", str(path),
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:duration=1",
+            "-c:a",
+            "ac3",
+            str(path),
         ]
     )
     return path
@@ -210,9 +231,7 @@ def test_mp4_source_is_remuxed_to_mkv(tmp_path: Path, settings: Settings) -> Non
     assert len(of_type(outcome.media_file, "subtitles")) == 1
 
 
-def test_multiple_same_language_dubs_both_survive(
-    tmp_path: Path, settings: Settings
-) -> None:
+def test_multiple_same_language_dubs_both_survive(tmp_path: Path, settings: Settings) -> None:
     """The anime multi-dub case, end to end through a real mux."""
     downloads = tmp_path / "downloads" / "Show.S01-GRP"
     library = tmp_path / "library" / "Show"
@@ -251,9 +270,7 @@ def test_download_folder_is_byte_identical_after_a_real_mux(
     assert _snapshot(release["downloads"]) == before
 
 
-def test_no_staging_files_are_left_behind(
-    release: dict[str, Path], settings: Settings
-) -> None:
+def test_no_staging_files_are_left_behind(release: dict[str, Path], settings: Settings) -> None:
     (release["release"] / "Movie.2024-GRP.rus.srt").write_text(SRT, encoding="utf-8")
 
     outcome = handle_import(import_request(release), settings)
@@ -263,18 +280,14 @@ def test_no_staging_files_are_left_behind(
     assert leftovers == []
 
 
-def test_reimport_of_the_result_is_a_noop(
-    release: dict[str, Path], settings: Settings
-) -> None:
+def test_reimport_of_the_result_is_a_noop(release: dict[str, Path], settings: Settings) -> None:
     """Second pass: the embedded track must not be added again."""
     (release["release"] / "Movie.2024-GRP.rus.srt").write_text(SRT, encoding="utf-8")
     first = handle_import(import_request(release), settings)
     assert first.media_file is not None
 
     # Simulate *arr re-invoking the script with our own output as the source.
-    second = handle_import(
-        import_request(release, source_path=first.media_file), settings
-    )
+    second = handle_import(import_request(release, source_path=first.media_file), settings)
 
     assert second.move_status == "DeferMove"
     assert "no external tracks" in second.reason
@@ -288,10 +301,19 @@ def _make_multilingual(release: dict[str, Path], scratch: Path) -> None:
     multi = scratch / "multi.mkv"
     _run(
         [
-            "mkvmerge", "-q", "-o", str(multi),
-            "--language", "1:eng", str(release["video"]),
-            "--language", "0:fre", str(french),
-            "--language", "0:ger", str(german),
+            "mkvmerge",
+            "-q",
+            "-o",
+            str(multi),
+            "--language",
+            "1:eng",
+            str(release["video"]),
+            "--language",
+            "0:fre",
+            str(french),
+            "--language",
+            "0:ger",
+            str(german),
         ]
     )
     multi.replace(release["video"])

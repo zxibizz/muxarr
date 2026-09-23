@@ -19,21 +19,17 @@ from src.api.app import create_app
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.core.container import AppContainer
 from src.db.session import DBManager
-from src.domain.media import MediaInfo, Track
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
 from src.infrastructure.settings.repository import SqlAlchemySettingsRepository
 from src.settings.config import Settings
 from tests.conftest import touch
+from tests.stubs import VIDEO_ONLY
+
+__all__ = ["VIDEO_ONLY"]
 
 TOKEN = "s3cret-token"
-
-VIDEO_ONLY = MediaInfo(
-    path=Path("/x.mkv"),
-    container="Matroska",
-    tracks=(Track(index=0, kind="video", codec_id="V_MPEG4/ISO/AVC"),),
-)
 
 
 class StubHandler:

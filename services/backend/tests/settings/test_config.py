@@ -34,9 +34,7 @@ def test_blank_root_entries_are_ignored() -> None:
 
 
 def test_root_entries_are_stripped_of_whitespace_and_quotes() -> None:
-    settings = Settings.from_env(
-        env(MUXARR_READ_ROOTS=f'  /downloads {os.pathsep} "/library"')
-    )
+    settings = Settings.from_env(env(MUXARR_READ_ROOTS=f'  /downloads {os.pathsep} "/library"'))
 
     assert settings.read_roots == (Path("/downloads"), Path("/library"))
 
@@ -121,14 +119,12 @@ class TestKeepLanguages:
         assert settings.selection_policy.keep_subtitle_languages == frozenset()
 
     def test_aliases_are_normalised_in_order_without_duplicates(self) -> None:
-        settings = Settings.from_env(
-            env(MUXARR_KEEP_AUDIO_LANGUAGES=" EN, russian ,deu,eng, und,")
-        )
+        settings = Settings.from_env(env(MUXARR_KEEP_AUDIO_LANGUAGES=" EN, russian ,deu,eng, und,"))
 
         assert settings.keep_audio_languages == ("eng", "rus", "ger", "und")
 
     def test_an_unknown_language_is_rejected(self) -> None:
-        with pytest.raises(ConfigError, match="MUXARR_KEEP_SUBTITLE_LANGUAGES.*klingon"):
+        with pytest.raises(ConfigError, match=r"MUXARR_KEEP_SUBTITLE_LANGUAGES.*klingon"):
             Settings.from_env(env(MUXARR_KEEP_SUBTITLE_LANGUAGES="eng,klingon"))
 
     def test_they_reach_the_selection_policy(self) -> None:

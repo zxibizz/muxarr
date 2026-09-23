@@ -1,23 +1,27 @@
 import { Badge } from '@mantine/core';
-import type { MoveStatus } from '../types';
+import type { BadgeVariant } from '@mantine/core';
+import { IconArrowForwardUp, IconCheck, IconTransfer } from '@tabler/icons-react';
+import type { MoveStatus } from '../api/types';
 
-const COLOURS: Record<MoveStatus, string> = {
-  RenameRequested: 'teal',
-  MoveComplete: 'blue',
-  DeferMove: 'gray',
-};
+interface Style {
+  label: string;
+  color: string;
+  variant: BadgeVariant;
+  icon: typeof IconCheck;
+}
 
-const LABELS: Record<MoveStatus, string> = {
-  RenameRequested: 'Muxed',
-  MoveComplete: 'Muxed',
-  // "Skipped" rather than "Deferred": from the user's side nothing happened.
-  DeferMove: 'Skipped',
+// Skipping is muxarr's normal, safe answer, so it reads as neutral rather than as a warning.
+const STATUS: Record<MoveStatus, Style> = {
+  RenameRequested: { label: 'Muxed', color: 'teal', variant: 'light', icon: IconCheck },
+  DeferMove: { label: 'Skipped', color: 'gray', variant: 'default', icon: IconArrowForwardUp },
+  MoveComplete: { label: 'Moved', color: 'blue', variant: 'light', icon: IconTransfer },
 };
 
 export function StatusBadge({ status }: { status: MoveStatus }) {
+  const { label, color, variant, icon: Icon } = STATUS[status];
   return (
-    <Badge color={COLOURS[status] ?? 'gray'} variant="light">
-      {LABELS[status] ?? status}
+    <Badge color={color} variant={variant} leftSection={<Icon size={12} stroke={2.5} />}>
+      {label}
     </Badge>
   );
 }

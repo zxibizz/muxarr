@@ -88,7 +88,7 @@ def run(
     full: list[str] = [*deprioritise_prefix(), *argv] if deprioritise else list(argv)
     log.debug("running external command", argv=full)
     try:
-        completed = subprocess.run(  # noqa: S603
+        completed = subprocess.run(
             full,
             capture_output=True,
             text=True,

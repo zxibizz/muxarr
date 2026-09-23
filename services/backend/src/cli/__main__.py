@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -41,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
             "plan": _cmd_plan,
             "mux": _cmd_mux,
             "serve": _cmd_serve,
+            "openapi": _cmd_openapi,
         }[args.command]
         return handler(args)
     except MuxarrError as exc:
@@ -70,6 +72,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     sub.add_parser("serve", help="run the HTTP daemon (configured via MUXARR_* env vars)")
+
+    openapi = sub.add_parser("openapi", help="print the HTTP API's OpenAPI schema as JSON")
+    openapi.add_argument("--out", type=Path, default=None, help="write here instead of stdout")
 
     return parser
 
@@ -103,6 +108,20 @@ def _cmd_serve(_args: argparse.Namespace) -> int:
     from src.api.app import serve
 
     serve()
+    return 0
+
+
+def _cmd_openapi(args: argparse.Namespace) -> int:
+    from src.api.app import create_app
+    from src.settings.config import Settings
+
+    # The schema does not depend on configuration; nothing here touches the roots.
+    schema = create_app(Settings(read_roots=(Path("/"),))).openapi()
+    text = json.dumps(schema, indent=2, sort_keys=True) + "\n"
+    if args.out is None:
+        sys.stdout.write(text)
+    else:
+        args.out.write_text(text, encoding="utf-8")
     return 0
 
 
@@ -154,8 +173,8 @@ def _report(info: MediaInfo, chosen: selection.Selection) -> None:
         print(f"  existing  {_describe_track(existing)}")
     for added in chosen.accepted:
         print(f"  + add     {_describe_external(added)}")
-    for skipped, reason in chosen.rejected:
-        print(f"  - skip    {_describe_external(skipped)}  ({reason})")
+    for rejection in chosen.rejected:
+        print(f"  - skip    {_describe_external(rejection.track)}  ({rejection.reason})")
 
 
 def _describe_track(track: Track | ExternalTrack) -> str:

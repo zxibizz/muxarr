@@ -1,0 +1,2393 @@
+{
+  "components": {
+    "schemas": {
+      "AiTestRequest": {
+        "description": "Credentials as currently typed, so a key can be checked before saving.",
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "minimum": 1.0,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "base_url",
+          "model"
+        ],
+        "title": "AiTestRequest",
+        "type": "object"
+      },
+      "AiTestResult": {
+        "properties": {
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "message",
+          "latency_ms"
+        ],
+        "title": "AiTestResult",
+        "type": "object"
+      },
+      "ClearedModel": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "ClearedModel",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Health": {
+        "properties": {
+          "auth_required": {
+            "default": false,
+            "title": "Auth Required",
+            "type": "boolean"
+          },
+          "read_roots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Read Roots",
+            "type": "array"
+          },
+          "status": {
+            "const": "ok",
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "worker_alive": {
+            "default": false,
+            "title": "Worker Alive",
+            "type": "boolean"
+          },
+          "worker_seen_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Seen At"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "read_roots",
+          "auth_required",
+          "worker_seen_at",
+          "worker_alive"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "HistoryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OperationModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "HistoryPage",
+        "type": "object"
+      },
+      "ImportPayload": {
+        "properties": {
+          "app": {
+            "enum": [
+              "radarr",
+              "sonarr"
+            ],
+            "title": "App",
+            "type": "string"
+          },
+          "destination_path": {
+            "title": "Destination Path",
+            "type": "string"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "job_id": {
+            "pattern": "^[A-Za-z0-9._:-]{8,128}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          },
+          "transfer_mode": {
+            "default": "Move",
+            "title": "Transfer Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "app",
+          "source_path",
+          "destination_path"
+        ],
+        "title": "ImportPayload",
+        "type": "object"
+      },
+      "ImportResult": {
+        "properties": {
+          "added_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/TrackModel"
+            },
+            "title": "Added Tracks",
+            "type": "array"
+          },
+          "extra_files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extra Files",
+            "type": "array"
+          },
+          "media_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media File"
+          },
+          "move_status": {
+            "enum": [
+              "DeferMove",
+              "MoveComplete",
+              "RenameRequested"
+            ],
+            "title": "Move Status",
+            "type": "string"
+          },
+          "prevent_extra_import": {
+            "default": false,
+            "title": "Prevent Extra Import",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rejected_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/RejectedTrackModel"
+            },
+            "title": "Rejected Tracks",
+            "type": "array"
+          },
+          "removed_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/RemovedTrackModel"
+            },
+            "title": "Removed Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "move_status",
+          "reason",
+          "media_file",
+          "extra_files",
+          "prevent_extra_import",
+          "added_tracks",
+          "rejected_tracks",
+          "removed_tracks"
+        ],
+        "title": "ImportResult",
+        "type": "object"
+      },
+      "JobDetailModel": {
+        "description": "A job as the UI watches it, log included.\n\nSeparate from :class:`JobModel` so the shim's reply stays as small as it has\nalways been -- it polls this route on a loop and cares about four fields.",
+        "properties": {
+          "app": {
+            "enum": [
+              "radarr",
+              "sonarr"
+            ],
+            "title": "App",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "destination_path": {
+            "title": "Destination Path",
+            "type": "string"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "history_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "log": {
+            "items": {
+              "$ref": "#/components/schemas/LogEntryModel"
+            },
+            "title": "Log",
+            "type": "array"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "transfer_mode": {
+            "title": "Transfer Mode",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "result",
+          "error",
+          "history_id",
+          "app",
+          "title",
+          "source_path",
+          "destination_path",
+          "transfer_mode",
+          "dry_run",
+          "created_at",
+          "updated_at",
+          "log"
+        ],
+        "title": "JobDetailModel",
+        "type": "object"
+      },
+      "JobModel": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "history_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "result",
+          "error",
+          "history_id"
+        ],
+        "title": "JobModel",
+        "type": "object"
+      },
+      "JobPageModel": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobDetailModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "JobPageModel",
+        "type": "object"
+      },
+      "LogEntryModel": {
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "context": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Context",
+            "type": "object"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LogStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "level",
+          "component",
+          "message",
+          "stage",
+          "context"
+        ],
+        "title": "LogEntryModel",
+        "type": "object"
+      },
+      "LogStage": {
+        "description": "The step of an import a log record belongs to.\n\nClosed, because the UI renders one timeline item per stage and an unknown\nvalue would simply vanish from it.",
+        "enum": [
+          "guard",
+          "probe",
+          "discovery",
+          "ai",
+          "selection",
+          "mux",
+          "placement",
+          "outcome"
+        ],
+        "title": "LogStage",
+        "type": "string"
+      },
+      "OperationModel": {
+        "properties": {
+          "added_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/TrackModel"
+            },
+            "title": "Added Tracks",
+            "type": "array"
+          },
+          "app": {
+            "enum": [
+              "radarr",
+              "sonarr"
+            ],
+            "title": "App",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "destination_path": {
+            "title": "Destination Path",
+            "type": "string"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "default": 0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "episodes": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Episodes",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "log": {
+            "items": {
+              "$ref": "#/components/schemas/LogEntryModel"
+            },
+            "title": "Log",
+            "type": "array"
+          },
+          "media_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media File"
+          },
+          "move_status": {
+            "enum": [
+              "DeferMove",
+              "MoveComplete",
+              "RenameRequested"
+            ],
+            "title": "Move Status",
+            "type": "string"
+          },
+          "output_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Bytes"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rejected_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/RejectedTrackModel"
+            },
+            "title": "Rejected Tracks",
+            "type": "array"
+          },
+          "removed_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/RemovedTrackModel"
+            },
+            "title": "Removed Tracks",
+            "type": "array"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "source_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Bytes"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "transfer_mode": {
+            "default": "",
+            "title": "Transfer Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "app",
+          "title",
+          "move_status",
+          "reason",
+          "source_path",
+          "destination_path",
+          "media_file",
+          "transfer_mode",
+          "season",
+          "episodes",
+          "added_tracks",
+          "rejected_tracks",
+          "removed_tracks",
+          "log",
+          "duration_ms",
+          "source_bytes",
+          "output_bytes",
+          "dry_run"
+        ],
+        "title": "OperationModel",
+        "type": "object"
+      },
+      "QueueStatusModel": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "QueueStatusModel",
+        "type": "object"
+      },
+      "RejectedTrackModel": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "image_subtitle",
+                  "undetermined_language",
+                  "language_not_kept",
+                  "already_present",
+                  "track_limit",
+                  "file_missing",
+                  "file_empty",
+                  "uninspectable",
+                  "no_tracks"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "kind": {
+            "default": "subtitles",
+            "enum": [
+              "video",
+              "audio",
+              "subtitles"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "language": {
+            "default": "und",
+            "title": "Language",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "default": "heuristic",
+            "enum": [
+              "heuristic",
+              "ai"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "track": {
+            "title": "Track",
+            "type": "string"
+          }
+        },
+        "required": [
+          "track",
+          "reason",
+          "kind",
+          "language",
+          "source",
+          "code"
+        ],
+        "title": "RejectedTrackModel",
+        "type": "object"
+      },
+      "RemovedTrackModel": {
+        "properties": {
+          "codec": {
+            "default": "",
+            "title": "Codec",
+            "type": "string"
+          },
+          "forced": {
+            "default": false,
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "kind": {
+            "default": "subtitles",
+            "enum": [
+              "video",
+              "audio",
+              "subtitles"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "language": {
+            "default": "und",
+            "title": "Language",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "kind",
+          "language",
+          "name",
+          "codec",
+          "forced",
+          "reason"
+        ],
+        "title": "RemovedTrackModel",
+        "type": "object"
+      },
+      "SettingsPatch": {
+        "additionalProperties": false,
+        "description": "Only the fields actually sent are changed.",
+        "properties": {
+          "ai_api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Api Key"
+          },
+          "ai_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Base Url"
+          },
+          "ai_max_entries": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Max Entries"
+          },
+          "ai_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "off",
+                  "fallback",
+                  "always",
+                  "verify"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Mode"
+          },
+          "ai_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Model"
+          },
+          "ai_name_tracks": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Name Tracks"
+          },
+          "ai_timeout_seconds": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Timeout Seconds"
+          },
+          "dedupe": {
+            "anyOf": [
+              {
+                "enum": [
+                  "off",
+                  "language",
+                  "language_codec"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dedupe"
+          },
+          "free_space_factor": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Space Factor"
+          },
+          "history_max_records": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Max Records"
+          },
+          "job_ttl_seconds": {
+            "anyOf": [
+              {
+                "minimum": 60.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Ttl Seconds"
+          },
+          "keep_audio_languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Audio Languages"
+          },
+          "keep_subtitle_languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Subtitle Languages"
+          },
+          "log_level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "TRACE",
+                  "DEBUG",
+                  "INFO",
+                  "SUCCESS",
+                  "WARNING",
+                  "ERROR",
+                  "CRITICAL"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Level"
+          },
+          "max_concurrent_muxes": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Concurrent Muxes"
+          },
+          "max_external_tracks": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max External Tracks"
+          },
+          "mux_timeout_seconds": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mux Timeout Seconds"
+          },
+          "operation_log_max_entries": {
+            "anyOf": [
+              {
+                "maximum": 5000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Log Max Entries"
+          },
+          "preserve_ownership": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preserve Ownership"
+          },
+          "skip_image_subtitles": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Image Subtitles"
+          },
+          "skip_undetermined_language": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Undetermined Language"
+          },
+          "sub_charset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Charset"
+          }
+        },
+        "title": "SettingsPatch",
+        "type": "object"
+      },
+      "SettingsView": {
+        "properties": {
+          "ai_api_key_set": {
+            "title": "Ai Api Key Set",
+            "type": "boolean"
+          },
+          "ai_base_url": {
+            "title": "Ai Base Url",
+            "type": "string"
+          },
+          "ai_max_entries": {
+            "title": "Ai Max Entries",
+            "type": "integer"
+          },
+          "ai_mode": {
+            "enum": [
+              "off",
+              "fallback",
+              "always",
+              "verify"
+            ],
+            "title": "Ai Mode",
+            "type": "string"
+          },
+          "ai_model": {
+            "title": "Ai Model",
+            "type": "string"
+          },
+          "ai_name_tracks": {
+            "title": "Ai Name Tracks",
+            "type": "boolean"
+          },
+          "ai_timeout_seconds": {
+            "title": "Ai Timeout Seconds",
+            "type": "number"
+          },
+          "dedupe": {
+            "enum": [
+              "off",
+              "language",
+              "language_codec"
+            ],
+            "title": "Dedupe",
+            "type": "string"
+          },
+          "free_space_factor": {
+            "title": "Free Space Factor",
+            "type": "number"
+          },
+          "history_max_records": {
+            "title": "History Max Records",
+            "type": "integer"
+          },
+          "job_ttl_seconds": {
+            "title": "Job Ttl Seconds",
+            "type": "number"
+          },
+          "keep_audio_languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keep Audio Languages",
+            "type": "array"
+          },
+          "keep_subtitle_languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keep Subtitle Languages",
+            "type": "array"
+          },
+          "locked": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Locked",
+            "type": "array"
+          },
+          "log_level": {
+            "title": "Log Level",
+            "type": "string"
+          },
+          "max_concurrent_muxes": {
+            "title": "Max Concurrent Muxes",
+            "type": "integer"
+          },
+          "max_external_tracks": {
+            "title": "Max External Tracks",
+            "type": "integer"
+          },
+          "mux_timeout_seconds": {
+            "title": "Mux Timeout Seconds",
+            "type": "number"
+          },
+          "operation_log_max_entries": {
+            "title": "Operation Log Max Entries",
+            "type": "integer"
+          },
+          "preserve_ownership": {
+            "title": "Preserve Ownership",
+            "type": "boolean"
+          },
+          "skip_image_subtitles": {
+            "title": "Skip Image Subtitles",
+            "type": "boolean"
+          },
+          "skip_undetermined_language": {
+            "title": "Skip Undetermined Language",
+            "type": "boolean"
+          },
+          "sub_charset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Charset"
+          }
+        },
+        "required": [
+          "dedupe",
+          "skip_image_subtitles",
+          "skip_undetermined_language",
+          "max_external_tracks",
+          "sub_charset",
+          "keep_audio_languages",
+          "keep_subtitle_languages",
+          "mux_timeout_seconds",
+          "free_space_factor",
+          "preserve_ownership",
+          "max_concurrent_muxes",
+          "job_ttl_seconds",
+          "history_max_records",
+          "operation_log_max_entries",
+          "ai_mode",
+          "ai_base_url",
+          "ai_model",
+          "ai_timeout_seconds",
+          "ai_max_entries",
+          "ai_name_tracks",
+          "ai_api_key_set",
+          "log_level",
+          "locked"
+        ],
+        "title": "SettingsView",
+        "type": "object"
+      },
+      "StatsModel": {
+        "properties": {
+          "deferred": {
+            "title": "Deferred",
+            "type": "integer"
+          },
+          "last_24h": {
+            "title": "Last 24H",
+            "type": "integer"
+          },
+          "muxed": {
+            "title": "Muxed",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "tracks_added": {
+            "title": "Tracks Added",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "muxed",
+          "deferred",
+          "tracks_added",
+          "last_24h"
+        ],
+        "title": "StatsModel",
+        "type": "object"
+      },
+      "SystemStatus": {
+        "properties": {
+          "queue": {
+            "$ref": "#/components/schemas/QueueStatusModel"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "worker": {
+            "$ref": "#/components/schemas/WorkerStatusModel"
+          }
+        },
+        "required": [
+          "version",
+          "worker",
+          "queue"
+        ],
+        "title": "SystemStatus",
+        "type": "object"
+      },
+      "TrackModel": {
+        "properties": {
+          "file": {
+            "default": "",
+            "title": "File",
+            "type": "string"
+          },
+          "forced": {
+            "default": false,
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "hearing_impaired": {
+            "default": false,
+            "title": "Hearing Impaired",
+            "type": "boolean"
+          },
+          "kind": {
+            "default": "subtitles",
+            "enum": [
+              "video",
+              "audio",
+              "subtitles"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "language": {
+            "default": "und",
+            "title": "Language",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source": {
+            "default": "heuristic",
+            "enum": [
+              "heuristic",
+              "ai"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "language",
+          "name",
+          "forced",
+          "hearing_impaired",
+          "variant",
+          "file",
+          "source"
+        ],
+        "title": "TrackModel",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkerStatusModel": {
+        "properties": {
+          "alive": {
+            "title": "Alive",
+            "type": "boolean"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "max_concurrent_muxes": {
+            "title": "Max Concurrent Muxes",
+            "type": "integer"
+          },
+          "stale_after_seconds": {
+            "title": "Stale After Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "alive",
+          "last_seen_at",
+          "stale_after_seconds",
+          "max_concurrent_muxes"
+        ],
+        "title": "WorkerStatusModel",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "muxarr",
+    "version": "0.9.2"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/history": {
+      "delete": {
+        "operationId": "clear_history_v1_history_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearedModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear History",
+        "tags": [
+          "history"
+        ]
+      },
+      "get": {
+        "operationId": "list_history_v1_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "move_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Move Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "app",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "App"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List History",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/v1/history/{operation_id}": {
+      "get": {
+        "operationId": "get_operation_v1_history__operation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Operation",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/v1/import": {
+      "post": {
+        "description": "Queue an import and return immediately; the worker picks it up.\n\nIdempotent on ``job_id`` so the shim can retry a submission whose reply was\nlost without queueing the mux twice.",
+        "operationId": "import_media_v1_import_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Media",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/jobs": {
+      "get": {
+        "description": "Recent jobs, log included: the only view of one that never reached the history.",
+        "operationId": "list_jobs_v1_jobs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "running",
+                    "succeeded",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPageModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Jobs",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait",
+            "required": false,
+            "schema": {
+              "default": 0.0,
+              "minimum": 0,
+              "title": "Wait",
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/detail": {
+      "get": {
+        "description": "The same job with its captured log, for the UI to poll while it runs.",
+        "operationId": "get_job_detail_v1_jobs__job_id__detail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDetailModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job Detail",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/protocol": {
+      "get": {
+        "description": "Long-poll transport for the shim, rendered as *arr's stdout protocol.\n\nAlways 200, with the state in the body: curl and busybox wget surface non-2xx\nso differently that a sh shim cannot tell \"unknown job\" from \"connection\nrefused\". Encoding state in the body makes a missing state line mean exactly\none thing -- transport failure, worth retrying.",
+        "operationId": "get_job_protocol_v1_jobs__job_id__protocol_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait",
+            "required": false,
+            "schema": {
+              "default": 25.0,
+              "minimum": 0,
+              "title": "Wait",
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job Protocol",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/settings": {
+      "get": {
+        "operationId": "read_settings_v1_settings_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "operationId": "update_settings_v1_settings_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/v1/settings/ai/test": {
+      "post": {
+        "operationId": "probe_ai_provider_v1_settings_ai_test_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe Ai Provider",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "operationId": "get_stats_v1_stats_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Stats",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/v1/system": {
+      "get": {
+        "operationId": "get_system_v1_system_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get System",
+        "tags": [
+          "system"
+        ]
+      }
+    }
+  }
+}

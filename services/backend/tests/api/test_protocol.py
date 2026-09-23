@@ -81,9 +81,7 @@ def test_move_status_is_always_last(tmp_path: Path) -> None:
         lambda p: muxed(p, media_file=p / "Movie - S01E02-E03.mkv"),
     ],
 )
-def test_every_rendered_line_matches_arrs_regex(
-    outcome_factory: object, tmp_path: Path
-) -> None:
+def test_every_rendered_line_matches_arrs_regex(outcome_factory: object, tmp_path: Path) -> None:
     lines = render(outcome_factory(tmp_path))  # type: ignore[operator]
 
     assert lines, "render must never produce an empty result"

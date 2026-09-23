@@ -1,0 +1,8 @@
+.rows > * + * {
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+.nav {
+  position: sticky;
+  top: var(--mantine-spacing-xl);
+}

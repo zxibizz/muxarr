@@ -20,7 +20,7 @@ Note if the mkvmerge/ffmpeg tests skipped on your machine.
 
 - [ ] New behaviour has a test; a bug fix has the test that fails without it
 - [ ] `CHANGELOG.md` updated under `Unreleased`
-- [ ] README config table updated (if an environment variable was added)
+- [ ] docs/configuration.md updated (if an environment variable was added)
 - [ ] A migration is included and its downgrade tested (if the schema changed)
 - [ ] The layering rules in AGENTS.md still hold
 

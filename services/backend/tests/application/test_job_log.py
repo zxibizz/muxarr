@@ -122,12 +122,14 @@ async def test_the_log_is_published_while_the_import_is_still_running(
 
     task = asyncio.create_task(use_case(jobs, history, StubHandler(block=release)).execute(job))
     mid_run: list[str] = []
-    for _ in range(100):
+    # Well inside the handler's own 5s block, but generous for a loaded CI box.
+    for _ in range(400):
         await asyncio.sleep(0.01)
         running = await jobs.get("job-1")
         assert running is not None
-        if running.log:
-            mid_run = [e.message for e in running.log]
+        # The first flush can land before the worker thread has logged anything.
+        if "embedding subtitles Russian" in (messages := [e.message for e in running.log]):
+            mid_run = messages
             break
     release.set()
     await task

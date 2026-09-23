@@ -14,7 +14,7 @@ import asyncio
 from contextlib import suppress
 from pathlib import Path
 
-from src.application.interfaces.history import HistoryRepository
+from src.application.interfaces.history import HistoryRepository, NewOperation
 from src.application.interfaces.jobs import JobRecord, JobRepository
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
@@ -100,24 +100,26 @@ class RunImportJobUseCase:
         episode = request.episode_ref
         try:
             return await self._history.record(
-                app=request.app,
-                title=Path(request.source_path).name,
-                move_status=outcome.move_status,
-                reason=outcome.reason,
-                source_path=str(request.source_path),
-                destination_path=str(request.destination_path),
-                media_file=str(outcome.media_file) if outcome.media_file else None,
-                transfer_mode=request.transfer_mode,
-                season=episode.season if episode else None,
-                episodes=episode.episodes if episode else (),
-                added_tracks=outcome.added_tracks,
-                rejected_tracks=outcome.rejected_tracks,
-                removed_tracks=outcome.removed_tracks,
-                log=list(entries),
-                duration_ms=outcome.duration_ms,
-                source_bytes=outcome.source_bytes,
-                output_bytes=outcome.output_bytes,
-                dry_run=request.dry_run,
+                NewOperation(
+                    app=request.app,
+                    title=Path(request.source_path).name,
+                    move_status=outcome.move_status,
+                    reason=outcome.reason,
+                    source_path=str(request.source_path),
+                    destination_path=str(request.destination_path),
+                    media_file=str(outcome.media_file) if outcome.media_file else None,
+                    transfer_mode=request.transfer_mode,
+                    season=episode.season if episode else None,
+                    episodes=episode.episodes if episode else (),
+                    added_tracks=outcome.added_tracks,
+                    rejected_tracks=outcome.rejected_tracks,
+                    removed_tracks=outcome.removed_tracks,
+                    log=list(entries),
+                    duration_ms=outcome.duration_ms,
+                    source_bytes=outcome.source_bytes,
+                    output_bytes=outcome.output_bytes,
+                    dry_run=request.dry_run,
+                )
             )
         except Exception:
             # Losing a history row must never turn a good import into a failure.

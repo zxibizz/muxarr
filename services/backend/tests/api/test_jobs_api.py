@@ -55,9 +55,7 @@ async def test_state_filter_is_wired_through(
     await drain(container)
 
     pending = (await client.get("/v1/jobs", params={"state": "pending"}, headers=auth())).json()
-    succeeded = (
-        await client.get("/v1/jobs", params={"state": "succeeded"}, headers=auth())
-    ).json()
+    succeeded = (await client.get("/v1/jobs", params={"state": "succeeded"}, headers=auth())).json()
 
     assert pending["total"] == 0
     assert succeeded["total"] == 1
@@ -69,9 +67,7 @@ async def test_detail_carries_the_log(
     job_id = await queue(client, layout)
     await drain(container)
 
-    body: dict[str, Any] = (
-        await client.get(f"/v1/jobs/{job_id}/detail", headers=auth())
-    ).json()
+    body: dict[str, Any] = (await client.get(f"/v1/jobs/{job_id}/detail", headers=auth())).json()
 
     assert body["state"] == "succeeded"
     assert "import started" in [entry["message"] for entry in body["log"]]

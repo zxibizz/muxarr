@@ -15,10 +15,12 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import ClassVar
 from urllib.parse import urlparse
 
 import pytest
@@ -49,11 +51,11 @@ class _Handler(BaseHTTPRequestHandler):
     # None means "echo the submitted job id back", as the real daemon does.
     submit_body: bytes | None = None
     # Consumed one per poll; the final entry repeats for every poll after it.
-    polls: list[tuple[int, bytes]] = [(200, DONE_DEFER)]
-    received: list[dict[str, object]] = []
-    polled: list[str] = []
+    polls: ClassVar[list[tuple[int, bytes]]] = [(200, DONE_DEFER)]
+    received: ClassVar[list[dict[str, object]]] = []
+    polled: ClassVar[list[str]] = []
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length)
         try:
@@ -68,7 +70,7 @@ class _Handler(BaseHTTPRequestHandler):
             reply = json.dumps({"id": job_id, "state": "pending"}).encode()
         self._respond(type(self).submit_code, reply, "application/json")
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         index = len(type(self).polled)
         type(self).polled.append(self.path)
         code, body = type(self).polls[min(index, len(type(self).polls) - 1)]
@@ -156,7 +158,6 @@ def assert_failed_import(result: subprocess.CompletedProcess[str]) -> None:
 
 def url_for(daemon: type[_Handler]) -> str:
     return f"http://127.0.0.1:{daemon.port}"  # type: ignore[attr-defined]
-
 
 
 def test_happy_path_defer(daemon: type[_Handler]) -> None:
@@ -393,9 +394,7 @@ class TestPayload:
 
         assert daemon.received[0]["source_path"] == cyrillic
 
-    def test_a_malicious_transfer_mode_cannot_inject_keys(
-        self, daemon: type[_Handler]
-    ) -> None:
+    def test_a_malicious_transfer_mode_cannot_inject_keys(self, daemon: type[_Handler]) -> None:
         run_shim(
             url_for(daemon),
             app="sonarr",
@@ -441,3 +440,14 @@ def test_shim_has_no_bashisms() -> None:
         for bashism in (r"\[\[", r"\bfunction\s+\w+\s*\(", r"\blocal\b"):
             assert re.search(bashism, text) is None, f"bashism in {shim.name}: {bashism}"
 
+
+def test_shims_match_their_template() -> None:
+    """Both shims are rendered from scripts/src; a hand edit to one would drift."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "build_shims.py"), "--check"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout

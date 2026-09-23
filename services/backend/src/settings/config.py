@@ -10,8 +10,9 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypeVar
 
-from src.domain.enums import UNDETERMINED, AiMode, DedupeMode
+from src.domain.enums import AI_MODES, DEDUPE_MODES, UNDETERMINED, AiMode, DedupeMode
 from src.domain.errors import MuxarrError
 from src.domain.language import normalise_language
 from src.domain.selection import SelectionPolicy
@@ -28,9 +29,9 @@ DEFAULT_AI_BASE_URL = "https://api.openai.com/v1"
 # anything that would make the history table awkward to read back.
 MAX_OPERATION_LOG_ENTRIES = 5000
 
-_TRUTHY = frozenset({"1", "true", "yes", "on"})
-_VALID_DEDUPE: frozenset[str] = frozenset({"off", "language", "language_codec"})
-_VALID_AI_MODE: frozenset[str] = frozenset({"off", "fallback", "always", "verify"})
+TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+_Choice = TypeVar("_Choice", bound=str)
 
 
 class ConfigError(MuxarrError):
@@ -114,19 +115,13 @@ class Settings:
                 "muxarr may read (download folders and library roots)"
             )
 
-        dedupe = source.get("MUXARR_DEDUPE", "language_codec").strip().lower()
-        if dedupe not in _VALID_DEDUPE:
-            raise ConfigError(
-                f"MUXARR_DEDUPE must be one of {sorted(_VALID_DEDUPE)}, got {dedupe!r}"
-            )
+        dedupe = parse_choice(
+            "MUXARR_DEDUPE", source.get("MUXARR_DEDUPE", "language_codec"), DEDUPE_MODES
+        )
 
         scratch = source.get("MUXARR_SCRATCH_DIR", "").strip()
 
-        ai_mode = source.get("MUXARR_AI_MODE", "off").strip().lower() or "off"
-        if ai_mode not in _VALID_AI_MODE:
-            raise ConfigError(
-                f"MUXARR_AI_MODE must be one of {sorted(_VALID_AI_MODE)}, got {ai_mode!r}"
-            )
+        ai_mode = parse_choice("MUXARR_AI_MODE", source.get("MUXARR_AI_MODE") or "off", AI_MODES)
         ai_model = source.get("MUXARR_AI_MODEL", "").strip()
         if ai_mode != "off" and not ai_model:
             raise ConfigError("MUXARR_AI_MODEL is required when MUXARR_AI_MODE is not 'off'")
@@ -145,7 +140,7 @@ class Settings:
                 max(0, _parse_int(source, "MUXARR_OPERATION_LOG_MAX_ENTRIES", 500)),
             ),
             scratch_dir=Path(scratch) if scratch else None,
-            dedupe=dedupe,  # type: ignore[arg-type]
+            dedupe=dedupe,
             skip_image_subtitles=_parse_bool(source, "MUXARR_SKIP_IMAGE_SUBTITLES"),
             skip_undetermined_language=_parse_bool(source, "MUXARR_SKIP_UNDETERMINED"),
             max_external_tracks=_parse_int(source, "MUXARR_MAX_TRACKS", 24),
@@ -162,7 +157,7 @@ class Settings:
             log_level=source.get("MUXARR_LOG_LEVEL", "INFO").upper(),
             log_json=_parse_bool(source, "MUXARR_LOG_JSON"),
             db_url=source.get("MUXARR_DB_URL", "").strip() or DEFAULT_DB_URL,
-            ai_mode=ai_mode,  # type: ignore[arg-type]
+            ai_mode=ai_mode,
             ai_base_url=source.get("MUXARR_AI_BASE_URL", "").strip() or DEFAULT_AI_BASE_URL,
             ai_api_key=source.get("MUXARR_AI_API_KEY") or None,
             ai_model=ai_model,
@@ -202,11 +197,19 @@ def parse_languages(env: str, raw: str) -> tuple[str, ...]:
     return tuple(codes)
 
 
+def parse_choice(env: str, raw: str, choices: tuple[_Choice, ...]) -> _Choice:
+    value = raw.strip().lower()
+    for choice in choices:
+        if value == choice:
+            return choice
+    raise ConfigError(f"{env} must be one of {sorted(choices)}, got {raw!r}")
+
+
 def _parse_bool(source: Mapping[str, str], key: str, *, default: bool = False) -> bool:
     raw = source.get(key)
     if raw is None or not raw.strip():
         return default
-    return raw.strip().lower() in _TRUTHY
+    return raw.strip().lower() in TRUTHY
 
 
 def _parse_int(source: Mapping[str, str], key: str, default: int) -> int:

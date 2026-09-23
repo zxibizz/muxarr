@@ -32,6 +32,22 @@ INIT = Path("services/backend/src/__init__.py")
 PACKAGE_JSON = Path("services/frontend/package.json")
 PACKAGE_LOCK = Path("services/frontend/package-lock.json")
 CHANGELOG = Path("CHANGELOG.md")
+# Mirrors check_version.IMAGE_TAG_FILES.
+IMAGE_TAG_FILES = (
+    Path("README.md"),
+    Path("docs/upgrading.md"),
+    Path("compose.example.yaml"),
+    Path(".github/ISSUE_TEMPLATE/bug_report.yml"),
+)
+
+
+def bump_image_tags(version: str) -> None:
+    for path in IMAGE_TAG_FILES:
+        target = ROOT / path
+        text = re.sub(
+            r"(ghcr\.io/zxibizz/muxarr:)\d+\.\d+\.\d+\b", rf"\g<1>{version}", target.read_text()
+        )
+        target.write_text(text)
 
 
 def _sub_once(path: Path, pattern: str, replacement: str) -> None:
@@ -144,9 +160,10 @@ def main(argv: list[str]) -> int:
     _sub_once(INIT, r'^__version__ = "[^"]+"', f'__version__ = "{version}"')
     _sub_once(PACKAGE_JSON, r'^(  "version": ")[^"]+(")', rf"\g<1>{version}\g<2>")
     bump_lock(version)
+    bump_image_tags(version)
     open_changelog_section(version, dt.date.today().isoformat())
 
-    for path in (PYPROJECT, INIT, PACKAGE_JSON, PACKAGE_LOCK, CHANGELOG):
+    for path in (PYPROJECT, INIT, PACKAGE_JSON, PACKAGE_LOCK, *IMAGE_TAG_FILES, CHANGELOG):
         print(f"  updated {path}")
 
     # The guard CI runs, against the tag this bump is for.

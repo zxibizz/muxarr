@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { notifications } from '@mantine/notifications';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 
@@ -28,6 +29,8 @@ window.scrollTo = vi.fn();
 
 afterEach(() => {
   cleanup();
+  // The notification store is module-global and would leak into the next test.
+  notifications.clean();
   window.localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();

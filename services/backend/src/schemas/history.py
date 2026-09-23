@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from src.domain.enums import App, MoveStatus
+from src.schemas.base import WireModel
 from src.schemas.journal import LogEntryModel, RejectedTrackModel, RemovedTrackModel, TrackModel
 
 
-class OperationModel(BaseModel):
+class OperationModel(WireModel):
     id: int
     created_at: str
-    app: str
+    app: App
     title: str
-    move_status: str
+    move_status: MoveStatus
     reason: str
     source_path: str
     destination_path: str
@@ -30,16 +32,20 @@ class OperationModel(BaseModel):
     dry_run: bool = False
 
 
-class HistoryPage(BaseModel):
+class HistoryPage(WireModel):
     items: list[OperationModel]
     total: int
     limit: int
     offset: int
 
 
-class StatsModel(BaseModel):
+class StatsModel(WireModel):
     total: int
     muxed: int
     deferred: int
     tracks_added: int
     last_24h: int
+
+
+class ClearedModel(WireModel):
+    deleted: int

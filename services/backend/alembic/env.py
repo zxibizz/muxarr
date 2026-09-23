@@ -16,9 +16,9 @@ from sqlalchemy import engine_from_config, pool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.db import metadata  # noqa: E402
-from src.domain import models  # noqa: E402,F401  (import registers the tables)
-from src.settings.config import DEFAULT_DB_URL  # noqa: E402
+from src.db import metadata
+from src.domain import models  # noqa: F401  (import registers the tables)
+from src.settings.config import DEFAULT_DB_URL
 
 config = context.config
 if config.config_file_name is not None:

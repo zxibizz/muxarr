@@ -72,15 +72,21 @@ target-version = "py311"
 exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PTH", "RET", "SIM", "S", "ASYNC"]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PTH", "RET", "SIM", "S", "ASYNC",
+    "RUF", "PIE", "PT",
+]
 ignore = [
     "S603",     # subprocess calls are audited by hand; every call site uses an argv list
     "ASYNC109", # the long-poll hold time is the shim's contract, not a caller-side deadline
 ]
+# Cyrillic release tags ("рус") are matched on purpose.
+allowed-confusables = ["р", "у", "с"]
 
 [tool.ruff.lint.per-file-ignores]
-# asserts, dummy tokens and PATH-resolved test binaries are all intentional
-"tests/**" = ["S101", "S105", "S106", "S607"]
+# asserts, dummy tokens and PATH-resolved test binaries are all intentional;
+# PT012 fights `with pytest.raises(...), some_context():` blocks that must fail inside.
+"tests/**" = ["S101", "S105", "S106", "S607", "PT012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src", "tests"]

@@ -1,14 +1,13 @@
 import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
 
-import { MantineProvider, createTheme } from '@mantine/core';
+import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { App } from './App';
-
-const theme = createTheme({
-  primaryColor: 'indigo',
-  defaultRadius: 'md',
-});
+import { App } from './app/App';
+import { AppProviders } from './app/AppProviders';
+import { theme } from './app/theme';
 
 const root = document.getElementById('root');
 if (!root) {
@@ -17,8 +16,11 @@ if (!root) {
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <MantineProvider theme={theme} defaultColorScheme="dark">
-      <App />
+    <MantineProvider theme={theme} forceColorScheme="dark">
+      <Notifications position="top-right" />
+      <AppProviders>
+        <App />
+      </AppProviders>
     </MantineProvider>
   </React.StrictMode>,
 );

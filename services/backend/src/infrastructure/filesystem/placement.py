@@ -41,9 +41,7 @@ def ensure_free_space(
         raise PlacementError(f"cannot stat filesystem at {destination_dir}: {exc}") from exc
 
     if free < needed:
-        raise InsufficientSpaceError(
-            f"{destination_dir} has {free} bytes free, need {needed}"
-        )
+        raise InsufficientSpaceError(f"{destination_dir} has {free} bytes free, need {needed}")
 
 
 def staging_path_for(destination: Path, scratch_dir: Path | None = None) -> Path:

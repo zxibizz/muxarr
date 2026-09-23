@@ -17,6 +17,28 @@ MAX_PAGE_SIZE = 500
 
 
 @dataclass(frozen=True, slots=True)
+class NewOperation:
+    app: str
+    title: str
+    move_status: str
+    reason: str
+    source_path: str
+    destination_path: str
+    media_file: str | None = None
+    transfer_mode: str = ""
+    season: int | None = None
+    episodes: Sequence[int] = ()
+    added_tracks: Sequence[TrackDetail] = ()
+    rejected_tracks: Sequence[RejectedTrack] = ()
+    removed_tracks: Sequence[RemovedTrack] = ()
+    log: Sequence[LogEntry] = ()
+    duration_ms: int = 0
+    source_bytes: int | None = None
+    output_bytes: int | None = None
+    dry_run: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class OperationRecord:
     id: int
     created_at: str
@@ -62,28 +84,7 @@ class Page:
 
 
 class HistoryRepository(Protocol):
-    async def record(
-        self,
-        *,
-        app: str,
-        title: str,
-        move_status: str,
-        reason: str,
-        source_path: str,
-        destination_path: str,
-        media_file: str | None = None,
-        transfer_mode: str = "",
-        season: int | None = None,
-        episodes: Sequence[int] = (),
-        added_tracks: Sequence[TrackDetail] = (),
-        rejected_tracks: Sequence[RejectedTrack] = (),
-        removed_tracks: Sequence[RemovedTrack] = (),
-        log: Sequence[LogEntry] = (),
-        duration_ms: int = 0,
-        source_bytes: int | None = None,
-        output_bytes: int | None = None,
-        dry_run: bool = False,
-    ) -> int: ...
+    async def record(self, operation: NewOperation) -> int: ...
 
     async def get(self, operation_id: int) -> OperationRecord | None: ...
 

@@ -8,7 +8,6 @@ muxarr's fail-safe design deferring is the common outcome.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -16,6 +15,7 @@ from sqlalchemy import CursorResult, delete, func, select
 
 from src.application.interfaces.history import (
     MAX_PAGE_SIZE,
+    NewOperation,
     OperationRecord,
     Page,
     Stats,
@@ -29,49 +29,29 @@ class SqlAlchemyHistoryRepository:
     def __init__(self, db: DBManager) -> None:
         self._db = db
 
-    async def record(
-        self,
-        *,
-        app: str,
-        title: str,
-        move_status: str,
-        reason: str,
-        source_path: str,
-        destination_path: str,
-        media_file: str | None = None,
-        transfer_mode: str = "",
-        season: int | None = None,
-        episodes: Sequence[int] = (),
-        added_tracks: Sequence[TrackDetail] = (),
-        rejected_tracks: Sequence[RejectedTrack] = (),
-        removed_tracks: Sequence[RemovedTrack] = (),
-        log: Sequence[LogEntry] = (),
-        duration_ms: int = 0,
-        source_bytes: int | None = None,
-        output_bytes: int | None = None,
-        dry_run: bool = False,
-    ) -> int:
+    async def record(self, operation: NewOperation) -> int:
         """Append one operation, returning its id."""
+        op = operation
         row = Operation(
             created_at=_now(),
-            app=app,
-            title=title,
-            move_status=move_status,
-            reason=reason,
-            source_path=source_path,
-            destination_path=destination_path,
-            media_file=media_file,
-            transfer_mode=transfer_mode,
-            season=season,
-            episodes=",".join(str(e) for e in episodes),
-            added_tracks=json.dumps([t.to_dict() for t in added_tracks]),
-            rejected_tracks=json.dumps([r.to_dict() for r in rejected_tracks]),
-            removed_tracks=json.dumps([r.to_dict() for r in removed_tracks]),
-            log=json.dumps([e.to_dict() for e in log]),
-            duration_ms=duration_ms,
-            source_bytes=source_bytes,
-            output_bytes=output_bytes,
-            dry_run=int(dry_run),
+            app=op.app,
+            title=op.title,
+            move_status=op.move_status,
+            reason=op.reason,
+            source_path=op.source_path,
+            destination_path=op.destination_path,
+            media_file=op.media_file,
+            transfer_mode=op.transfer_mode,
+            season=op.season,
+            episodes=",".join(str(e) for e in op.episodes),
+            added_tracks=json.dumps([t.to_dict() for t in op.added_tracks]),
+            rejected_tracks=json.dumps([r.to_dict() for r in op.rejected_tracks]),
+            removed_tracks=json.dumps([r.to_dict() for r in op.removed_tracks]),
+            log=json.dumps([e.to_dict() for e in op.log]),
+            duration_ms=op.duration_ms,
+            source_bytes=op.source_bytes,
+            output_bytes=op.output_bytes,
+            dry_run=int(op.dry_run),
         )
         async with self._db.session() as session:
             session.add(row)
@@ -143,9 +123,7 @@ class SqlAlchemyHistoryRepository:
                 )
                 or 0
             )
-            added = await session.scalars(
-                select(Operation.added_tracks).where(muxed_filter)
-            )
+            added = await session.scalars(select(Operation.added_tracks).where(muxed_filter))
             tracks = sum(len(json.loads(value or "[]")) for value in added)
 
         return Stats(

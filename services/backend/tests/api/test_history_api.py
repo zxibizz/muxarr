@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from src.application.interfaces.history import HistoryRepository
+from src.application.interfaces.history import HistoryRepository, NewOperation
 from src.core.container import AppContainer
 from src.domain.journal import LogEntry, TrackDetail
 from src.infrastructure import probing
@@ -46,7 +46,7 @@ async def seed(store: HistoryRepository, **overrides: Any) -> int:
         "destination_path": "/library/x.mkv",
     }
     payload.update(overrides)
-    return await store.record(**payload)
+    return await store.record(NewOperation(**payload))
 
 
 @pytest.fixture
@@ -60,9 +60,7 @@ class TestHistoryEndpoints:
 
         assert body == {"items": [], "total": 0, "limit": 50, "offset": 0}
 
-    async def test_lists_newest_first(
-        self, client: AsyncClient, store: HistoryRepository
-    ) -> None:
+    async def test_lists_newest_first(self, client: AsyncClient, store: HistoryRepository) -> None:
         await seed(store, title="first.mkv")
         await seed(store, title="second.mkv")
 

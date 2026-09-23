@@ -11,12 +11,13 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.domain.enums import AiMode, DedupeMode
+from src.schemas.base import WireModel
 from src.settings.config import MAX_OPERATION_LOG_ENTRIES
 
 LogLevel = Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
 
 
-class SettingsView(BaseModel):
+class SettingsView(WireModel):
     dedupe: DedupeMode
     skip_image_subtitles: bool
     skip_undetermined_language: bool
@@ -42,6 +43,7 @@ class SettingsView(BaseModel):
     ai_name_tracks: bool
     ai_api_key_set: bool
 
+    # str, not LogLevel: MUXARR_LOG_LEVEL is not validated, and reading it must not 500.
     log_level: str
 
     # Pinned by an environment variable; the UI renders these read-only.
@@ -69,9 +71,7 @@ class SettingsPatch(BaseModel):
     max_concurrent_muxes: int | None = Field(default=None, ge=1)
     job_ttl_seconds: float | None = Field(default=None, ge=60)
     history_max_records: int | None = Field(default=None, ge=1)
-    operation_log_max_entries: int | None = Field(
-        default=None, ge=0, le=MAX_OPERATION_LOG_ENTRIES
-    )
+    operation_log_max_entries: int | None = Field(default=None, ge=0, le=MAX_OPERATION_LOG_ENTRIES)
 
     ai_mode: AiMode | None = None
     ai_base_url: str | None = None
@@ -95,7 +95,7 @@ class AiTestRequest(BaseModel):
     timeout_seconds: float = Field(default=10.0, ge=1)
 
 
-class AiTestResult(BaseModel):
+class AiTestResult(WireModel):
     ok: bool
     message: str
     latency_ms: int

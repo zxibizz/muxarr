@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from src.schemas.base import WireModel
 
 
-class WorkerStatusModel(BaseModel):
+class WorkerStatusModel(WireModel):
     alive: bool
     # Null until the worker has run once.
     last_seen_at: str | None
@@ -13,7 +13,7 @@ class WorkerStatusModel(BaseModel):
     max_concurrent_muxes: int
 
 
-class QueueStatusModel(BaseModel):
+class QueueStatusModel(WireModel):
     pending: int
     running: int
     # Finished jobs are pruned on their TTL, so these cover a recent window.
@@ -21,7 +21,7 @@ class QueueStatusModel(BaseModel):
     failed: int
 
 
-class SystemStatus(BaseModel):
+class SystemStatus(WireModel):
     version: str
     worker: WorkerStatusModel
     queue: QueueStatusModel

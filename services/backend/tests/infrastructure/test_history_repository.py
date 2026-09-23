@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.application.interfaces.history import NewOperation
 from src.db.session import DBManager
 from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.models import Operation
@@ -24,7 +25,7 @@ async def add(store: Store, **overrides: object) -> int:
         "destination_path": "/library/Movie (2024)/Movie (2024).mkv",
     }
     payload.update(overrides)
-    return await store.record(**payload)  # type: ignore[arg-type]
+    return await store.record(NewOperation(**payload))  # type: ignore[arg-type]
 
 
 async def test_record_returns_an_id(history: Store) -> None:

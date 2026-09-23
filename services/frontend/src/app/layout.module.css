@@ -1,0 +1,46 @@
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.alive {
+  background: var(--mantine-color-teal-5);
+  box-shadow: 0 0 0 0 rgb(32 201 151 / 60%);
+  animation: pulse 2.4s ease-out infinite;
+}
+
+.dead {
+  background: var(--mantine-color-red-6);
+}
+
+.status {
+  display: block;
+  width: 100%;
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-sm);
+  background: var(--mantine-color-dark-6);
+  border: 1px solid var(--mantine-color-default-border);
+  transition: border-color 120ms ease;
+
+  &:hover {
+    border-color: var(--mantine-color-dark-3);
+  }
+}
+
+@keyframes pulse {
+  70% {
+    box-shadow: 0 0 0 6px rgb(32 201 151 / 0%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgb(32 201 151 / 0%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alive {
+    animation: none;
+  }
+}

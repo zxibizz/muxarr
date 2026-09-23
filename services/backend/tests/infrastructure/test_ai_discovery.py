@@ -101,9 +101,7 @@ class TestModeGating:
 
         assert len(completer.calls) == 1
 
-    def test_fallback_calls_the_model_when_a_language_is_undetermined(
-        self, video: Path
-    ) -> None:
+    def test_fallback_calls_the_model_when_a_language_is_undetermined(self, video: Path) -> None:
         completer = StubCompleter()
 
         found = FilesystemTrackDiscovery().discover(video)
@@ -126,9 +124,7 @@ class TestModeGating:
         assert completer.calls == []
         assert [t.language for t in found] == ["eng"]
 
-    def test_always_calls_the_model_even_when_the_heuristic_succeeded(
-        self, tmp_path: Path
-    ) -> None:
+    def test_always_calls_the_model_even_when_the_heuristic_succeeded(self, tmp_path: Path) -> None:
         root = tmp_path / "Movie.2024.1080p"
         video_path = touch(root / "Movie.2024.1080p.mkv", b"video")
         touch(root / "Movie.2024.1080p.eng.srt", "subs")
@@ -142,9 +138,7 @@ class TestModeGating:
         assert [t.language for t in found] == ["fre"]
         assert [t.source for t in found] == ["ai"]
 
-    def test_verify_consults_the_model_but_keeps_the_heuristic_answer(
-        self, tmp_path: Path
-    ) -> None:
+    def test_verify_consults_the_model_but_keeps_the_heuristic_answer(self, tmp_path: Path) -> None:
         root = tmp_path / "Movie.2024.1080p"
         video_path = touch(root / "Movie.2024.1080p.mkv", b"video")
         touch(root / "Movie.2024.1080p.eng.srt", "subs")
@@ -193,13 +187,9 @@ class TestNameTracks:
         # Untouched by the reply, so it keeps the name the filename produced.
         assert by_name["Movie.2024.1080p.eng.srt"].name == "English"
 
-    def test_naming_does_not_let_the_provider_change_the_selection(
-        self, settled: Path
-    ) -> None:
+    def test_naming_does_not_let_the_provider_change_the_selection(self, settled: Path) -> None:
         completer = StubCompleter(
-            tracks_reply(
-                {"file": "Movie.2024.1080p.eng.srt", "language": "fre", "title": "French"}
-            )
+            tracks_reply({"file": "Movie.2024.1080p.eng.srt", "language": "fre", "title": "French"})
         )
 
         found = make(completer, mode="fallback", name_tracks=True).discover(settled)
@@ -383,9 +373,7 @@ class TestReplyValidation:
         assert tracks[0].forced is False
         assert tracks[0].hearing_impaired is False
 
-    def test_labels_are_stripped_of_control_characters_and_capped(
-        self, release: Path
-    ) -> None:
+    def test_labels_are_stripped_of_control_characters_and_capped(self, release: Path) -> None:
         reply = tracks_reply(
             {
                 "file": "Nadpisi/Some.Show.S02E05.ass",
@@ -449,7 +437,7 @@ class TestReplyValidation:
 
     @pytest.mark.parametrize(
         "reply",
-        ["not json", "", "null", '{"tracks": "everything"}', '{"other": []}', '[1, 2, 3]'],
+        ["not json", "", "null", '{"tracks": "everything"}', '{"other": []}', "[1, 2, 3]"],
     )
     def test_unusable_replies_yield_no_tracks(self, release: Path, reply: str) -> None:
         assert materialise(reply, index=self.index(release), max_tracks=24) == []

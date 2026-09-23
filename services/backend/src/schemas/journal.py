@@ -6,12 +6,14 @@ becomes show the same log, so the shape has to be the same one.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from src.domain.enums import UNDETERMINED, TrackKind, TrackSource
+from src.domain.enums import UNDETERMINED, RejectCode, TrackKind, TrackSource
+from src.domain.journal import LogStage
+from src.schemas.base import WireModel
 
 
-class TrackModel(BaseModel):
+class TrackModel(WireModel):
     kind: TrackKind = "subtitles"
     label: str = ""
     language: str = UNDETERMINED
@@ -23,15 +25,16 @@ class TrackModel(BaseModel):
     source: TrackSource = "heuristic"
 
 
-class RejectedTrackModel(BaseModel):
+class RejectedTrackModel(WireModel):
     track: str
     reason: str
     kind: TrackKind = "subtitles"
     language: str = UNDETERMINED
     source: TrackSource = "heuristic"
+    code: RejectCode | None = None
 
 
-class RemovedTrackModel(BaseModel):
+class RemovedTrackModel(WireModel):
     index: int
     kind: TrackKind = "subtitles"
     language: str = UNDETERMINED
@@ -41,11 +44,11 @@ class RemovedTrackModel(BaseModel):
     reason: str = ""
 
 
-class LogEntryModel(BaseModel):
+class LogEntryModel(WireModel):
     ts: str
     level: str
     component: str
     message: str
     # Set on the records that make up the narrative; null on the rest.
-    stage: str | None = None
+    stage: LogStage | None = None
     context: dict[str, str] = Field(default_factory=dict)

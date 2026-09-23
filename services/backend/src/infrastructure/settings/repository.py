@@ -53,9 +53,7 @@ class SqlAlchemySettingsRepository:
                 ),
             )
             if not result.rowcount:
-                session.add(
-                    AppSettings(id=_ROW_ID, payload=payload, revision=1, updated_at=now)
-                )
+                session.add(AppSettings(id=_ROW_ID, payload=payload, revision=1, updated_at=now))
             await session.commit()
 
             revision = await session.scalar(

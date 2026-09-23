@@ -88,9 +88,9 @@ class InterceptHandler(logging.Handler):
             frame = frame.f_back
             depth += 1
 
-        logger.opt(depth=depth, exception=record.exc_info).bind(
-            component=record.name
-        ).log(level, record.getMessage())
+        logger.opt(depth=depth, exception=record.exc_info).bind(component=record.name).log(
+            level, record.getMessage()
+        )
 
 
 def _resolve_level(name: str) -> str:
@@ -168,9 +168,7 @@ def _to_entry(record: Record) -> LogEntry:
         # An absent value is dropped rather than rendered as "None", which reads
         # as a value in the UI.
         context={
-            str(k): str(v)
-            for k, v in extra.items()
-            if k not in _CAPTURE_RESERVED and v is not None
+            str(k): str(v) for k, v in extra.items() if k not in _CAPTURE_RESERVED and v is not None
         },
     )
 

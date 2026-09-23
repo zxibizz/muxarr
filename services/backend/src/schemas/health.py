@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from src.schemas.base import WireModel
 
 
-class Health(BaseModel):
+class Health(WireModel):
     status: Literal["ok"] = "ok"
     version: str
     read_roots: list[str]

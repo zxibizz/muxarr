@@ -75,9 +75,7 @@ def test_a_root_itself_is_readable(guard: PathGuard, tmp_path: Path) -> None:
 
 
 class TestDestinations:
-    def test_destination_inside_library_is_allowed(
-        self, guard: PathGuard, tmp_path: Path
-    ) -> None:
+    def test_destination_inside_library_is_allowed(self, guard: PathGuard, tmp_path: Path) -> None:
         destination = tmp_path / "library" / "Movie (2024)" / "Movie (2024).mkv"
 
         assert guard.check_destination(destination) == resolve(destination)
@@ -87,15 +85,11 @@ class TestDestinations:
 
         assert guard.check_destination(destination) == resolve(destination)
 
-    def test_destination_outside_roots_is_rejected(
-        self, guard: PathGuard, tmp_path: Path
-    ) -> None:
+    def test_destination_outside_roots_is_rejected(self, guard: PathGuard, tmp_path: Path) -> None:
         with pytest.raises(PathNotAllowedError, match="destination"):
             guard.check_destination(tmp_path / "elsewhere" / "out.mkv")
 
-    def test_destination_may_not_be_a_root_itself(
-        self, guard: PathGuard, tmp_path: Path
-    ) -> None:
+    def test_destination_may_not_be_a_root_itself(self, guard: PathGuard, tmp_path: Path) -> None:
         with pytest.raises(PathNotAllowedError, match="is a configured root itself"):
             guard.check_destination(tmp_path / "library")
 

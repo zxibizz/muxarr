@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from src.application.interfaces.muxer import Muxer, MuxPlan
@@ -24,7 +24,7 @@ from src.application.interfaces.track_source import TrackDiscovery
 from src.application.use_cases.imports.dto import OUTPUT_SUFFIX, ImportOutcome, ImportRequest
 from src.core.logging import get_logger
 from src.domain import selection
-from src.domain.enums import LogComponent, TrackKind
+from src.domain.enums import LogComponent, RejectCode, TrackKind
 from src.domain.errors import MuxarrError
 from src.domain.journal import LogStage, RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.media import ExternalTrack, MediaInfo, Track
@@ -45,9 +45,26 @@ def _note(stage: LogStage, message: str, **context: object) -> None:
     log.bind(stage=stage.value, **context).info(message)
 
 
-def _defer(reason: str, *, stage: LogStage = LogStage.OUTCOME, **extra: object) -> ImportOutcome:
-    _note(stage, f"deferring to *arr: {reason}")
-    return ImportOutcome(move_status="DeferMove", reason=reason, **extra)  # type: ignore[arg-type]
+class _DeferError(Exception):
+    """Unwinds the pipeline to a DeferMove. Caught in ``_decide``; never escapes it."""
+
+    def __init__(self, reason: str, stage: LogStage = LogStage.OUTCOME) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.stage = stage
+
+
+@dataclass(slots=True)
+class _Findings:
+    """What the import has established so far; a deferral still reports it."""
+
+    added: tuple[TrackDetail, ...] = ()
+    rejected: tuple[RejectedTrack, ...] = ()
+    removed: tuple[RemovedTrack, ...] = ()
+
+
+# Sidecars never handed back to *arr: unwanted by the user, or gone.
+_NOT_HANDED_BACK: frozenset[RejectCode] = frozenset({"language_not_kept", "file_missing"})
 
 
 class HandleImportUseCase:
@@ -84,14 +101,60 @@ class HandleImportUseCase:
         )
 
     def _decide(self, request: ImportRequest) -> ImportOutcome:
-        settings = self._settings
-        guard = self._guard
-
+        findings = _Findings()
         try:
-            source = guard.check_read(request.source_path)
-            destination = guard.check_destination(request.destination_path)
+            return self._import(request, findings)
+        except _DeferError as deferral:
+            _note(deferral.stage, f"deferring to *arr: {deferral.reason}")
+            return ImportOutcome(
+                move_status="DeferMove",
+                reason=deferral.reason,
+                added_tracks=findings.added,
+                rejected_tracks=findings.rejected,
+                removed_tracks=findings.removed,
+            )
+
+    def _import(self, request: ImportRequest, findings: _Findings) -> ImportOutcome:
+        source, destination = self._check_paths(request)
+        info = self._probe_source(source)
+        pruning = self._prune(info)
+
+        accepted, rejected = self._choose(request, source, pruning)
+        findings.rejected = tuple(_rejection(r) for r in rejected)
+        _check_worth_muxing(info, pruning, accepted, findings.rejected)
+        output = self._check_output(destination)
+
+        findings.added = tuple(_detail(t) for t in accepted)
+        findings.removed = tuple(_removal(t) for t in pruning.removed)
+        if request.dry_run:
+            raise _DeferError("dry run")
+
+        self._mux(request, source, info, pruning, accepted, output)
+
+        summary = _summary(findings.added, findings.removed)
+        _note(LogStage.OUTCOME, summary, output=output)
+        return ImportOutcome(
+            move_status="RenameRequested",
+            reason=summary,
+            media_file=output,
+            # Hand the unembedded subtitles back so they are not silently lost.
+            extra_files=tuple(
+                r.track.path
+                for r in rejected
+                if r.track.kind == "subtitles" and r.code not in _NOT_HANDED_BACK
+            ),
+            prevent_extra_import=True,
+            added_tracks=findings.added,
+            rejected_tracks=findings.rejected,
+            removed_tracks=findings.removed,
+        )
+
+    def _check_paths(self, request: ImportRequest) -> tuple[Path, Path]:
+        try:
+            source = self._guard.check_read(request.source_path)
+            destination = self._guard.check_destination(request.destination_path)
         except MuxarrError as exc:
-            return _defer(f"path rejected: {exc}", stage=LogStage.GUARD)
+            raise _DeferError(f"path rejected: {exc}", LogStage.GUARD) from exc
 
         _note(
             LogStage.GUARD,
@@ -100,14 +163,15 @@ class HandleImportUseCase:
             destination=destination,
             mode=request.transfer_mode,
         )
-
         if not source.is_file():
-            return _defer(f"source does not exist: {source}", stage=LogStage.GUARD)
+            raise _DeferError(f"source does not exist: {source}", LogStage.GUARD)
+        return source, destination
 
+    def _probe_source(self, source: Path) -> MediaInfo:
         try:
             info = self._prober.probe(source)
         except MuxarrError as exc:
-            return _defer(f"could not probe source: {exc}", stage=LogStage.PROBE)
+            raise _DeferError(f"could not probe source: {exc}", LogStage.PROBE) from exc
 
         _note(LogStage.PROBE, f"source already holds {_inventory(info)}", container=info.container)
         for existing in info.tracks:
@@ -117,27 +181,34 @@ class HandleImportUseCase:
                     name=existing.name,
                     forced=existing.forced,
                 ).debug(f"existing {existing.kind} track: {existing.language}")
+        return info
 
-        policy = settings.selection_policy
-        pruning = selection.prune(info, policy)
-        removals = tuple(_removal(t) for t in pruning.removed)
+    def _prune(self, info: MediaInfo) -> selection.Pruning:
+        pruning = selection.prune(info, self._settings.selection_policy)
+        why = selection.REJECT_REASONS["language_not_kept"]
         for stripped in pruning.removed:
             _note(
                 LogStage.SELECTION,
-                f"stripping source {_summarise_existing(stripped)}: {selection.LANGUAGE_NOT_KEPT}",
+                f"stripping source {_summarise_existing(stripped)}: {why}",
                 track_id=stripped.index,
             )
+        return pruning
+
+    def _choose(
+        self, request: ImportRequest, source: Path, pruning: selection.Pruning
+    ) -> tuple[tuple[ExternalTrack, ...], tuple[selection.Rejection, ...]]:
+        settings = self._settings
+        policy = settings.selection_policy
 
         candidates = self._tracks.discover(source, episode=request.episode_ref)
         if not candidates and not pruning:
-            return _defer("no external tracks found beside the source", stage=LogStage.DISCOVERY)
+            raise _DeferError("no external tracks found beside the source", LogStage.DISCOVERY)
 
         if candidates:
-            by_ai = sum(1 for c in candidates if c.source == "ai")
             _note(
                 LogStage.DISCOVERY,
                 f"found {len(candidates)} sidecar file(s) worth considering",
-                identified_by_ai=by_ai,
+                identified_by_ai=sum(1 for c in candidates if c.source == "ai"),
             )
         else:
             _note(LogStage.DISCOVERY, "no sidecar files found; remuxing only to strip tracks")
@@ -151,9 +222,10 @@ class HandleImportUseCase:
             keep_audio=",".join(settings.keep_audio_languages) or "all",
             keep_subtitles=",".join(settings.keep_subtitle_languages) or "all",
         )
-        chosen = selection.select(pruning.kept, candidates, policy)
+        present, missing = _split_missing(candidates)
+        chosen = selection.select(pruning.kept, present, policy)
         accepted, unreadable = self._drop_unreadable(chosen.accepted)
-        rejected = (*chosen.rejected, *unreadable)
+        rejected = (*missing, *chosen.rejected, *unreadable)
 
         for track in accepted:
             _note(
@@ -161,114 +233,70 @@ class HandleImportUseCase:
                 f"embedding {_summarise(track)}, {_origin(track)}",
                 file=track.path.name,
             )
-        for track, why in rejected:
+        for rejection in rejected:
             _note(
                 LogStage.SELECTION,
-                f"skipping {_summarise(track)}: {why}",
-                file=track.path.name,
+                f"skipping {_summarise(rejection.track)}: {rejection.reason}",
+                file=rejection.track.path.name,
             )
+        return accepted, rejected
 
-        rejections = tuple(_rejection(t, why) for t, why in rejected)
-        if not accepted and not pruning:
-            reasons = "; ".join(f"{r.track}: {r.reason}" for r in rejections)
-            return _defer(
-                f"nothing worth embedding ({reasons or 'no candidates'})",
-                rejected_tracks=rejections,
-            )
-
-        if info.audio and not pruning.kept.audio and not any(t.kind == "audio" for t in accepted):
-            languages = ", ".join(sorted({t.language for t in info.audio}))
-            return _defer(
-                f"the keep list would strip every audio track ({languages}), "
-                "leaving the file silent",
-                stage=LogStage.SELECTION,
-                rejected_tracks=rejections,
-            )
-
+    def _check_output(self, destination: Path) -> Path:
         output = destination.with_suffix(OUTPUT_SUFFIX)
         try:
-            guard.check_destination(output)
+            self._guard.check_destination(output)
         except MuxarrError as exc:
-            return _defer(
-                f"output path rejected: {exc}",
-                stage=LogStage.GUARD,
-                rejected_tracks=rejections,
-            )
+            raise _DeferError(f"output path rejected: {exc}", LogStage.GUARD) from exc
+        return output
 
-        details = tuple(_detail(t) for t in accepted)
-
-        if request.dry_run:
-            return _defer(
-                "dry run",
-                added_tracks=details,
-                rejected_tracks=rejections,
-                removed_tracks=removals,
-            )
-
+    def _mux(
+        self,
+        request: ImportRequest,
+        source: Path,
+        info: MediaInfo,
+        pruning: selection.Pruning,
+        tracks: Sequence[ExternalTrack],
+        output: Path,
+    ) -> None:
         placement = PlacementPolicy(
-            scratch_dir=settings.scratch_dir,
-            free_space_factor=settings.free_space_factor,
-            preserve_ownership=settings.preserve_ownership,
+            scratch_dir=self._settings.scratch_dir,
+            free_space_factor=self._settings.free_space_factor,
+            preserve_ownership=self._settings.preserve_ownership,
         )
-
         try:
-            self._ensure_room(source, accepted, output, placement)
+            self._ensure_room(source, tracks, output, placement)
             _note(
                 LogStage.MUX,
                 f"remuxing into {output.name}",
-                tracks=len(details),
-                stripped=len(removals),
+                tracks=len(tracks),
+                stripped=len(pruning.removed),
             )
-            self._mux_into_place(request, info, pruning, accepted, output, placement)
+            self._mux_into_place(request, info, pruning, tracks, output, placement)
         except MuxarrError as exc:
-            return _defer(
-                f"mux failed, leaving the import to *arr: {exc}",
-                stage=LogStage.MUX,
-                added_tracks=details,
-                rejected_tracks=rejections,
-                removed_tracks=removals,
-            )
-
-        summary = _summary(details, removals)
-        _note(LogStage.OUTCOME, summary, output=output)
-        return ImportOutcome(
-            move_status="RenameRequested",
-            reason=summary,
-            media_file=output,
-            # Hand back the sidecars we did not embed so they are not silently lost,
-            # except those the user asked to be rid of.
-            extra_files=tuple(
-                t.path
-                for t, why in rejected
-                if t.kind == "subtitles" and why != selection.LANGUAGE_NOT_KEPT
-            ),
-            prevent_extra_import=True,
-            added_tracks=details,
-            rejected_tracks=rejections,
-            removed_tracks=removals,
-        )
+            reason = f"mux failed, leaving the import to *arr: {exc}"
+            raise _DeferError(reason, LogStage.MUX) from exc
 
     def _drop_unreadable(
         self, accepted: Sequence[ExternalTrack]
-    ) -> tuple[tuple[ExternalTrack, ...], tuple[tuple[ExternalTrack, str], ...]]:
+    ) -> tuple[tuple[ExternalTrack, ...], tuple[selection.Rejection, ...]]:
         """Split off the sidecars mkvmerge cannot get a track out of.
 
         One identify per file is nothing next to discovering the same thing after
         a remux that has already been running for hours.
         """
         usable: list[ExternalTrack] = []
-        unreadable: list[tuple[ExternalTrack, str]] = []
+        unreadable: list[selection.Rejection] = []
 
         for track in accepted:
             try:
                 probed = self._prober.probe(track.path)
             except MuxarrError as exc:
-                unreadable.append((track, f"the file could not be inspected: {exc}"))
+                unreadable.append(selection.Rejection(track, "uninspectable", str(exc)))
                 continue
             if probed.tracks:
                 usable.append(track)
             else:
-                unreadable.append((track, "the file holds no track mkvmerge can read"))
+                unreadable.append(selection.Rejection(track, "no_tracks"))
 
         return tuple(usable), tuple(unreadable)
 
@@ -280,9 +308,7 @@ class HandleImportUseCase:
         policy: PlacementPolicy,
     ) -> None:
         required = source.stat().st_size + sum(t.path.stat().st_size for t in tracks)
-        self._placement.ensure_free_space(
-            output.parent, required, factor=policy.free_space_factor
-        )
+        self._placement.ensure_free_space(output.parent, required, factor=policy.free_space_factor)
 
     def _mux_into_place(
         self,
@@ -318,6 +344,39 @@ def _size_of(path: Path | None) -> int | None:
         return path.stat().st_size
     except OSError:
         return None
+
+
+def _split_missing(
+    candidates: Sequence[ExternalTrack],
+) -> tuple[list[ExternalTrack], list[selection.Rejection]]:
+    present: list[ExternalTrack] = []
+    missing: list[selection.Rejection] = []
+    for track in candidates:
+        if not track.path.is_file():
+            missing.append(selection.Rejection(track, "file_missing"))
+        elif track.path.stat().st_size == 0:
+            missing.append(selection.Rejection(track, "file_empty"))
+        else:
+            present.append(track)
+    return present, missing
+
+
+def _check_worth_muxing(
+    info: MediaInfo,
+    pruning: selection.Pruning,
+    accepted: Sequence[ExternalTrack],
+    rejections: Sequence[RejectedTrack],
+) -> None:
+    if not accepted and not pruning:
+        reasons = "; ".join(f"{r.track}: {r.reason}" for r in rejections)
+        raise _DeferError(f"nothing worth embedding ({reasons or 'no candidates'})")
+
+    if info.audio and not pruning.kept.audio and not any(t.kind == "audio" for t in accepted):
+        languages = ", ".join(sorted({t.language for t in info.audio}))
+        raise _DeferError(
+            f"the keep list would strip every audio track ({languages}), leaving the file silent",
+            LogStage.SELECTION,
+        )
 
 
 def _inventory(info: MediaInfo) -> str:
@@ -374,7 +433,7 @@ def _removal(track: Track) -> RemovedTrack:
         name=track.name,
         codec=track.codec_family,
         forced=track.forced,
-        reason=selection.LANGUAGE_NOT_KEPT,
+        reason=selection.REJECT_REASONS["language_not_kept"],
     )
 
 
@@ -392,11 +451,13 @@ def _detail(track: ExternalTrack) -> TrackDetail:
     )
 
 
-def _rejection(track: ExternalTrack, reason: str) -> RejectedTrack:
+def _rejection(rejection: selection.Rejection) -> RejectedTrack:
+    track = rejection.track
     return RejectedTrack(
         track=track.path.name,
-        reason=reason,
+        reason=rejection.reason,
         kind=track.kind,
         language=track.language,
         source=track.source,
+        code=rejection.code,
     )

@@ -13,8 +13,10 @@ needs mkvmerge or write access to the library. They meet at the `jobs` table.
 ```
 services/backend/src/    api | application | domain | infrastructure | worker | db | schemas | settings | core | cli
 services/backend/tests/  mirrors the layers, plus integration/
-services/frontend/       React + Vite SPA
-scripts/                 the *arr-side shims (they run in Sonarr's container, not ours)
+services/frontend/       React + Vite SPA: api | app | components | features | lib
+scripts/                 the *arr-side shims (they run in Sonarr's container, not ours),
+                         rendered from scripts/src/ by scripts/build_shims.py
+docs/                    user-facing docs: configuration, troubleshooting, upgrading, architecture
 cicd/containers/         the s6-overlay overlay copied into the production image
 alembic/                 under services/backend/
 ```
@@ -57,7 +59,8 @@ alembic/                 under services/backend/
     through `infrastructure/process/runner.py`.
 13. **The shims must stay POSIX sh.** No `[[`, no `local`, no `function name()`;
     they run under dash and busybox ash. `tests/integration/test_shim.py` greps
-    for the banned constructs.
+    for the banned constructs. Edit `scripts/src/muxarr-import.sh.in` and run
+    `make shims`; the rendered files are committed and a test checks they match.
 14. **Logging is loguru.** `get_logger(LogComponent.X)` at module level, context
     as keyword arguments (`log.info("import settled", job_id=..., status=...)`),
     never `%s` interpolation and never `logging.getLogger`. `LogComponent` is a
@@ -71,13 +74,30 @@ alembic/                 under services/backend/
     built with an f-string -- loguru formats it, and a brace in a filename would
     otherwise blow up.
 16. **Comments explain why, not what.**
+17. **The UI's wire types are generated.** Response models inherit `WireModel`
+    (`schemas/base.py`) so defaulted fields stay required in the schema. After
+    changing one, run `make gen-api`; `tests/api/test_openapi.py` fails on a
+    stale `services/frontend/openapi.json`, and CI on a stale `schema.gen.ts`.
+18. **Code keys off `RejectCode`, never off a reason's prose.** The prose is for
+    humans and may be reworded; `selection.REJECT_REASONS` maps one to the other.
 
 ## Commands
 
 ```bash
+make help                      # every target below, from the repo root
+make setup                     # uv sync + npm ci
+make check                     # lint + typecheck + both suites + shim/version guards
+make dev                       # the dev container: API, worker, Vite on :5173
+make gen-api                   # after changing a response model
+make shims                     # after editing scripts/src/muxarr-import.sh.in
+```
+
+The underlying commands:
+
+```bash
 cd services/backend
 uv sync
-uv run ruff check .
+uv run ruff check . && uv run ruff format --check .
 uv run python -m mypy          # strict; src/ only
 uv run pytest -q               # ~30s; test_shim spawns real /bin/sh + HTTP servers
 uv run alembic upgrade head
@@ -88,6 +108,7 @@ uv run python -m src.worker
 cd services/frontend
 npm run dev                    # proxies /v1 to VITE_API_PROXY_TARGET
 npm run build
+npm run gen:api                # openapi.json -> src/api/schema.gen.ts
 
 docker compose -f compose.dev.yaml up --build
 docker build -f Dockerfile.all-in-one -t muxarr:latest .
