@@ -39,6 +39,15 @@ class CommandResult:
         """Last few lines of stderr, for error messages."""
         return "\n".join(self.stderr.strip().splitlines()[-lines:])
 
+    def output_tail(self, lines: int = 20) -> str:
+        """Last few lines of both streams.
+
+        mkvmerge prints ``Warning:`` to stdout and only ``Error:`` to stderr, so a
+        stderr-only tail silently drops the one message that explains a bad mux.
+        """
+        merged = f"{self.stdout}\n{self.stderr}".strip().splitlines()
+        return "\n".join(line for line in merged[-lines:] if line.strip())
+
 
 def resolve_tool(name: str) -> str:
     path = shutil.which(name)

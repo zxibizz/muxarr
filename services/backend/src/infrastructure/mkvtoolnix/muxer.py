@@ -89,9 +89,11 @@ def run_mux(
     result = run(argv, timeout=timeout, deprioritise=True)
 
     if result.returncode == MKVMERGE_WARNING_EXIT:
-        log.warning("mkvmerge completed with warnings", output=plan.output, tail=result.tail(5))
+        log.warning(
+            "mkvmerge completed with warnings", output=plan.output, tail=result.output_tail(10)
+        )
     elif not result.ok:
-        raise MuxError(f"mkvmerge failed (exit {result.returncode}): {result.tail()}")
+        raise MuxError(f"mkvmerge failed (exit {result.returncode}): {result.output_tail()}")
 
     if not plan.output.is_file():
         raise MuxError(f"mkvmerge reported success but produced no output at {plan.output}")
@@ -112,11 +114,15 @@ def verify(plan: MuxPlan, source_info: MediaInfo) -> MediaInfo:
         expected = sum(1 for t in plan.tracks if t.kind == kind)
         if expected == 0:
             continue
+        landed = info.of_kind(kind)
         required = len(source_info.of_kind(kind)) + expected
-        actual = len(info.of_kind(kind))
-        if actual < required:
+        if len(landed) < required:
+            # Name what did land: mkvmerge silently drops a sidecar it cannot read,
+            # and the difference is the only way to tell which one.
+            got = ", ".join(f"{t.language}/{t.name or '-'}" for t in landed) or "none"
             raise MuxError(
-                f"expected at least {required} {kind} tracks in {plan.output}, found {actual}"
+                f"expected at least {required} {kind} tracks in {plan.output}, "
+                f"found {len(landed)} ({got})"
             )
 
     return info
