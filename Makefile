@@ -48,4 +48,4 @@ shims: ## Render the *arr shims from scripts/src
 	python3 scripts/build_shims.py
 
 image: ## Build the production image as muxarr:local
-	docker build -f Dockerfile.all-in-one -t muxarr:local .
+	docker build -t muxarr:local .

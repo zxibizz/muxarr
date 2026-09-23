@@ -32,3 +32,12 @@ Then:
 
 Downgrading across a migration is not supported: bring the old database back
 from your backup instead.
+
+## Moving to Postgres or a split deployment
+
+Pointing `MUXARR_DB_URL` at Postgres starts from an empty database: the history
+and the Settings page overrides in `/config/muxarr.db` are not copied over. Note
+down any settings you changed in the UI first. Pending imports are not lost as
+long as the old container has finished its queue before you switch.
+
+If you build the image yourself: `Dockerfile.all-in-one` is now `Dockerfile`.

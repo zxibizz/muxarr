@@ -14,6 +14,16 @@ within the same major version.
 
 ### Added
 
+- **Run the API and the worker as separate containers.** One image, three modes:
+  `MUXARR_MODE=all` (the default, unchanged), `web` (API and UI, never muxes)
+  and `worker` (muxes, serves nothing). `compose.split.example.yaml` wires the
+  two up with Postgres. The web container runs the migrations; the worker waits
+  for them. In worker mode the healthcheck reads the worker's heartbeat.
+- **Postgres support.** `MUXARR_DB_URL=postgresql+asyncpg://...` (a bare
+  `postgres://` URL works too). An unsupported URL now fails at startup, without
+  echoing the password.
+- `python -m src.cli wait-for-schema` and `python -m src.cli worker-alive`, which
+  the container uses for the above.
 - **Keep only the languages you want.** `MUXARR_KEEP_AUDIO_LANGUAGES` and
   `MUXARR_KEEP_SUBTITLE_LANGUAGES` (also editable in the UI) strip every other
   audio or subtitle track from the source during the remux, and stop sidecars
@@ -38,6 +48,9 @@ within the same major version.
 
 ### Changed
 
+- **`Dockerfile.all-in-one` is now `Dockerfile`** (its s6 overlay moved to
+  `cicd/containers/prod/`). Only matters if you build the image yourself.
+- History search ignores case on every database (it already did on SQLite).
 - The UI now runs on React 19, Mantine 9 and TanStack Query, which replaces
   three hand-rolled polling loops.
 - The README was cut to what a new user needs; the configuration reference,
@@ -49,6 +62,8 @@ within the same major version.
 
 ### Fixed
 
+- **File sizes are stored as 64-bit integers** (migrated on start), which
+  Postgres needs for anything over 2 GiB.
 - **A sidecar that disappeared before muxing is no longer handed back to *arr**
   as an extra file.
 - **An `MUXARR_AI_API_KEY` set in the environment now pins the key field** in

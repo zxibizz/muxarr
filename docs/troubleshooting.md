@@ -15,7 +15,13 @@ sure `MUXARR_READ_ROOTS` covers both the download and the library path.
 The worker process is not running or cannot reach the database. It heartbeats
 every 5s and is considered stale after 30s. Look for worker lines in the
 container logs; a crash loop usually means `/config` is not writable by
-`PUID:PGID`.
+`PUID:PGID`. In a split deployment, check that the worker container is up and
+has the same `MUXARR_DB_URL` as the web container.
+
+**The worker container restarts every two minutes, logging `schema not ready`.**
+It waits for the web container to migrate the database and gives up after two
+minutes. Either the web container is not running, it is on a different database
+(compare `MUXARR_DB_URL`), or the two run different image versions.
 
 **Imports fail after roughly a minute, and Radarr/Sonarr report a script error.**
 The reverse proxy is cutting the long poll. nginx's `proxy_read_timeout` must be

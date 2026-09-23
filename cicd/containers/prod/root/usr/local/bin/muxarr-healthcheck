@@ -1,0 +1,13 @@
+#!/bin/sh
+# Docker runs this outside s6, from the container's own environment.
+case "${MUXARR_MODE:-all}" in
+    worker)
+        # As PUID so a SQLite database is never touched by root.
+        export HOME=/config
+        exec /command/s6-applyuidgid -u "${PUID:-1000}" -g "${PGID:-1000}" \
+            /app/.venv/bin/python -m src.cli worker-alive
+        ;;
+    *)
+        exec curl -fsS http://127.0.0.1:8710/healthz
+        ;;
+esac

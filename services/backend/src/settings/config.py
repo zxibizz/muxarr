@@ -23,6 +23,10 @@ DEFAULT_HOST = "127.0.0.1"
 # The container mounts a volume here; anything else has to set MUXARR_DB_URL.
 DEFAULT_DB_URL = "sqlite+aiosqlite:////config/muxarr.db"
 
+SUPPORTED_DB_SCHEMES = ("sqlite+aiosqlite", "postgresql+asyncpg", "postgresql+psycopg")
+# Bare postgres URLs would make SQLAlchemy reach for psycopg2, which is not installed.
+_DB_SCHEME_ALIASES = {"postgres": "postgresql+asyncpg", "postgresql": "postgresql+asyncpg"}
+
 DEFAULT_AI_BASE_URL = "https://api.openai.com/v1"
 
 # The log is stored inline on the row it explains, so it is capped well below
@@ -156,7 +160,7 @@ class Settings:
             sub_charset=source.get("MUXARR_SUB_CHARSET") or None,
             log_level=source.get("MUXARR_LOG_LEVEL", "INFO").upper(),
             log_json=_parse_bool(source, "MUXARR_LOG_JSON"),
-            db_url=source.get("MUXARR_DB_URL", "").strip() or DEFAULT_DB_URL,
+            db_url=normalise_db_url(source.get("MUXARR_DB_URL", "")),
             ai_mode=ai_mode,
             ai_base_url=source.get("MUXARR_AI_BASE_URL", "").strip() or DEFAULT_AI_BASE_URL,
             ai_api_key=source.get("MUXARR_AI_API_KEY") or None,
@@ -180,6 +184,20 @@ def _parse_roots(raw: str) -> tuple[Path, ...]:
             raise ConfigError(f"MUXARR_READ_ROOTS entries must be absolute paths, got {part!r}")
         roots.append(root)
     return tuple(roots)
+
+
+def normalise_db_url(raw: str) -> str:
+    url = raw.strip() or DEFAULT_DB_URL
+    scheme, sep, rest = url.partition("://")
+    if not sep:
+        raise ConfigError("MUXARR_DB_URL must be a URL such as postgresql+asyncpg://host/db")
+    scheme = _DB_SCHEME_ALIASES.get(scheme.lower(), scheme.lower())
+    # Only the scheme is echoed: the rest of the URL may carry a password.
+    if scheme not in SUPPORTED_DB_SCHEMES:
+        raise ConfigError(
+            f"MUXARR_DB_URL must use one of {list(SUPPORTED_DB_SCHEMES)}, got {scheme!r}"
+        )
+    return f"{scheme}://{rest}"
 
 
 def parse_languages(env: str, raw: str) -> tuple[str, ...]:

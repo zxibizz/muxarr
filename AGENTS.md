@@ -100,6 +100,7 @@ uv sync
 uv run ruff check . && uv run ruff format --check .
 uv run python -m mypy          # strict; src/ only
 uv run pytest -q               # ~30s; test_shim spawns real /bin/sh + HTTP servers
+MUXARR_TEST_POSTGRES_URL=postgresql+asyncpg://... uv run pytest -q   # also runs `db` tests on Postgres
 uv run alembic upgrade head
 uv run alembic revision --autogenerate -m "describe the change"
 uv run python -m src.cli serve   # API only; the worker is a separate process
@@ -111,7 +112,7 @@ npm run build
 npm run gen:api                # openapi.json -> src/api/schema.gen.ts
 
 docker compose -f compose.dev.yaml up --build
-docker build -f Dockerfile.all-in-one -t muxarr:latest .
+docker build -t muxarr:latest .
 ```
 
 The mux integration tests skip without mkvtoolnix and ffmpeg on PATH. The dev
@@ -123,13 +124,27 @@ docker compose -f compose.dev.yaml run --rm muxarr pytest -q
 
 ## Container
 
-One image, four processes under s6-overlay: an `01-prepare` init hook that
-chowns `/config` to `PUID:PGID`, an `02-migrations` hook running
-`alembic upgrade head`, an `03-shims` hook that republishes the \*arr shims into
-`/shims` when that volume is mounted, then `api` (uvicorn on 127.0.0.1:8000,
-started via the `build_app` ASGI factory), `worker` (`python -m src.worker`) and
-`nginx` (:8710, serving `/static` with SPA fallback and proxying `/v1` and
-`/healthz`).
+One image (`Dockerfile`, overlay in `cicd/containers/prod/root/`), processes
+under s6-overlay, picked by `MUXARR_MODE`: `all` (default: api + worker +
+nginx), `web` (api + nginx) or `worker` (worker only). Init hooks: `00-mode`
+validates the mode and warns about SQLite outside `all`; `01-prepare` chowns
+`/config` to `PUID:PGID`; `02-migrations` runs `alembic upgrade head`, except in
+worker mode, which runs `python -m src.cli wait-for-schema` instead (the web
+container owns migrations); `03-shims` republishes the \*arr shims into
+`/shims` when mounted, except in worker mode. Then `api` (uvicorn on
+127.0.0.1:8000, started via the `build_app` ASGI factory), `worker`
+(`python -m src.worker`) and `nginx` (:8710, serving `/static` with SPA fallback
+and proxying `/v1` and `/healthz`). A service outside the mode runs
+`s6-svc -O .` and exits, so s6 leaves it down. `muxarr-healthcheck` curls
+`/healthz`, or in worker mode runs `python -m src.cli worker-alive`.
+
+Every process that drops to `PUID` exports `HOME=/config`: asyncpg probes
+`~/.postgresql` and raises on root's unreadable home.
+
+The database is SQLite (`aiosqlite`) or Postgres (`asyncpg`; alembic swaps in
+`psycopg`). `normalise_db_url` in `settings/config.py` is the single gate for
+both the app and `alembic/env.py`. Split deployments need Postgres and **exactly
+one worker** -- `fail_running` at startup would fail another worker's jobs.
 
 There is no module-level `app`: it would call `Settings.from_env()` at import
 time and make merely importing `src.api.app` depend on a configured

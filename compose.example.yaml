@@ -1,4 +1,7 @@
-# Example deployment. Copy to compose.yaml and adjust paths.
+# Example deployment: one container running the API, the worker and the UI
+# (MUXARR_MODE=all, the default) on SQLite. compose.split.example.yaml runs the
+# API and the worker as separate containers on Postgres. Copy to compose.yaml
+# and adjust paths.
 #
 # THE ONE RULE: every media path must be mounted at the SAME path inside the
 # *arr containers and inside muxarr. Radarr/Sonarr hand muxarr absolute paths;
@@ -20,7 +23,7 @@ services:
     image: ghcr.io/zxibizz/muxarr:0.9.2
     # build:
     #   context: .
-    #   dockerfile: Dockerfile.all-in-one
+    #   dockerfile: Dockerfile
     container_name: muxarr
     restart: unless-stopped
     environment:

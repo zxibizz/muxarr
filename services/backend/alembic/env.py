@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.db import metadata
 from src.domain import models  # noqa: F401  (import registers the tables)
-from src.settings.config import DEFAULT_DB_URL
+from src.settings.config import normalise_db_url
 
 config = context.config
 if config.config_file_name is not None:
@@ -33,7 +33,7 @@ _ASYNC_TO_SYNC = {
 
 
 def _database_url() -> str:
-    url = os.environ.get("MUXARR_DB_URL", "").strip() or DEFAULT_DB_URL
+    url = normalise_db_url(os.environ.get("MUXARR_DB_URL", ""))
     for async_driver, sync_driver in _ASYNC_TO_SYNC.items():
         if url.startswith(f"{async_driver}:"):
             return sync_driver + url[len(async_driver) :]
@@ -61,7 +61,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # SQLite cannot ALTER most things in place.
+            # SQLite cannot ALTER most things in place; elsewhere batch ops run as plain ALTERs.
             render_as_batch=True,
         )
         with context.begin_transaction():

@@ -9,7 +9,7 @@ port of an existing table.
 
 from __future__ import annotations
 
-from sqlalchemy import Index, Integer, String, Text
+from sqlalchemy import BigInteger, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.db import Base
@@ -45,8 +45,9 @@ class Operation(Base):
     # column existed keep the empty list and render as "no log recorded".
     log: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    source_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    output_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # BigInteger: Postgres INTEGER is 32-bit, and a remux is routinely over 2 GiB.
+    source_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    output_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     dry_run: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 

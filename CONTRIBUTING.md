@@ -92,6 +92,16 @@ Check the generated file by hand — autogenerate does not know about SQLite's
 `ALTER TABLE` limits, and existing users will run your migration against a
 database with real data in it. Test the downgrade too.
 
+muxarr runs on SQLite and Postgres, and CI runs the repository tests and the
+migrations against both. To do the same locally, point the suite at a throwaway
+Postgres; every test drops and recreates the tables in it:
+
+```sh
+docker run -d --rm --name muxarr-pg -e POSTGRES_PASSWORD=muxarr -p 5432:5432 postgres:17-alpine
+MUXARR_TEST_POSTGRES_URL=postgresql+asyncpg://postgres:muxarr@localhost:5432/postgres \
+  uv run pytest -q
+```
+
 ## Pull requests
 
 - One topic per PR.

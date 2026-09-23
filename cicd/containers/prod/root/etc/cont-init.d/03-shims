@@ -4,6 +4,11 @@
 # Deliberately not `set -e`: S6_BEHAVIOUR_IF_STAGE2_FAILS=2 would turn a
 # read-only volume into a dead container, and a stale shim still muxes.
 
+if [ "${MUXARR_MODE:-all}" = "worker" ]; then
+    echo "shims: worker mode, the web container publishes them"
+    exit 0
+fi
+
 if [ ! -d /shims ]; then
     echo "shims: /shims is not mounted, nothing to publish"
     exit 0

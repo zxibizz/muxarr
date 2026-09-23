@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
 #
-# Single container: nginx serves the SPA on :8710 and reverse-proxies the API to
-# uvicorn on :8000, both supervised by s6-overlay.
+# One image, three shapes, picked at runtime by MUXARR_MODE (s6-overlay supervises):
+#   all    - nginx on :8710 serving the SPA and proxying the API, uvicorn, worker
+#   web    - nginx + uvicorn only; queues imports, never muxes
+#   worker - the worker only; muxes, serves nothing
+# web and worker meet at the jobs table, so apart they need a shared database.
 
 FROM node:22-alpine AS frontend
 
@@ -76,20 +79,21 @@ COPY services/backend/src /app/src
 COPY services/backend/alembic /app/alembic
 COPY services/backend/alembic.ini /app/alembic.ini
 COPY scripts /app/scripts
-COPY cicd/containers/all-in-one/root/ /
+COPY cicd/containers/prod/root/ /
 
 # Fail the build, not the container, if the venv does not match the interpreter.
-RUN python -c "import src.api.app, src.worker"
+RUN python -c "import src.api.app, src.worker, src.db.migrations, asyncpg, psycopg"
 
 # No s6 `log/` services: each run script folds stderr into stdout so everything
 # lands on `docker logs`, which is where anyone will look first.
-RUN chmod +x /etc/cont-init.d/* /etc/services.d/*/run \
+RUN chmod +x /etc/cont-init.d/* /etc/services.d/*/run /usr/local/bin/muxarr-healthcheck \
     && ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 
 # Match the uid/gid that owns your library -- the same values as the *arr
 # containers' PUID/PGID. muxarr creates the final file, so it needs to.
 ENV PUID=1000 \
     PGID=1000 \
+    MUXARR_MODE=all \
     MUXARR_DB_URL=sqlite+aiosqlite:////config/muxarr.db
 
 # An unmigrated schema is not worth serving against: abort instead.
@@ -99,9 +103,11 @@ ENV S6_SERVICES_GRACETIME=30000
 ENV S6_KILL_GRACETIME=30000
 
 VOLUME ["/config"]
+# Nothing listens in worker mode; there the check reads the worker's heartbeat.
 EXPOSE 8710
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8710/healthz || exit 1
+# The start period covers a worker waiting on the web container's migrations.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ["/usr/local/bin/muxarr-healthcheck"]
 
 ENTRYPOINT ["/init"]

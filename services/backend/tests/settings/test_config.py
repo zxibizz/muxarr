@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from src.settings.config import DEFAULT_AI_BASE_URL, DEFAULT_PORT, ConfigError, Settings
+from src.settings.config import (
+    DEFAULT_AI_BASE_URL,
+    DEFAULT_DB_URL,
+    DEFAULT_PORT,
+    ConfigError,
+    Settings,
+)
 
 
 def env(**overrides: str) -> dict[str, str]:
@@ -58,6 +64,47 @@ def test_defaults() -> None:
 
 def test_history_cap_is_at_least_one() -> None:
     assert Settings.from_env(env(MUXARR_HISTORY_MAX_RECORDS="0")).history_max_records == 1
+
+
+class TestDbUrl:
+    def test_defaults_to_sqlite_in_config(self) -> None:
+        assert Settings.from_env(env()).db_url == DEFAULT_DB_URL
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "postgres://u:p@db:5432/muxarr",
+            "postgresql://u:p@db:5432/muxarr",
+            "POSTGRESQL://u:p@db:5432/muxarr",
+        ],
+    )
+    def test_bare_postgres_urls_get_the_async_driver(self, raw: str) -> None:
+        settings = Settings.from_env(env(MUXARR_DB_URL=raw))
+
+        assert settings.db_url == "postgresql+asyncpg://u:p@db:5432/muxarr"
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "sqlite+aiosqlite:////config/muxarr.db",
+            "postgresql+asyncpg://u:p@db/muxarr",
+            "postgresql+psycopg://u:p@db/muxarr",
+        ],
+    )
+    def test_supported_urls_pass_through(self, raw: str) -> None:
+        assert Settings.from_env(env(MUXARR_DB_URL=raw)).db_url == raw
+
+    def test_an_unsupported_driver_is_rejected_without_echoing_the_password(self) -> None:
+        with pytest.raises(ConfigError, match="mysql") as excinfo:
+            Settings.from_env(env(MUXARR_DB_URL="mysql://u:hunter2@db/muxarr"))
+
+        assert "hunter2" not in str(excinfo.value)
+
+    def test_a_non_url_is_rejected_without_echoing_it(self) -> None:
+        with pytest.raises(ConfigError, match="must be a URL") as excinfo:
+            Settings.from_env(env(MUXARR_DB_URL="u:hunter2@db"))
+
+        assert "hunter2" not in str(excinfo.value)
 
 
 @pytest.mark.parametrize("raw", ["1", "true", "TRUE", "yes", "on"])

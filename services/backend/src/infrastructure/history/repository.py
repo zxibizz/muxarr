@@ -82,10 +82,11 @@ class SqlAlchemyHistoryRepository:
             conditions.append(Operation.app == app)
         if query:
             like = f"%{_escape_like(query)}%"
+            # ilike: Postgres LIKE is case-sensitive, SQLite's is not.
             conditions.append(
-                Operation.title.like(like, escape="\\")
-                | Operation.source_path.like(like, escape="\\")
-                | Operation.reason.like(like, escape="\\")
+                Operation.title.ilike(like, escape="\\")
+                | Operation.source_path.ilike(like, escape="\\")
+                | Operation.reason.ilike(like, escape="\\")
             )
 
         async with self._db.session() as session:

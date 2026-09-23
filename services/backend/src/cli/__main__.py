@@ -7,8 +7,11 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 from src.application.interfaces.muxer import MuxPlan
@@ -43,6 +46,8 @@ def main(argv: list[str] | None = None) -> int:
             "mux": _cmd_mux,
             "serve": _cmd_serve,
             "openapi": _cmd_openapi,
+            "wait-for-schema": _cmd_wait_for_schema,
+            "worker-alive": _cmd_worker_alive,
         }[args.command]
         return handler(args)
     except MuxarrError as exc:
@@ -75,6 +80,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     openapi = sub.add_parser("openapi", help="print the HTTP API's OpenAPI schema as JSON")
     openapi.add_argument("--out", type=Path, default=None, help="write here instead of stdout")
+
+    wait = sub.add_parser(
+        "wait-for-schema",
+        help="block until MUXARR_DB_URL is reachable and migrated to this build's head",
+    )
+    wait.add_argument("--timeout", type=float, default=120.0, help="seconds; exit 1 after")
+    wait.add_argument("--interval", type=float, default=2.0, help="seconds between checks")
+
+    sub.add_parser("worker-alive", help="exit 0 if the worker's heartbeat is fresh, else 1")
 
     return parser
 
@@ -123,6 +137,58 @@ def _cmd_openapi(args: argparse.Namespace) -> int:
     else:
         args.out.write_text(text, encoding="utf-8")
     return 0
+
+
+def _cmd_wait_for_schema(args: argparse.Namespace) -> int:
+    return asyncio.run(_wait_for_schema(args.timeout, args.interval))
+
+
+async def _wait_for_schema(timeout: float, interval: float) -> int:
+    from src.db.migrations import schema_is_current
+    from src.db.session import DBManager
+    from src.settings.config import normalise_db_url
+
+    # Only the URL: waiting on the database should not need the rest configured.
+    db = DBManager(normalise_db_url(os.environ.get("MUXARR_DB_URL", "")))
+    deadline = time.monotonic() + timeout
+    announced = False
+    try:
+        while True:
+            try:
+                if await schema_is_current(db.engine):
+                    return 0
+                reason = "the schema does not match this build's migrations"
+            except Exception as exc:  # the database may simply not be up yet
+                reason = f"{type(exc).__name__}: {exc}"
+            if time.monotonic() >= deadline:
+                print(f"error: schema not ready after {timeout:g}s: {reason}", file=sys.stderr)
+                return 1
+            if not announced:
+                print(f"waiting up to {timeout:g}s for the database schema: {reason}")
+                announced = True
+            await asyncio.sleep(interval)
+    finally:
+        await db.dispose()
+
+
+def _cmd_worker_alive(_args: argparse.Namespace) -> int:
+    return asyncio.run(_worker_alive())
+
+
+async def _worker_alive() -> int:
+    from src.core.container import AppContainer
+    from src.settings.config import Settings
+
+    container = AppContainer(Settings.from_env())
+    try:
+        status = await container.system_status.worker_status()
+    finally:
+        await container.shutdown()
+    if status.alive:
+        return 0
+    seen = status.last_seen_at or "never"
+    print(f"worker heartbeat is stale (last seen: {seen})", file=sys.stderr)
+    return 1
 
 
 def _cmd_plan(args: argparse.Namespace) -> int:

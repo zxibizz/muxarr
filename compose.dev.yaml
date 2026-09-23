@@ -6,7 +6,7 @@
 # UI on http://localhost:5173, API on http://localhost:8000.
 #
 # This is not what production looks like -- there the SPA is a static build
-# behind nginx on a single port, supervised by s6. See Dockerfile.all-in-one.
+# behind nginx on a single port, supervised by s6. See Dockerfile.
 
 services:
   muxarr:

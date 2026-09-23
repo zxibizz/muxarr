@@ -15,7 +15,11 @@ from sqlalchemy.ext.asyncio import (
 
 class DBManager:
     def __init__(self, url: str, *, echo: bool = False) -> None:
-        self._engine: AsyncEngine = create_async_engine(url, echo=echo, future=True)
+        # The worker lives for weeks; without a ping a database restart would fail
+        # the first query on every pooled connection.
+        self._engine: AsyncEngine = create_async_engine(
+            url, echo=echo, future=True, pool_pre_ping=True
+        )
         self._sessions = async_sessionmaker(self._engine, expire_on_commit=False)
 
     @property

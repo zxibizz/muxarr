@@ -100,6 +100,14 @@ async def test_get_unknown_id_returns_none(history: Store) -> None:
     assert await history.get(999) is None
 
 
+async def test_byte_counts_past_32_bits_round_trip(history: Store) -> None:
+    size = 60 * 1024**3
+    found = await history.get(await add(history, source_bytes=size, output_bytes=size + 1))
+
+    assert found is not None
+    assert (found.source_bytes, found.output_bytes) == (size, size + 1)
+
+
 async def test_empty_episodes_round_trip_as_empty_list(history: Store) -> None:
     found = await history.get(await add(history))
 
@@ -165,6 +173,11 @@ class TestListing:
         assert (await history.list(query="Hanaori")).total == 1
         assert (await history.list(query="Надписи")).total == 1
         assert (await history.list(query="mux failed")).total == 1
+
+    async def test_search_ignores_ascii_case(self, history: Store) -> None:
+        await add(history, title="Hanaori.mkv")
+
+        assert (await history.list(query="hANAORI")).total == 1
 
     async def test_filters_combine(self, history: Store) -> None:
         await add(history, app="sonarr", move_status="DeferMove")

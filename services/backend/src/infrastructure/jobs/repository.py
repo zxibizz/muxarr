@@ -1,9 +1,10 @@
-"""Job queue backed by the same SQLite database as the history.
+"""Job queue backed by the same database as the history.
 
 SQLite has no row locking -- ``SELECT ... FOR UPDATE`` is silently a no-op in the
 dialect -- so a job is claimed with a conditional UPDATE and confirmed by its
 rowcount. Two workers racing for the same row means exactly one of them sees
-``rowcount == 1``.
+``rowcount == 1``. The same holds on Postgres under READ COMMITTED: the losing
+UPDATE waits for the winner, re-evaluates ``state = 'pending'`` and matches nothing.
 """
 
 from __future__ import annotations

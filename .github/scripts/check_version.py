@@ -28,6 +28,7 @@ IMAGE_TAG_FILES = (
     Path("README.md"),
     Path("docs/upgrading.md"),
     Path("compose.example.yaml"),
+    Path("compose.split.example.yaml"),
     Path(".github/ISSUE_TEMPLATE/bug_report.yml"),
 )
 IMAGE_TAG = r"ghcr\.io/zxibizz/muxarr:(\d+\.\d+\.\d+)\b"

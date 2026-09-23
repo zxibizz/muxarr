@@ -34,7 +34,7 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_FREE_SPACE_FACTOR` | `1.05` | ✓ | Free space required before a mux, as a multiple of the expected output |
 | `MUXARR_SUB_CHARSET` | *unset* | ✓ | Force a `--sub-charset` for text subtitles, e.g. `windows-1251` |
 | `MUXARR_PRESERVE_OWNERSHIP` | `true` | ✓ | chown output to match the source |
-| `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | | Where the history lives |
+| `MUXARR_DB_URL` | `sqlite+aiosqlite:////config/muxarr.db` | | History, job queue and UI settings. `postgresql+asyncpg://user:pass@host:5432/db` (or plain `postgres://…`) for Postgres, which a split deployment needs — see [Container modes](#container-modes) |
 | `MUXARR_LOG_LEVEL` | `INFO` | ✓ | |
 | `MUXARR_LOG_JSON` | `false` | | One JSON object per record, for log shippers |
 | `MUXARR_AI_MODE` | `off` | ✓ | `off`, `fallback`, `always`, `verify` — see [AI mode](#ai-mode) |
@@ -45,6 +45,7 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_AI_MAX_ENTRIES` | `200` | ✓ | Skip the call entirely above this many sidecars |
 | `MUXARR_AI_NAME_TRACKS` | `false` | ✓ | Let the provider write the track names — see [Track names](#track-names) |
 | `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
+| `MUXARR_MODE` | `all` | | Container image only: `all`, `web` or `worker` — see [Container modes](#container-modes) |
 
 Read roots, the database URL, the bind address, the API token and the scratch
 directory stay environment-only on purpose: they decide what muxarr is allowed
@@ -53,6 +54,35 @@ be able to move.
 
 The AI key is write-only over HTTP. The UI can set or clear it and the daemon
 will say whether one is stored, but it is never sent back to the browser.
+
+## Container modes
+
+The image runs any part of muxarr, picked by `MUXARR_MODE`:
+
+| Mode | Runs | Needs |
+| --- | --- | --- |
+| `all` (default) | nginx on `:8710`, the API, the worker | the media mounts, `/config` |
+| `web` | nginx on `:8710`, the API | the database; no media mounts |
+| `worker` | the worker | the database, the media mounts |
+
+[compose.example.yaml](../compose.example.yaml) is the single `all` container on
+SQLite. [compose.split.example.yaml](../compose.split.example.yaml) runs `web` and
+`worker` apart, on Postgres. When split:
+
+- **Give both containers the same environment.** They read the same Settings
+  page overrides from the database, and a variable set on only one of them locks
+  the field there but not in the other.
+- **The web container migrates the database**; the worker waits up to two
+  minutes for the schema to catch up, then exits so its restart policy retries.
+- **Run exactly one worker.** A starting worker fails every job left `running`,
+  on the assumption that it is the worker that died mid-mux.
+- **The \*arr containers talk to the web container**, and only the worker needs
+  the media mounted at the same paths as the \*arr containers.
+- SQLite still works if both containers share one `/config` volume on one host;
+  they log a warning, because it does not work across machines.
+
+In worker mode nothing listens on `:8710`; the healthcheck reads the worker's
+heartbeat from the database instead.
 
 ## Shim
 

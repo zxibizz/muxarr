@@ -1,0 +1,23 @@
+#!/command/with-contenv sh
+# MUXARR_MODE picks what this container runs; every later hook and service reads it.
+#   all    - api + worker + nginx (the default)
+#   web    - api + nginx: queues imports and serves the UI, never muxes
+#   worker - the worker alone: muxes, needs the library, serves nothing
+
+mode="${MUXARR_MODE:-all}"
+case "${mode}" in
+    all|web|worker) ;;
+    *)
+        echo "MUXARR_MODE must be one of all, web, worker; got '${mode}'" >&2
+        exit 1
+        ;;
+esac
+
+case "${mode}:${MUXARR_DB_URL:-sqlite}" in
+    all:*) ;;
+    *:sqlite*)
+        echo "WARNING: MUXARR_MODE=${mode} on SQLite only works if the web and worker containers share one /config volume on one host; use Postgres to run them apart" >&2
+        ;;
+esac
+
+echo "muxarr mode: ${mode}"

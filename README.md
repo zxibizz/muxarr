@@ -59,7 +59,9 @@ flowchart LR
 The API and the worker are separate processes. The API only queues work and
 reports on it; the worker claims a job, muxes, and writes the result back. That
 split means a worker crash or restart cannot take the API down with it, and a
-long mux never blocks the shim's polls.
+long mux never blocks the shim's polls. By default one container runs both; with
+a Postgres database they can also run as separate containers from the same image
+(`MUXARR_MODE=web` / `worker`, see [Container modes](docs/configuration.md#container-modes)).
 
 The shim queues the remux and then long-polls for the result: each request is
 held open by the API until the job changes state, so the shim learns about
@@ -89,8 +91,9 @@ command line, if you scroll that far.
 
 Imports that have not settled yet are listed the same way and follow their log
 live, so a mux that will take an hour is something you can watch rather than
-guess at. The history is stored in SQLite under `/config`, so it survives
-restarts — mount that volume or you will lose it.
+guess at. The history is stored in SQLite under `/config` (or in Postgres, if
+`MUXARR_DB_URL` points there), so it survives restarts — mount that volume or you
+will lose it.
 
 If `MUXARR_TOKEN` is set, the UI asks for it once and keeps it in the browser's
 local storage.
@@ -113,6 +116,9 @@ local storage.
    > different things in each container, muxarr rejects them and defers.
 
    > `/config` holds the operation history. Migrations run on every start.
+
+   To run the API and the worker as separate containers on Postgres, start from
+   `compose.split.example.yaml` instead.
 
 2. **Share the shims.** They ship inside the muxarr image, which copies them
    into a `muxarr-shims` volume on every start; the \*arr containers mount it

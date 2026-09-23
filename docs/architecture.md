@@ -13,7 +13,7 @@ flowchart LR
         N["nginx :8710<br/>SPA + reverse proxy"]
         API["API<br/>FastAPI, uvicorn"]
         W["worker<br/>owns mkvmerge"]
-        DB[("SQLite<br/>jobs · operations · settings")]
+        DB[("SQLite or Postgres<br/>jobs · operations · settings")]
         N --> API
         API -->|enqueue / long-poll| DB
         W -->|claim / result / heartbeat| DB
@@ -27,11 +27,15 @@ flowchart LR
 
 - **The API never muxes.** It queues work and reports on it. That is what lets
   the worker be restarted, or moved to the machine that holds the library, on
-  its own.
+  its own: the same image runs as `MUXARR_MODE=web` and `MUXARR_MODE=worker`
+  against a shared Postgres (see
+  [Container modes](configuration.md#container-modes)). There must be exactly
+  one worker; a starting worker fails whatever was left `running`.
 - **The worker is the only thing that needs mkvmerge** or write access to the
   library. It claims one job at a time per slot with a conditional `UPDATE`
-  (SQLite has no row locks), runs the synchronous mux on a thread, and writes
-  the outcome and its log back to the job row.
+  (SQLite has no row locks; on Postgres the losing `UPDATE` matches nothing),
+  runs the synchronous mux on a thread, and writes the outcome and its log back
+  to the job row.
 - **The shim long-polls.** Each poll is held open by the API until the job
   changes state, so completion is noticed within a second, while no single
   request lives long enough for a proxy to cut it. The job id is chosen by the

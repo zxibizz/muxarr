@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -10,18 +11,27 @@ from src.db import Base
 from src.db.session import DBManager
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 
+# Opt-in: point at a disposable database; every test drops and recreates its tables.
+POSTGRES_URL = os.environ.get("MUXARR_TEST_POSTGRES_URL", "").strip()
+DB_BACKENDS = ["sqlite", "postgres"] if POSTGRES_URL else ["sqlite"]
 
-@pytest.fixture
-async def db() -> AsyncIterator[DBManager]:
-    """A private in-memory database with the schema applied.
+
+@pytest.fixture(params=DB_BACKENDS)
+async def db(request: pytest.FixtureRequest) -> AsyncIterator[DBManager]:
+    """A private database with the schema applied.
 
     SQLAlchemy gives ``:memory:`` a StaticPool, so every session in one test
     sees the same database.
     """
-    manager = DBManager("sqlite+aiosqlite:///:memory:")
+    url = POSTGRES_URL if request.param == "postgres" else "sqlite+aiosqlite:///:memory:"
+    manager = DBManager(url)
     async with manager.engine.begin() as conn:
+        # A test that died mid-way leaves its tables behind on Postgres.
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield manager
+    async with manager.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     await manager.dispose()
 
 

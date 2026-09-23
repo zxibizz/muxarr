@@ -19,6 +19,21 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      # The repository tests run against this as well as in-memory SQLite.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: muxarr
+          POSTGRES_PASSWORD: muxarr
+          POSTGRES_DB: muxarr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U muxarr -d muxarr"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -52,6 +67,8 @@ jobs:
       # shims relative to the repo root, so this must run from a full checkout.
       - name: Test
         working-directory: services/backend
+        env:
+          MUXARR_TEST_POSTGRES_URL: postgresql+asyncpg://muxarr:muxarr@localhost:5432/muxarr
         run: uv run pytest -q
 
       - name: Check migrations apply from empty
@@ -61,6 +78,17 @@ jobs:
           MUXARR_DB_URL: sqlite+aiosqlite:///./ci-check.db
         run: |
           uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+
+      - name: Check migrations apply from empty (Postgres)
+        working-directory: services/backend
+        env:
+          MUXARR_READ_ROOTS: /tmp
+          MUXARR_DB_URL: postgresql+asyncpg://muxarr:muxarr@localhost:5432/muxarr
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
           uv run alembic downgrade base
 
   frontend:
@@ -118,7 +146,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: Dockerfile.all-in-one
+          file: Dockerfile
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
