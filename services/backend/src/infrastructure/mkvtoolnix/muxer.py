@@ -10,10 +10,13 @@ rewrite the file too, and a source mkvmerge rejects is usually damaged.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from pathlib import Path
+
 from src.application.interfaces.muxer import MuxPlan
 from src.core.logging import get_logger
 from src.domain.enums import LogComponent, TrackKind
-from src.domain.errors import MuxError
+from src.domain.errors import MuxarrError, MuxError
 from src.domain.media import ExternalTrack, MediaInfo
 from src.infrastructure.mkvtoolnix.probe import (
     mkvmerge_version,
@@ -35,6 +38,11 @@ _DIAGNOSTIC_PREFIXES = ("Warning:", "Error:")
 # Per-percent progress lines; on a pipe they are one line each and bury everything.
 _PROGRESS_PREFIX = "Progress:"
 
+# Inside these, mkvmerge keeps the file's own track numbering, so the single
+# track of a sidecar is not necessarily ID 0. Every other sidecar format is read
+# as a bare elementary stream and always is.
+_MATROSKA_SUFFIXES = frozenset({".mka", ".mks", ".mkv", ".mk3d", ".webm"})
+
 
 def diagnostics(result: CommandResult, lines: int = 10) -> str:
     """The interesting part of mkvmerge's output."""
@@ -44,12 +52,43 @@ def diagnostics(result: CommandResult, lines: int = 10) -> str:
     return "\n".join(chosen[-lines:])
 
 
-def build_argv(plan: MuxPlan, executable: str = "mkvmerge") -> list[str]:
+def resolve_selectors(plan: MuxPlan) -> dict[Path, int]:
+    """Map each Matroska sidecar to the track ID mkvmerge will actually give it."""
+    selectors: dict[Path, int] = {}
+    for track in plan.tracks:
+        if track.path.suffix.lower() not in _MATROSKA_SUFFIXES:
+            continue
+        track_id = _first_track_id(track)
+        if track_id is None or track_id == 0:
+            continue
+        log.bind(file=track.path.name, track_id=track_id).debug(
+            "sidecar does not number its track from zero"
+        )
+        selectors[track.path] = track_id
+    return selectors
+
+
+def _first_track_id(track: ExternalTrack) -> int | None:
+    try:
+        info = probe_with_mkvmerge(track.path)
+    except MuxarrError as exc:
+        # Fall back to 0; a sidecar that is truly unreadable is caught by verify().
+        log.bind(file=track.path.name).warning(f"could not probe sidecar: {exc}")
+        return None
+    candidates = info.of_kind(track.kind) or info.tracks
+    return candidates[0].index if candidates else None
+
+
+def build_argv(
+    plan: MuxPlan,
+    executable: str = "mkvmerge",
+    selectors: Mapping[Path, int] | None = None,
+) -> list[str]:
     """Assemble the full mkvmerge argv.
 
     Per-file options must appear *before* the filename they apply to, and track
-    selectors are relative to that file -- hence the ``0:`` prefixes, which target
-    the first (and for a sidecar, only) track inside each external file.
+    selectors are relative to that file -- hence the ``<id>:`` prefixes, which
+    target the one track muxarr wants out of each external file.
     """
     argv: list[str] = [executable, "--output", str(plan.output)]
 
@@ -60,30 +99,30 @@ def build_argv(plan: MuxPlan, executable: str = "mkvmerge") -> list[str]:
     argv.append(str(plan.source))
 
     for track in plan.tracks:
-        argv += _options_for(track, plan)
+        argv += _options_for(track, plan, (selectors or {}).get(track.path, 0))
         argv.append(str(track.path))
 
     return argv
 
 
-def _options_for(track: ExternalTrack, plan: MuxPlan) -> list[str]:
-    options: list[str] = ["--language", f"0:{track.language}"]
+def _options_for(track: ExternalTrack, plan: MuxPlan, selector: int = 0) -> list[str]:
+    options: list[str] = ["--language", f"{selector}:{track.language}"]
 
     if track.name:
-        options += ["--track-name", f"0:{track.name}"]
+        options += ["--track-name", f"{selector}:{track.name}"]
 
     if plan.sub_charset and track.kind == "subtitles":
-        options += ["--sub-charset", f"0:{plan.sub_charset}"]
+        options += ["--sub-charset", f"{selector}:{plan.sub_charset}"]
 
     # Added tracks never claim the default flag; hijacking playback order is a
     # worse failure than the user having to pick the track once.
     if plan.modern_flags:
-        options += ["--default-track-flag", "0:0"]
-        options += ["--forced-display-flag", f"0:{int(track.forced)}"]
-        options += ["--hearing-impaired-flag", f"0:{int(track.hearing_impaired)}"]
+        options += ["--default-track-flag", f"{selector}:0"]
+        options += ["--forced-display-flag", f"{selector}:{int(track.forced)}"]
+        options += ["--hearing-impaired-flag", f"{selector}:{int(track.hearing_impaired)}"]
     else:
-        options += ["--default-track", "0:0"]
-        options += ["--forced-track", f"0:{int(track.forced)}"]
+        options += ["--default-track", f"{selector}:0"]
+        options += ["--forced-track", f"{selector}:{int(track.forced)}"]
 
     return options
 
@@ -98,7 +137,7 @@ def run_mux(
     if not plan.tracks:
         raise MuxError("refusing to mux with no external tracks")
 
-    argv = build_argv(plan, resolve_tool("mkvmerge"))
+    argv = build_argv(plan, resolve_tool("mkvmerge"), resolve_selectors(plan))
     result = run(argv, timeout=timeout, deprioritise=True)
 
     if result.returncode == MKVMERGE_WARNING_EXIT:
