@@ -24,7 +24,7 @@ import { theme } from '../app/theme';
 /** Everything main.tsx provides except the router, so App can bring its own. */
 export function renderWithProviders(ui: ReactElement) {
   return render(
-    <MantineProvider theme={theme} forceColorScheme="dark">
+    <MantineProvider theme={theme} forceColorScheme="dark" env="test">
       <Notifications />
       <AppProviders>{ui}</AppProviders>
     </MantineProvider>,
