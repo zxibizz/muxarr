@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -27,12 +28,15 @@ VIDEO_ONLY = MediaInfo(
 
 
 class StubProber:
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(self, error: Exception | None = None, *, empty: Sequence[Path] = ()) -> None:
         self._error = error
+        self._empty = set(empty)
 
     def probe(self, path: Path) -> MediaInfo:
         if self._error is not None:
             raise self._error
+        if path in self._empty:
+            return MediaInfo(path=path, container="Matroska", tracks=())
         return VIDEO_ONLY
 
 
@@ -41,12 +45,14 @@ class StubMuxer:
 
     def __init__(self, error: Exception | None = None) -> None:
         self.written: list[Path] = []
+        self.plans: list[MuxPlan] = []
         self._error = error
 
     def supports_modern_flags(self) -> bool:
         return True
 
     def run(self, plan: MuxPlan, source_info: MediaInfo, *, timeout: float) -> MediaInfo:
+        self.plans.append(plan)
         if self._error is not None:
             raise self._error
         plan.output.parent.mkdir(parents=True, exist_ok=True)
@@ -274,6 +280,37 @@ class TestSuccessfulMux:
         assert outcome.move_status == "DeferMove"
         assert outcome.reason == "dry run"
         assert [t.label for t in outcome.added_tracks] == ["Russian"]
+        assert muxer.written == []
+
+
+class TestUnreadableSidecars:
+    """mkvmerge silently ignores a file it can get no track out of, so we pre-empt it."""
+
+    def test_one_bad_sidecar_does_not_sink_the_whole_import(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        good = touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.srt", "1\n")
+        bad = touch(layout["release"] / "Some.Movie.2024.1080p-GRP.ger.mka", b"junk")
+        handler = use_case(settings, prober=StubProber(empty=[bad]), muxer=muxer)
+
+        outcome = handler.execute(request_for(layout))
+
+        assert outcome.move_status == "RenameRequested"
+        assert [t.path for t in muxer.plans[0].tracks] == [good]
+        assert [r.reason for r in outcome.rejected_tracks] == [
+            "the file holds no track mkvmerge can read"
+        ]
+
+    def test_it_defers_when_that_leaves_nothing(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        bad = touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.mka", b"junk")
+        handler = use_case(settings, prober=StubProber(empty=[bad]), muxer=muxer)
+
+        outcome = handler.execute(request_for(layout))
+
+        assert outcome.move_status == "DeferMove"
+        assert "nothing worth embedding" in outcome.reason
         assert muxer.written == []
 
 

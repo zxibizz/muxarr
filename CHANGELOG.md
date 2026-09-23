@@ -14,6 +14,16 @@ within the same major version.
 
 ### Fixed
 
+- **Sidecars in a Matroska container (`.mka`) are now addressed by their real
+  track number.** mkvmerge keeps a file's own numbering, so a `.mka` whose track
+  is not numbered 0 had its language, title and flags silently ignored, and the
+  import was deferred after a full remux had already run.
+- **A sidecar mkvmerge can read no track out of is now rejected up front**,
+  with the reason recorded against it, instead of sinking the whole import.
+  The remaining tracks are embedded as normal.
+- **mkvmerge's diagnostics are no longer discarded.** It writes warnings to
+  stdout and only errors to stderr, so the message explaining a bad mux never
+  reached the log.
 - **The image no longer fails to start after the Python 3.14 base-image bump.**
   The dependencies were still installed for Python 3.11, so the 3.14
   interpreter could not import any of them. They are now installed on the same

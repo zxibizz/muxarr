@@ -138,21 +138,24 @@ class HandleImportUseCase:
             skip_undetermined=policy.skip_undetermined_language,
         )
         chosen = selection.select(info, candidates, policy)
-        for track in chosen.accepted:
+        accepted, unreadable = self._drop_unreadable(chosen.accepted)
+        rejected = (*chosen.rejected, *unreadable)
+
+        for track in accepted:
             _note(
                 LogStage.SELECTION,
                 f"embedding {_summarise(track)}, {_origin(track)}",
                 file=track.path.name,
             )
-        for track, why in chosen.rejected:
+        for track, why in rejected:
             _note(
                 LogStage.SELECTION,
                 f"skipping {_summarise(track)}: {why}",
                 file=track.path.name,
             )
 
-        rejections = tuple(_rejection(t, why) for t, why in chosen.rejected)
-        if not chosen.accepted:
+        rejections = tuple(_rejection(t, why) for t, why in rejected)
+        if not accepted:
             reasons = "; ".join(f"{r.track}: {r.reason}" for r in rejections)
             return _defer(
                 f"nothing worth embedding ({reasons or 'no candidates'})",
@@ -169,7 +172,7 @@ class HandleImportUseCase:
                 rejected_tracks=rejections,
             )
 
-        details = tuple(_detail(t) for t in chosen.accepted)
+        details = tuple(_detail(t) for t in accepted)
 
         if request.dry_run:
             return _defer(
@@ -185,9 +188,9 @@ class HandleImportUseCase:
         )
 
         try:
-            self._ensure_room(source, chosen.accepted, output, placement)
+            self._ensure_room(source, accepted, output, placement)
             _note(LogStage.MUX, f"remuxing into {output.name}", tracks=len(details))
-            self._mux_into_place(request, info, chosen.accepted, output, placement)
+            self._mux_into_place(request, info, accepted, output, placement)
         except MuxarrError as exc:
             return _defer(
                 f"mux failed, leaving the import to *arr: {exc}",
@@ -202,11 +205,35 @@ class HandleImportUseCase:
             reason=f"embedded {len(details)} external track(s)",
             media_file=output,
             # Hand back the sidecars we did not embed so they are not silently lost.
-            extra_files=tuple(t.path for t, _ in chosen.rejected if t.kind == "subtitles"),
+            extra_files=tuple(t.path for t, _ in rejected if t.kind == "subtitles"),
             prevent_extra_import=True,
             added_tracks=details,
             rejected_tracks=rejections,
         )
+
+    def _drop_unreadable(
+        self, accepted: Sequence[ExternalTrack]
+    ) -> tuple[tuple[ExternalTrack, ...], tuple[tuple[ExternalTrack, str], ...]]:
+        """Split off the sidecars mkvmerge cannot get a track out of.
+
+        One identify per file is nothing next to discovering the same thing after
+        a remux that has already been running for hours.
+        """
+        usable: list[ExternalTrack] = []
+        unreadable: list[tuple[ExternalTrack, str]] = []
+
+        for track in accepted:
+            try:
+                probed = self._prober.probe(track.path)
+            except MuxarrError as exc:
+                unreadable.append((track, f"the file could not be inspected: {exc}"))
+                continue
+            if probed.tracks:
+                usable.append(track)
+            else:
+                unreadable.append((track, "the file holds no track mkvmerge can read"))
+
+        return tuple(usable), tuple(unreadable)
 
     def _ensure_room(
         self,
