@@ -20,7 +20,7 @@ from src.infrastructure.mkvtoolnix.probe import (
     probe_with_mkvmerge,
     supports_modern_flag_syntax,
 )
-from src.infrastructure.process.runner import resolve_tool, run
+from src.infrastructure.process.runner import CommandResult, resolve_tool, run
 
 log = get_logger(LogComponent.INFRA_MUX)
 
@@ -29,6 +29,19 @@ log = get_logger(LogComponent.INFRA_MUX)
 MUX_TIMEOUT = 4 * 60 * 60.0
 
 MKVMERGE_WARNING_EXIT = 1
+
+# mkvmerge's own prefixes for the lines that actually explain a bad mux.
+_DIAGNOSTIC_PREFIXES = ("Warning:", "Error:")
+# Per-percent progress lines; on a pipe they are one line each and bury everything.
+_PROGRESS_PREFIX = "Progress:"
+
+
+def diagnostics(result: CommandResult, lines: int = 10) -> str:
+    """The interesting part of mkvmerge's output."""
+    output = result.output_lines()
+    flagged = [line for line in output if line.startswith(_DIAGNOSTIC_PREFIXES)]
+    chosen = flagged or [line for line in output if not line.startswith(_PROGRESS_PREFIX)]
+    return "\n".join(chosen[-lines:])
 
 
 def build_argv(plan: MuxPlan, executable: str = "mkvmerge") -> list[str]:
@@ -89,11 +102,9 @@ def run_mux(
     result = run(argv, timeout=timeout, deprioritise=True)
 
     if result.returncode == MKVMERGE_WARNING_EXIT:
-        log.warning(
-            "mkvmerge completed with warnings", output=plan.output, tail=result.output_tail(10)
-        )
+        log.bind(output=plan.output).warning(f"mkvmerge warned: {diagnostics(result)}")
     elif not result.ok:
-        raise MuxError(f"mkvmerge failed (exit {result.returncode}): {result.output_tail()}")
+        raise MuxError(f"mkvmerge failed (exit {result.returncode}): {diagnostics(result, 20)}")
 
     if not plan.output.is_file():
         raise MuxError(f"mkvmerge reported success but produced no output at {plan.output}")

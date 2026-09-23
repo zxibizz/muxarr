@@ -39,14 +39,14 @@ class CommandResult:
         """Last few lines of stderr, for error messages."""
         return "\n".join(self.stderr.strip().splitlines()[-lines:])
 
-    def output_tail(self, lines: int = 20) -> str:
-        """Last few lines of both streams.
+    def output_lines(self) -> list[str]:
+        """Non-empty lines of both streams, in stdout-then-stderr order.
 
         mkvmerge prints ``Warning:`` to stdout and only ``Error:`` to stderr, so a
-        stderr-only tail silently drops the one message that explains a bad mux.
+        stderr-only view silently drops the one message that explains a bad mux.
         """
-        merged = f"{self.stdout}\n{self.stderr}".strip().splitlines()
-        return "\n".join(line for line in merged[-lines:] if line.strip())
+        merged = f"{self.stdout}\n{self.stderr}".splitlines()
+        return [line.strip() for line in merged if line.strip()]
 
 
 def resolve_tool(name: str) -> str:
