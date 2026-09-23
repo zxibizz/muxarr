@@ -24,10 +24,10 @@ from src.application.interfaces.track_source import TrackDiscovery
 from src.application.use_cases.imports.dto import OUTPUT_SUFFIX, ImportOutcome, ImportRequest
 from src.core.logging import get_logger
 from src.domain import selection
-from src.domain.enums import LogComponent
+from src.domain.enums import LogComponent, TrackKind
 from src.domain.errors import MuxarrError
-from src.domain.journal import LogStage, RejectedTrack, TrackDetail
-from src.domain.media import ExternalTrack, MediaInfo
+from src.domain.journal import LogStage, RejectedTrack, RemovedTrack, TrackDetail
+from src.domain.media import ExternalTrack, MediaInfo, Track
 from src.domain.paths import PathGuard, resolve
 from src.settings.config import Settings
 
@@ -118,26 +118,40 @@ class HandleImportUseCase:
                     forced=existing.forced,
                 ).debug(f"existing {existing.kind} track: {existing.language}")
 
+        policy = settings.selection_policy
+        pruning = selection.prune(info, policy)
+        removals = tuple(_removal(t) for t in pruning.removed)
+        for stripped in pruning.removed:
+            _note(
+                LogStage.SELECTION,
+                f"stripping source {_summarise_existing(stripped)}: {selection.LANGUAGE_NOT_KEPT}",
+                track_id=stripped.index,
+            )
+
         candidates = self._tracks.discover(source, episode=request.episode_ref)
-        if not candidates:
+        if not candidates and not pruning:
             return _defer("no external tracks found beside the source", stage=LogStage.DISCOVERY)
 
-        by_ai = sum(1 for c in candidates if c.source == "ai")
-        _note(
-            LogStage.DISCOVERY,
-            f"found {len(candidates)} sidecar file(s) worth considering",
-            identified_by_ai=by_ai,
-        )
+        if candidates:
+            by_ai = sum(1 for c in candidates if c.source == "ai")
+            _note(
+                LogStage.DISCOVERY,
+                f"found {len(candidates)} sidecar file(s) worth considering",
+                identified_by_ai=by_ai,
+            )
+        else:
+            _note(LogStage.DISCOVERY, "no sidecar files found; remuxing only to strip tracks")
 
-        policy = settings.selection_policy
         _note(
             LogStage.SELECTION,
             f"comparing against the container, de-duplicating by {policy.dedupe}",
             max_tracks=policy.max_external_tracks,
             skip_image_subtitles=policy.skip_image_subtitles,
             skip_undetermined=policy.skip_undetermined_language,
+            keep_audio=",".join(settings.keep_audio_languages) or "all",
+            keep_subtitles=",".join(settings.keep_subtitle_languages) or "all",
         )
-        chosen = selection.select(info, candidates, policy)
+        chosen = selection.select(pruning.kept, candidates, policy)
         accepted, unreadable = self._drop_unreadable(chosen.accepted)
         rejected = (*chosen.rejected, *unreadable)
 
@@ -155,10 +169,19 @@ class HandleImportUseCase:
             )
 
         rejections = tuple(_rejection(t, why) for t, why in rejected)
-        if not accepted:
+        if not accepted and not pruning:
             reasons = "; ".join(f"{r.track}: {r.reason}" for r in rejections)
             return _defer(
                 f"nothing worth embedding ({reasons or 'no candidates'})",
+                rejected_tracks=rejections,
+            )
+
+        if info.audio and not pruning.kept.audio and not any(t.kind == "audio" for t in accepted):
+            languages = ", ".join(sorted({t.language for t in info.audio}))
+            return _defer(
+                f"the keep list would strip every audio track ({languages}), "
+                "leaving the file silent",
+                stage=LogStage.SELECTION,
                 rejected_tracks=rejections,
             )
 
@@ -179,6 +202,7 @@ class HandleImportUseCase:
                 "dry run",
                 added_tracks=details,
                 rejected_tracks=rejections,
+                removed_tracks=removals,
             )
 
         placement = PlacementPolicy(
@@ -189,26 +213,39 @@ class HandleImportUseCase:
 
         try:
             self._ensure_room(source, accepted, output, placement)
-            _note(LogStage.MUX, f"remuxing into {output.name}", tracks=len(details))
-            self._mux_into_place(request, info, accepted, output, placement)
+            _note(
+                LogStage.MUX,
+                f"remuxing into {output.name}",
+                tracks=len(details),
+                stripped=len(removals),
+            )
+            self._mux_into_place(request, info, pruning, accepted, output, placement)
         except MuxarrError as exc:
             return _defer(
                 f"mux failed, leaving the import to *arr: {exc}",
                 stage=LogStage.MUX,
                 added_tracks=details,
                 rejected_tracks=rejections,
+                removed_tracks=removals,
             )
 
-        _note(LogStage.OUTCOME, f"embedded {len(details)} external track(s)", output=output)
+        summary = _summary(details, removals)
+        _note(LogStage.OUTCOME, summary, output=output)
         return ImportOutcome(
             move_status="RenameRequested",
-            reason=f"embedded {len(details)} external track(s)",
+            reason=summary,
             media_file=output,
-            # Hand back the sidecars we did not embed so they are not silently lost.
-            extra_files=tuple(t.path for t, _ in rejected if t.kind == "subtitles"),
+            # Hand back the sidecars we did not embed so they are not silently lost,
+            # except those the user asked to be rid of.
+            extra_files=tuple(
+                t.path
+                for t, why in rejected
+                if t.kind == "subtitles" and why != selection.LANGUAGE_NOT_KEPT
+            ),
             prevent_extra_import=True,
             added_tracks=details,
             rejected_tracks=rejections,
+            removed_tracks=removals,
         )
 
     def _drop_unreadable(
@@ -251,6 +288,7 @@ class HandleImportUseCase:
         self,
         request: ImportRequest,
         info: MediaInfo,
+        pruning: selection.Pruning,
         tracks: Sequence[ExternalTrack],
         output: Path,
         policy: PlacementPolicy,
@@ -264,6 +302,8 @@ class HandleImportUseCase:
                 tracks=tuple(tracks),
                 modern_flags=modern,
                 sub_charset=self._settings.sub_charset,
+                keep_audio=_kept_ids(pruning, "audio"),
+                keep_subtitles=_kept_ids(pruning, "subtitles"),
             )
             self._muxer.run(plan, info, timeout=self._settings.mux_timeout_seconds)
             self._placement.finalise(staging, output, policy)
@@ -302,6 +342,40 @@ def _origin(track: ExternalTrack) -> str:
     if track.source == "ai":
         return "identified by the AI provider"
     return "identified from its filename"
+
+
+def _summarise_existing(track: Track) -> str:
+    label = track.name or track.language
+    forced = " (forced)" if track.forced else ""
+    return f"{track.kind} {label} [{track.language}]{forced}, track {track.index}"
+
+
+def _summary(details: Sequence[TrackDetail], removals: Sequence[RemovedTrack]) -> str:
+    parts = []
+    if details:
+        parts.append(f"embedded {len(details)} external track(s)")
+    if removals:
+        parts.append(f"removed {len(removals)} source track(s)")
+    return ", ".join(parts)
+
+
+def _kept_ids(pruning: selection.Pruning, kind: TrackKind) -> tuple[int, ...] | None:
+    """The source IDs mkvmerge should copy, or None when this kind is left alone."""
+    if not any(t.kind == kind for t in pruning.removed):
+        return None
+    return tuple(t.index for t in pruning.kept.of_kind(kind))
+
+
+def _removal(track: Track) -> RemovedTrack:
+    return RemovedTrack(
+        index=track.index,
+        kind=track.kind,
+        language=track.language,
+        name=track.name,
+        codec=track.codec_family,
+        forced=track.forced,
+        reason=selection.LANGUAGE_NOT_KEPT,
+    )
 
 
 def _detail(track: ExternalTrack) -> TrackDetail:

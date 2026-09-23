@@ -132,6 +132,26 @@ export function OperationDetail({ operation, onClose }: Props) {
             )}
           </Field>
 
+          {operation.removed_tracks.length > 0 && (
+            <Field label={`Removed from source (${operation.removed_tracks.length})`}>
+              <List size="sm" spacing={4}>
+                {operation.removed_tracks.map((removed) => (
+                  <List.Item key={`${removed.kind}:${removed.index}`}>
+                    <Text size="sm" span fw={500}>
+                      {removed.kind} · {removed.name ?? removed.language} ({removed.language}
+                      {removed.codec && `, ${removed.codec}`}
+                      {removed.forced && ', forced'})
+                    </Text>
+                    <Text size="sm" span c="dimmed">
+                      {' '}
+                      — track {removed.index}, {removed.reason}
+                    </Text>
+                  </List.Item>
+                ))}
+              </List>
+            </Field>
+          )}
+
           <Divider />
 
           <Field label="What happened">

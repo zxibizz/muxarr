@@ -11,8 +11,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from src.domain.enums import AiMode, DedupeMode
+from src.domain.enums import UNDETERMINED, AiMode, DedupeMode
 from src.domain.errors import MuxarrError
+from src.domain.language import normalise_language
 from src.domain.selection import SelectionPolicy
 
 DEFAULT_PORT = 8710
@@ -62,6 +63,9 @@ class Settings:
     skip_image_subtitles: bool = False
     skip_undetermined_language: bool = False
     max_external_tracks: int = 24
+    # Languages to keep; any other track in the source or a sidecar is dropped.
+    keep_audio_languages: tuple[str, ...] = ()
+    keep_subtitle_languages: tuple[str, ...] = ()
     mux_timeout_seconds: float = 4 * 60 * 60.0
     free_space_factor: float = 1.05
     preserve_ownership: bool = True
@@ -95,6 +99,8 @@ class Settings:
             max_external_tracks=self.max_external_tracks,
             skip_image_subtitles=self.skip_image_subtitles,
             skip_undetermined_language=self.skip_undetermined_language,
+            keep_audio_languages=frozenset(self.keep_audio_languages),
+            keep_subtitle_languages=frozenset(self.keep_subtitle_languages),
         )
 
     @classmethod
@@ -143,6 +149,12 @@ class Settings:
             skip_image_subtitles=_parse_bool(source, "MUXARR_SKIP_IMAGE_SUBTITLES"),
             skip_undetermined_language=_parse_bool(source, "MUXARR_SKIP_UNDETERMINED"),
             max_external_tracks=_parse_int(source, "MUXARR_MAX_TRACKS", 24),
+            keep_audio_languages=parse_languages(
+                "MUXARR_KEEP_AUDIO_LANGUAGES", source.get("MUXARR_KEEP_AUDIO_LANGUAGES", "")
+            ),
+            keep_subtitle_languages=parse_languages(
+                "MUXARR_KEEP_SUBTITLE_LANGUAGES", source.get("MUXARR_KEEP_SUBTITLE_LANGUAGES", "")
+            ),
             mux_timeout_seconds=_parse_float(source, "MUXARR_MUX_TIMEOUT", 4 * 60 * 60.0),
             free_space_factor=_parse_float(source, "MUXARR_FREE_SPACE_FACTOR", 1.05),
             preserve_ownership=_parse_bool(source, "MUXARR_PRESERVE_OWNERSHIP", default=True),
@@ -173,6 +185,21 @@ def _parse_roots(raw: str) -> tuple[Path, ...]:
             raise ConfigError(f"MUXARR_READ_ROOTS entries must be absolute paths, got {part!r}")
         roots.append(root)
     return tuple(roots)
+
+
+def parse_languages(env: str, raw: str) -> tuple[str, ...]:
+    """A comma-separated language list as canonical ISO 639-2/B codes, in order, deduplicated."""
+    codes: list[str] = []
+    for part in raw.split(","):
+        token = part.strip().lower()
+        if not token:
+            continue
+        code = UNDETERMINED if token == UNDETERMINED else normalise_language(token)
+        if code is None:
+            raise ConfigError(f"{env} holds an unknown language {part.strip()!r}")
+        if code not in codes:
+            codes.append(code)
+    return tuple(codes)
 
 
 def _parse_bool(source: Mapping[str, str], key: str, *, default: bool = False) -> bool:

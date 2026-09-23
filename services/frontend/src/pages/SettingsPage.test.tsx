@@ -42,6 +42,24 @@ describe('SettingsPage', () => {
     expect(JSON.parse(String(patch?.[1]?.body))).toMatchObject({ max_external_tracks: 3 });
   });
 
+  it('saves the keep lists as arrays', async () => {
+    const fetchStub = stubFetch({
+      settings: someSettings({ keep_audio_languages: ['eng'] }),
+    });
+    await loaded();
+
+    const subtitles = screen.getByRole('textbox', { name: /^keep subtitle languages/i });
+    await userEvent.type(subtitles, 'rus,');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+
+    await screen.findByText(/saved/i);
+    const patch = fetchStub.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.[1]?.body))).toMatchObject({
+      keep_audio_languages: ['eng'],
+      keep_subtitle_languages: ['rus'],
+    });
+  });
+
   it('surfaces a rejected value instead of pretending it saved', async () => {
     stubFetch({ statusByPath: { '/v1/settings': 422 } });
     renderPage();

@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -277,6 +278,58 @@ def test_reimport_of_the_result_is_a_noop(
 
     assert second.move_status == "DeferMove"
     assert "no external tracks" in second.reason
+
+
+def _make_multilingual(release: dict[str, Path], scratch: Path) -> None:
+    """Rewrite the fixture video to hold English and French audio plus a German subtitle."""
+    french = make_audio(scratch / "fre.ac3")
+    german = scratch / "ger.srt"
+    german.write_text(SRT, encoding="utf-8")
+    multi = scratch / "multi.mkv"
+    _run(
+        [
+            "mkvmerge", "-q", "-o", str(multi),
+            "--language", "1:eng", str(release["video"]),
+            "--language", "0:fre", str(french),
+            "--language", "0:ger", str(german),
+        ]
+    )
+    multi.replace(release["video"])
+
+
+def test_tracks_outside_the_keep_lists_are_stripped(
+    release: dict[str, Path], settings: Settings, tmp_path: Path
+) -> None:
+    _make_multilingual(release, tmp_path / "scratch")
+    (release["release"] / "Movie.2024-GRP.rus.srt").write_text(SRT, encoding="utf-8")
+    keep = replace(settings, keep_audio_languages=("eng",), keep_subtitle_languages=("rus",))
+
+    outcome = handle_import(import_request(release), keep)
+
+    assert outcome.move_status == "RenameRequested", outcome.reason
+    assert outcome.media_file is not None
+    languages = {
+        kind: [t["properties"]["language"] for t in of_type(outcome.media_file, kind)]  # type: ignore[index]
+        for kind in ("audio", "subtitles")
+    }
+    assert languages == {"audio": ["eng"], "subtitles": ["rus"]}
+    assert sorted(r.language for r in outcome.removed_tracks) == ["fre", "ger"]
+
+
+def test_a_cleanup_only_remux_needs_no_sidecar(
+    release: dict[str, Path], settings: Settings, tmp_path: Path
+) -> None:
+    _make_multilingual(release, tmp_path / "scratch")
+
+    outcome = handle_import(
+        import_request(release), replace(settings, keep_audio_languages=("fre",))
+    )
+
+    assert outcome.move_status == "RenameRequested", outcome.reason
+    assert outcome.media_file is not None
+    audio = of_type(outcome.media_file, "audio")
+    assert [t["properties"]["language"] for t in audio] == ["fre"]  # type: ignore[index]
+    assert len(of_type(outcome.media_file, "subtitles")) == 1
 
 
 def _snapshot(root: Path) -> dict[str, tuple[str, int]]:

@@ -39,6 +39,8 @@ class Operation(Base):
     episodes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     added_tracks: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
     rejected_tracks: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
+    # The source's own tracks the keep lists stripped, as JSON.
+    removed_tracks: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
     # Every log record the import emitted, as JSON. Rows written before this
     # column existed keep the empty list and render as "no log recorded".
     log: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")

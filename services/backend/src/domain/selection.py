@@ -10,9 +10,12 @@ from dataclasses import dataclass
 
 from src.domain.codecs import IMAGE_SUBTITLE_FAMILIES
 from src.domain.enums import DedupeMode, TrackKind
-from src.domain.media import ExternalTrack, MediaInfo
+from src.domain.language import normalise_language
+from src.domain.media import ExternalTrack, MediaInfo, Track
 
 _KIND_ORDER: dict[TrackKind, int] = {"video": 0, "audio": 1, "subtitles": 2}
+
+LANGUAGE_NOT_KEPT = "language is not in the keep list"
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +24,55 @@ class SelectionPolicy:
     max_external_tracks: int = 24
     skip_image_subtitles: bool = False
     skip_undetermined_language: bool = False
+    # Empty means every language of that kind is kept.
+    keep_audio_languages: frozenset[str] = frozenset()
+    keep_subtitle_languages: frozenset[str] = frozenset()
+
+    def keeps(self, kind: TrackKind, language: str) -> bool:
+        wanted = self._keep_list(kind)
+        return not wanted or canonical_language(language) in wanted
+
+    def prunes(self, kind: TrackKind) -> bool:
+        return bool(self._keep_list(kind))
+
+    def _keep_list(self, kind: TrackKind) -> frozenset[str]:
+        if kind == "audio":
+            return self.keep_audio_languages
+        if kind == "subtitles":
+            return self.keep_subtitle_languages
+        return frozenset()
+
+
+@dataclass(frozen=True, slots=True)
+class Pruning:
+    """The source's own tracks split into those that survive the remux and those that don't."""
+
+    kept: MediaInfo
+    removed: tuple[Track, ...]
+
+    def __bool__(self) -> bool:
+        return bool(self.removed)
+
+
+def canonical_language(code: str) -> str:
+    """One spelling per language, so ``ger`` and ``deu`` compare equal."""
+    return normalise_language(code) or code.strip().lower()
+
+
+def prune(existing: MediaInfo, policy: SelectionPolicy | None = None) -> Pruning:
+    """Decide which of the source's audio and subtitle tracks the keep lists drop."""
+    policy = policy or SelectionPolicy()
+    kept: list[Track] = []
+    removed: list[Track] = []
+    for track in existing.tracks:
+        if policy.keeps(track.kind, track.language):
+            kept.append(track)
+        else:
+            removed.append(track)
+    return Pruning(
+        kept=MediaInfo(path=existing.path, container=existing.container, tracks=tuple(kept)),
+        removed=tuple(removed),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +135,8 @@ def _reject_reason(candidate: ExternalTrack, policy: SelectionPolicy) -> str | N
         return "image-based subtitle excluded by policy"
     if policy.skip_undetermined_language and candidate.language == "und":
         return "language could not be determined"
+    if not policy.keeps(candidate.kind, candidate.language):
+        return LANGUAGE_NOT_KEPT
     if not candidate.path.is_file():
         return "file disappeared before muxing"
     if candidate.path.stat().st_size == 0:

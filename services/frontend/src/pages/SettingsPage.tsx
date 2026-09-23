@@ -9,6 +9,7 @@ import {
   Select,
   Stack,
   Switch,
+  TagsInput,
   Text,
   TextInput,
 } from '@mantine/core';
@@ -44,6 +45,8 @@ const ENV_VARS: Record<SettingsField, string> = {
   skip_undetermined_language: 'MUXARR_SKIP_UNDETERMINED',
   max_external_tracks: 'MUXARR_MAX_TRACKS',
   sub_charset: 'MUXARR_SUB_CHARSET',
+  keep_audio_languages: 'MUXARR_KEEP_AUDIO_LANGUAGES',
+  keep_subtitle_languages: 'MUXARR_KEEP_SUBTITLE_LANGUAGES',
   mux_timeout_seconds: 'MUXARR_MUX_TIMEOUT',
   free_space_factor: 'MUXARR_FREE_SPACE_FACTOR',
   preserve_ownership: 'MUXARR_PRESERVE_OWNERSHIP',
@@ -200,7 +203,7 @@ export function SettingsPage() {
 
         <SettingsSection
           title="Track selection"
-          description="Which external tracks get embedded, and which are dropped."
+          description="Which external tracks get embedded, and which tracks are dropped."
         >
           <Select
             label="Duplicate handling"
@@ -220,6 +223,24 @@ export function SettingsPage() {
             placeholder="auto-detect"
             {...form.getInputProps('sub_charset')}
             {...lockProps('sub_charset')}
+          />
+          <TagsInput
+            label="Keep audio languages"
+            description="Strip every other audio track, in the source and in sidecars. Empty keeps all."
+            placeholder="eng, rus, und"
+            splitChars={[',', ' ']}
+            clearable
+            {...form.getInputProps('keep_audio_languages')}
+            {...lockProps('keep_audio_languages')}
+          />
+          <TagsInput
+            label="Keep subtitle languages"
+            description="Strip every other subtitle track, in the source and in sidecars. Empty keeps all."
+            placeholder="eng, rus"
+            splitChars={[',', ' ']}
+            clearable
+            {...form.getInputProps('keep_subtitle_languages')}
+            {...lockProps('keep_subtitle_languages')}
           />
           <Switch
             label="Skip image subtitles"

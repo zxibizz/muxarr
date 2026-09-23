@@ -31,6 +31,16 @@ class RejectedTrackModel(BaseModel):
     source: TrackSource = "heuristic"
 
 
+class RemovedTrackModel(BaseModel):
+    index: int
+    kind: TrackKind = "subtitles"
+    language: str = UNDETERMINED
+    name: str | None = None
+    codec: str = ""
+    forced: bool = False
+    reason: str = ""
+
+
 class LogEntryModel(BaseModel):
     ts: str
     level: str

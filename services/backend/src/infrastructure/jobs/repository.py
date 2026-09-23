@@ -26,7 +26,7 @@ from src.application.interfaces.jobs import (
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.db.session import DBManager
 from src.domain.enums import App, JobState, MoveStatus
-from src.domain.journal import LogEntry, RejectedTrack, TrackDetail
+from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.models import Job
 
 # How many pending rows to try before giving up on a claim pass. Only matters
@@ -218,6 +218,7 @@ def _outcome_to_json(outcome: ImportOutcome) -> dict[str, Any]:
         "prevent_extra_import": outcome.prevent_extra_import,
         "added_tracks": [t.to_dict() for t in outcome.added_tracks],
         "rejected_tracks": [r.to_dict() for r in outcome.rejected_tracks],
+        "removed_tracks": [r.to_dict() for r in outcome.removed_tracks],
         "duration_ms": outcome.duration_ms,
         "source_bytes": outcome.source_bytes,
         "output_bytes": outcome.output_bytes,
@@ -236,6 +237,9 @@ def _outcome_from_json(payload: str) -> ImportOutcome:
         added_tracks=tuple(TrackDetail.from_stored(t) for t in data.get("added_tracks", ())),
         rejected_tracks=tuple(
             RejectedTrack.from_stored(r) for r in data.get("rejected_tracks", ())
+        ),
+        removed_tracks=tuple(
+            RemovedTrack.from_stored(r) for r in data.get("removed_tracks", ())
         ),
         duration_ms=int(data.get("duration_ms", 0)),
         source_bytes=data.get("source_bytes"),

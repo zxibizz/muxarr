@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.db.session import DBManager
-from src.domain.journal import LogEntry, RejectedTrack, TrackDetail
+from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.models import Operation
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 
@@ -38,6 +38,9 @@ async def test_round_trip(history: Store) -> None:
         rejected_tracks=[
             RejectedTrack(track="eng.srt", reason="already present in container", language="eng")
         ],
+        removed_tracks=[
+            RemovedTrack(index=2, kind="audio", language="fre", name="French", forced=True)
+        ],
         log=[
             LogEntry(
                 ts="2026-01-01T00:00:00Z",
@@ -61,6 +64,9 @@ async def test_round_trip(history: Store) -> None:
     assert found.added_tracks == [a_track(file="rus.srt", source="ai")]
     assert found.rejected_tracks == [
         RejectedTrack(track="eng.srt", reason="already present in container", language="eng")
+    ]
+    assert found.removed_tracks == [
+        RemovedTrack(index=2, kind="audio", language="fre", name="French", forced=True)
     ]
     assert [(e.stage, e.message, e.context) for e in found.log] == [
         ("selection", "embedding subtitles", {"file": "rus.srt"})

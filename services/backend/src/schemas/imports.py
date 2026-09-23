@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from src.application.interfaces.jobs import JobRecord
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
-from src.schemas.journal import LogEntryModel, RejectedTrackModel, TrackModel
+from src.schemas.journal import LogEntryModel, RejectedTrackModel, RemovedTrackModel, TrackModel
 
 # Constrained so a job id cannot smuggle path separators into the URL or control
 # characters into the log.
@@ -45,6 +45,7 @@ class ImportResult(BaseModel):
     prevent_extra_import: bool = False
     added_tracks: list[TrackModel] = Field(default_factory=list)
     rejected_tracks: list[RejectedTrackModel] = Field(default_factory=list)
+    removed_tracks: list[RemovedTrackModel] = Field(default_factory=list)
 
     @classmethod
     def from_outcome(cls, outcome: ImportOutcome) -> ImportResult:
@@ -57,6 +58,9 @@ class ImportResult(BaseModel):
             added_tracks=[TrackModel.model_validate(t.to_dict()) for t in outcome.added_tracks],
             rejected_tracks=[
                 RejectedTrackModel.model_validate(r.to_dict()) for r in outcome.rejected_tracks
+            ],
+            removed_tracks=[
+                RemovedTrackModel.model_validate(r.to_dict()) for r in outcome.removed_tracks
             ],
         )
 

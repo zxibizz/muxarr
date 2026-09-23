@@ -158,6 +158,8 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_SKIP_IMAGE_SUBTITLES` | `false` | ✓ | Exclude PGS/VobSub |
 | `MUXARR_SKIP_UNDETERMINED` | `false` | ✓ | Exclude tracks with unknown language |
 | `MUXARR_MAX_TRACKS` | `24` | ✓ | Cap on embedded tracks |
+| `MUXARR_KEEP_AUDIO_LANGUAGES` | *unset* | ✓ | Comma-separated languages (`eng,rus`, `en`, `russian`) to keep. Every other audio track is stripped from the source and not embedded from sidecars; list `und` to keep untagged tracks. An import that would lose all its audio is left to *arr |
+| `MUXARR_KEEP_SUBTITLE_LANGUAGES` | *unset* | ✓ | The same, for subtitles, forced ones included |
 | `MUXARR_MUX_TIMEOUT` | `14400` | ✓ | Seconds before a single mkvmerge run is killed |
 | `MUXARR_FREE_SPACE_FACTOR` | `1.05` | ✓ | Free space required before a mux, as a multiple of the expected output |
 | `MUXARR_SUB_CHARSET` | *unset* | ✓ | Force a `--sub-charset` for text subtitles, e.g. `windows-1251` |

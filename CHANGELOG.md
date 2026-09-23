@@ -12,6 +12,16 @@ within the same major version.
 
 ## [Unreleased]
 
+### Added
+
+- **Keep only the languages you want.** `MUXARR_KEEP_AUDIO_LANGUAGES` and
+  `MUXARR_KEEP_SUBTITLE_LANGUAGES` (also editable in the UI) strip every other
+  audio or subtitle track from the source during the remux, and stop sidecars
+  in those languages from being embedded or handed back to *arr. A release
+  with no sidecars is now remuxed when there is something to strip. An import
+  that would lose every audio track is left to *arr instead. Each operation
+  lists the tracks it removed (a new `removed_tracks` column, migrated on start).
+
 ### Fixed
 
 - **Sidecars in a Matroska container (`.mka`) are now addressed by their real

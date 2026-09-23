@@ -15,7 +15,7 @@ import pytest
 from src.application.interfaces.jobs import JobConflictError
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
 from src.db.session import DBManager
-from src.domain.journal import RejectedTrack, TrackDetail
+from src.domain.journal import RejectedTrack, RemovedTrack, TrackDetail
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 
 REQUEST = ImportRequest(
@@ -137,6 +137,9 @@ class TestCompletion:
             prevent_extra_import=True,
             added_tracks=(TrackDetail(kind="subtitles", label="Russian", language="rus"),),
             rejected_tracks=(RejectedTrack(track="eng.srt", reason="already present"),),
+            removed_tracks=(
+                RemovedTrack(index=2, kind="audio", language="fre", codec="ac3", reason="no"),
+            ),
             duration_ms=1234,
             source_bytes=100,
             output_bytes=120,

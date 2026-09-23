@@ -21,7 +21,7 @@ from src.application.interfaces.history import (
     Stats,
 )
 from src.db.session import DBManager
-from src.domain.journal import LogEntry, RejectedTrack, TrackDetail
+from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.models import Operation
 
 
@@ -44,6 +44,7 @@ class SqlAlchemyHistoryRepository:
         episodes: Sequence[int] = (),
         added_tracks: Sequence[TrackDetail] = (),
         rejected_tracks: Sequence[RejectedTrack] = (),
+        removed_tracks: Sequence[RemovedTrack] = (),
         log: Sequence[LogEntry] = (),
         duration_ms: int = 0,
         source_bytes: int | None = None,
@@ -65,6 +66,7 @@ class SqlAlchemyHistoryRepository:
             episodes=",".join(str(e) for e in episodes),
             added_tracks=json.dumps([t.to_dict() for t in added_tracks]),
             rejected_tracks=json.dumps([r.to_dict() for r in rejected_tracks]),
+            removed_tracks=json.dumps([r.to_dict() for r in removed_tracks]),
             log=json.dumps([e.to_dict() for e in log]),
             duration_ms=duration_ms,
             source_bytes=source_bytes,
@@ -210,6 +212,9 @@ def _to_record(row: Operation) -> OperationRecord:
         added_tracks=[TrackDetail.from_stored(t) for t in json.loads(row.added_tracks or "[]")],
         rejected_tracks=[
             RejectedTrack.from_stored(r) for r in json.loads(row.rejected_tracks or "[]")
+        ],
+        removed_tracks=[
+            RemovedTrack.from_stored(r) for r in json.loads(row.removed_tracks or "[]")
         ],
         log=[LogEntry.from_dict(e) for e in json.loads(row.log or "[]")],
         duration_ms=int(row.duration_ms),

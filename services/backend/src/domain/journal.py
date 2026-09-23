@@ -178,8 +178,48 @@ class RejectedTrack:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class RemovedTrack:
+    """A track the source already held that the keep lists stripped from the output."""
+
+    index: int
+    kind: TrackKind
+    language: str = UNDETERMINED
+    name: str | None = None
+    codec: str = ""
+    forced: bool = False
+    reason: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "index": self.index,
+            "kind": self.kind,
+            "language": self.language,
+            "name": self.name,
+            "codec": self.codec,
+            "forced": self.forced,
+            "reason": self.reason,
+        }
+
+    @classmethod
+    def from_stored(cls, payload: object) -> RemovedTrack:
+        if not isinstance(payload, Mapping):
+            return cls(index=-1, kind="subtitles", reason=str(payload))
+        kind = payload.get("kind")
+        index = payload.get("index")
+        return cls(
+            index=index if isinstance(index, int) else -1,
+            kind=kind if kind in ("video", "audio", "subtitles") else "subtitles",
+            language=str(payload.get("language", UNDETERMINED)),
+            name=_optional_str(payload.get("name")),
+            codec=str(payload.get("codec", "")),
+            forced=bool(payload.get("forced", False)),
+            reason=str(payload.get("reason", "")),
+        )
+
+
 def _optional_str(value: object) -> str | None:
     return str(value) if isinstance(value, str) and value else None
 
 
-__all__ = ["LogEntry", "LogStage", "RejectedTrack", "TrackDetail"]
+__all__ = ["LogEntry", "LogStage", "RejectedTrack", "RemovedTrack", "TrackDetail"]

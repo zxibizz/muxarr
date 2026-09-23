@@ -22,6 +22,8 @@ class SettingsView(BaseModel):
     skip_undetermined_language: bool
     max_external_tracks: int
     sub_charset: str | None
+    keep_audio_languages: list[str]
+    keep_subtitle_languages: list[str]
 
     mux_timeout_seconds: float
     free_space_factor: float
@@ -56,6 +58,9 @@ class SettingsPatch(BaseModel):
     skip_undetermined_language: bool | None = None
     max_external_tracks: int | None = Field(default=None, ge=1)
     sub_charset: str | None = None
+    # Null or [] keeps every language.
+    keep_audio_languages: list[str] | None = None
+    keep_subtitle_languages: list[str] | None = None
 
     mux_timeout_seconds: float | None = Field(default=None, ge=1)
     free_space_factor: float | None = Field(default=None, ge=1)

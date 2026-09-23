@@ -25,6 +25,17 @@ export interface RejectedTrack {
   source: TrackSource;
 }
 
+/** A track the source already held that the keep lists stripped. */
+export interface RemovedTrack {
+  index: number;
+  kind: TrackKind;
+  language: string;
+  name: string | null;
+  codec: string;
+  forced: boolean;
+  reason: string;
+}
+
 export type LogStage =
   | 'guard'
   | 'probe'
@@ -60,6 +71,7 @@ export interface Operation {
   episodes: number[];
   added_tracks: AddedTrack[];
   rejected_tracks: RejectedTrack[];
+  removed_tracks: RemovedTrack[];
   log: LogEntry[];
   duration_ms: number;
   source_bytes: number | null;
@@ -158,6 +170,9 @@ export interface EditableSettings {
   skip_undetermined_language: boolean;
   max_external_tracks: number;
   sub_charset: string | null;
+  // Empty keeps every language.
+  keep_audio_languages: string[];
+  keep_subtitle_languages: string[];
 
   mux_timeout_seconds: number;
   free_space_factor: number;

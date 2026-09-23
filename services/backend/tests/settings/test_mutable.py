@@ -42,6 +42,14 @@ class TestApply:
     def test_an_empty_string_clears_an_optional_field(self) -> None:
         assert apply_overrides(BASE, {"sub_charset": ""}).sub_charset is None
 
+    def test_a_language_list_round_trips_through_its_string_form(self) -> None:
+        applied = apply_overrides(
+            BASE, {"keep_audio_languages": to_raw(["eng", "ru"]), "keep_subtitle_languages": ""}
+        )
+
+        assert applied.keep_audio_languages == ("eng", "rus")
+        assert applied.keep_subtitle_languages == ()
+
     def test_a_key_from_an_older_version_is_ignored(self) -> None:
         """A removed setting must not stop the daemon from starting."""
         assert apply_overrides(BASE, {"gone_in_a_later_release": "x"}) == BASE
@@ -60,6 +68,7 @@ class TestApply:
             ("free_space_factor", "0.5"),
             ("log_level", "CHATTY"),
             ("ai_mode", "maybe"),
+            ("keep_audio_languages", "eng,elvish"),
         ],
     )
     def test_an_unusable_value_is_rejected(self, name: str, raw: str) -> None:
@@ -94,7 +103,16 @@ class TestLocking:
 class TestRendering:
     @pytest.mark.parametrize(
         ("value", "expected"),
-        [(True, "true"), (False, "false"), (None, ""), (12, "12"), (1.5, "1.5"), ("x", "x")],
+        [
+            (True, "true"),
+            (False, "false"),
+            (None, ""),
+            (12, "12"),
+            (1.5, "1.5"),
+            ("x", "x"),
+            (["eng", "rus"], "eng,rus"),
+            ((), ""),
+        ],
     )
     def test_values_render_to_their_environment_form(
         self, value: object, expected: str

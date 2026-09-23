@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from src.schemas.journal import LogEntryModel, RejectedTrackModel, TrackModel
+from src.schemas.journal import LogEntryModel, RejectedTrackModel, RemovedTrackModel, TrackModel
 
 
 class OperationModel(BaseModel):
@@ -22,6 +22,7 @@ class OperationModel(BaseModel):
     episodes: list[int] = Field(default_factory=list)
     added_tracks: list[TrackModel] = Field(default_factory=list)
     rejected_tracks: list[RejectedTrackModel] = Field(default_factory=list)
+    removed_tracks: list[RemovedTrackModel] = Field(default_factory=list)
     log: list[LogEntryModel] = Field(default_factory=list)
     duration_ms: int = 0
     source_bytes: int | None = None

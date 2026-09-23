@@ -90,6 +90,30 @@ class TestWrite:
         assert response.status_code == 422
         assert "ai_model" in response.json()["detail"]
 
+    async def test_keep_lists_are_normalised_and_echoed(
+        self, client: AsyncClient, container: AppContainer
+    ) -> None:
+        response = await client.patch(
+            "/v1/settings", json={"keep_audio_languages": ["en", "ja"]}, headers=auth()
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["keep_audio_languages"] == ["eng", "jpn"]
+        assert container.settings.selection_policy.keep_audio_languages == {"eng", "jpn"}
+
+    async def test_an_unknown_language_is_refused(self, client: AsyncClient) -> None:
+        response = await client.patch(
+            "/v1/settings", json={"keep_subtitle_languages": ["zzz"]}, headers=auth()
+        )
+
+        assert response.status_code == 422
+
+    async def test_null_clears_a_keep_list(self, client: AsyncClient) -> None:
+        await client.patch("/v1/settings", json={"keep_audio_languages": ["eng"]}, headers=auth())
+        await client.patch("/v1/settings", json={"keep_audio_languages": None}, headers=auth())
+
+        assert (await get_settings(client))["keep_audio_languages"] == []
+
 
 class TestSecrets:
     async def test_the_key_is_never_returned(self, client: AsyncClient) -> None:

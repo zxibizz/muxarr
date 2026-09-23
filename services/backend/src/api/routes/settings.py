@@ -67,6 +67,8 @@ def _view(container: AppContainer) -> SettingsView:
         skip_undetermined_language=settings.skip_undetermined_language,
         max_external_tracks=settings.max_external_tracks,
         sub_charset=settings.sub_charset,
+        keep_audio_languages=list(settings.keep_audio_languages),
+        keep_subtitle_languages=list(settings.keep_subtitle_languages),
         mux_timeout_seconds=settings.mux_timeout_seconds,
         free_space_factor=settings.free_space_factor,
         preserve_ownership=settings.preserve_ownership,

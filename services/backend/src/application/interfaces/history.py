@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from src.domain.journal import LogEntry, RejectedTrack, TrackDetail
+from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 
 MAX_PAGE_SIZE = 500
 
@@ -32,6 +32,7 @@ class OperationRecord:
     episodes: list[int]
     added_tracks: list[TrackDetail]
     rejected_tracks: list[RejectedTrack]
+    removed_tracks: list[RemovedTrack]
     log: list[LogEntry]
     duration_ms: int
     source_bytes: int | None
@@ -76,6 +77,7 @@ class HistoryRepository(Protocol):
         episodes: Sequence[int] = (),
         added_tracks: Sequence[TrackDetail] = (),
         rejected_tracks: Sequence[RejectedTrack] = (),
+        removed_tracks: Sequence[RemovedTrack] = (),
         log: Sequence[LogEntry] = (),
         duration_ms: int = 0,
         source_bytes: int | None = None,

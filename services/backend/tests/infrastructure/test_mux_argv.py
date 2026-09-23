@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from src.application.interfaces.muxer import MuxPlan
-from src.domain.errors import ProbeError
+from src.domain.errors import MuxError, ProbeError
 from src.domain.media import ExternalTrack, MediaInfo, Track
 from src.infrastructure.mkvtoolnix import muxer as muxer_module
-from src.infrastructure.mkvtoolnix.muxer import build_argv, resolve_selectors
+from src.infrastructure.mkvtoolnix.muxer import build_argv, resolve_selectors, run_mux, verify
 
 
 def plan_for(tmp_path: Path, *tracks: ExternalTrack, modern: bool = True) -> MuxPlan:
@@ -186,3 +187,78 @@ def test_resolve_selectors_prefers_a_track_of_the_expected_kind(
     )
 
     assert resolve_selectors(plan_for(tmp_path, track)) == {track.path: 2}
+
+
+class TestSourcePruning:
+    def plan(self, tmp_path: Path, *tracks: ExternalTrack, **keep: object) -> MuxPlan:
+        return replace(plan_for(tmp_path, *tracks), **keep)  # type: ignore[arg-type]
+
+    def source_options(self, plan: MuxPlan) -> list[str]:
+        argv = build_argv(plan)
+        return argv[3 : argv.index(str(plan.source))]
+
+    def test_nothing_is_added_when_every_track_is_kept(self, tmp_path: Path) -> None:
+        assert self.source_options(self.plan(tmp_path, sub(tmp_path, language="eng"))) == []
+
+    def test_kept_ids_precede_the_source_only(self, tmp_path: Path) -> None:
+        track = sub(tmp_path, language="eng")
+        plan = self.plan(tmp_path, track, keep_audio=(1, 3), keep_subtitles=(5,))
+
+        assert self.source_options(plan) == [
+            "--audio-tracks",
+            "1,3",
+            "--subtitle-tracks",
+            "5",
+        ]
+        argv = build_argv(plan)
+        assert "--audio-tracks" not in argv[argv.index(str(plan.source)) :]
+
+    def test_an_empty_selection_drops_the_kind_entirely(self, tmp_path: Path) -> None:
+        plan = self.plan(tmp_path, keep_audio=(), keep_subtitles=())
+
+        assert self.source_options(plan) == ["--no-audio", "--no-subtitles"]
+
+    def test_run_mux_refuses_only_when_there_is_nothing_to_do(self, tmp_path: Path) -> None:
+        with pytest.raises(MuxError, match="nothing to strip"):
+            run_mux(plan_for(tmp_path), SOURCE)
+
+    def test_verify_counts_only_the_kept_source_tracks(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        stub_probe(monkeypatch, output_with("eng", "rus"))
+        audio = ExternalTrack(path=tmp_path / "rus.mka", kind="audio", language="rus")
+
+        verify(self.plan(tmp_path, audio, keep_audio=(1,)), SOURCE)
+
+    def test_verify_rejects_a_track_that_should_have_gone(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        stub_probe(monkeypatch, output_with("eng", "fre"))
+
+        with pytest.raises(MuxError, match="exactly 1 audio"):
+            verify(self.plan(tmp_path, keep_audio=(1,)), SOURCE)
+
+
+SOURCE = MediaInfo(
+    path=Path("/in.mkv"),
+    container="Matroska",
+    tracks=(
+        Track(index=0, kind="video", codec_id="V_MPEG4/ISO/AVC"),
+        Track(index=1, kind="audio", codec_id="A_AC3", language="eng"),
+        Track(index=2, kind="audio", codec_id="A_AC3", language="fre"),
+    ),
+)
+
+
+def output_with(*audio: str) -> MediaInfo:
+    return MediaInfo(
+        path=Path("/out.mkv"),
+        container="Matroska",
+        tracks=(
+            Track(index=0, kind="video", codec_id="V_MPEG4/ISO/AVC"),
+            *(
+                Track(index=i, kind="audio", codec_id="A_AC3", language=lang)
+                for i, lang in enumerate(audio, start=1)
+            ),
+        ),
+    )

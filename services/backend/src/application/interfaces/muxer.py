@@ -22,6 +22,13 @@ class MuxPlan:
     sub_charset: str | None = None
     title: str | None = None
     extra_args: tuple[str, ...] = field(default=())
+    # mkvmerge IDs of the source's own tracks to keep; None keeps every one of that kind.
+    keep_audio: tuple[int, ...] | None = None
+    keep_subtitles: tuple[int, ...] | None = None
+
+    @property
+    def prunes_source(self) -> bool:
+        return self.keep_audio is not None or self.keep_subtitles is not None
 
 
 class Muxer(Protocol):

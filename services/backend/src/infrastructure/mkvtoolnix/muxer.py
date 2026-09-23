@@ -102,6 +102,8 @@ def build_argv(
         argv += ["--title", plan.title]
 
     argv += list(plan.extra_args)
+    argv += _source_selection("--audio-tracks", "--no-audio", plan.keep_audio)
+    argv += _source_selection("--subtitle-tracks", "--no-subtitles", plan.keep_subtitles)
     argv.append(str(plan.source))
 
     for track in plan.tracks:
@@ -109,6 +111,14 @@ def build_argv(
         argv.append(str(track.path))
 
     return argv
+
+
+def _source_selection(option: str, none: str, keep: tuple[int, ...] | None) -> list[str]:
+    if keep is None:
+        return []
+    if not keep:
+        return [none]
+    return [option, ",".join(str(i) for i in keep)]
 
 
 def _options_for(track: ExternalTrack, plan: MuxPlan, selector: int = 0) -> list[str]:
@@ -140,8 +150,8 @@ def run_mux(
     timeout: float = MUX_TIMEOUT,
 ) -> MediaInfo:
     """Execute the plan and verify the result. Raises :class:`MuxError` on failure."""
-    if not plan.tracks:
-        raise MuxError("refusing to mux with no external tracks")
+    if not plan.tracks and not plan.prunes_source:
+        raise MuxError("refusing to mux with no external tracks and nothing to strip")
 
     argv = build_argv(plan, resolve_tool("mkvmerge"), resolve_selectors(plan))
     result = run(argv, timeout=timeout, deprioritise=True)
@@ -168,17 +178,21 @@ def verify(plan: MuxPlan, source_info: MediaInfo) -> MediaInfo:
     kinds: tuple[TrackKind, ...] = ("audio", "subtitles")
     for kind in kinds:
         expected = sum(1 for t in plan.tracks if t.kind == kind)
-        if expected == 0:
+        keep = plan.keep_audio if kind == "audio" else plan.keep_subtitles
+        if expected == 0 and keep is None:
             continue
         landed = info.of_kind(kind)
-        required = len(source_info.of_kind(kind)) + expected
-        if len(landed) < required:
+        kept = len(source_info.of_kind(kind)) if keep is None else len(keep)
+        required = kept + expected
+        # When stripping, a surplus means a track that should be gone survived.
+        exact = keep is not None
+        if len(landed) < required or (exact and len(landed) != required):
             # Name what did land: mkvmerge silently drops a sidecar it cannot read,
             # and the difference is the only way to tell which one.
             got = ", ".join(f"{t.language}/{t.name or '-'}" for t in landed) or "none"
             raise MuxError(
-                f"expected at least {required} {kind} tracks in {plan.output}, "
-                f"found {len(landed)} ({got})"
+                f"expected {'exactly' if exact else 'at least'} {required} {kind} tracks "
+                f"in {plan.output}, found {len(landed)} ({got})"
             )
 
     return info

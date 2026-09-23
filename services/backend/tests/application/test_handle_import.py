@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from src.domain.errors import MuxError, ProbeError
 from src.domain.media import MediaInfo, Track
 from src.domain.naming import EpisodeRef
 from src.domain.paths import PathGuard
+from src.domain.selection import LANGUAGE_NOT_KEPT
 from src.infrastructure.filesystem.placement import FilesystemPlacement
 from src.infrastructure.filesystem.track_discovery import FilesystemTrackDiscovery
 from src.settings.config import Settings
@@ -28,16 +30,23 @@ VIDEO_ONLY = MediaInfo(
 
 
 class StubProber:
-    def __init__(self, error: Exception | None = None, *, empty: Sequence[Path] = ()) -> None:
+    def __init__(
+        self,
+        error: Exception | None = None,
+        *,
+        empty: Sequence[Path] = (),
+        infos: Mapping[Path, MediaInfo] | None = None,
+    ) -> None:
         self._error = error
         self._empty = set(empty)
+        self._infos = dict(infos or {})
 
     def probe(self, path: Path) -> MediaInfo:
         if self._error is not None:
             raise self._error
         if path in self._empty:
             return MediaInfo(path=path, container="Matroska", tracks=())
-        return VIDEO_ONLY
+        return self._infos.get(path, VIDEO_ONLY)
 
 
 class StubMuxer:
@@ -314,6 +323,136 @@ class TestUnreadableSidecars:
         assert muxer.written == []
 
 
+MULTI_LANGUAGE = MediaInfo(
+    path=Path("/x.mkv"),
+    container="Matroska",
+    tracks=(
+        Track(index=0, kind="video", codec_id="V_MPEG4/ISO/AVC"),
+        Track(index=1, kind="audio", codec_id="A_AC3", language="eng"),
+        Track(index=2, kind="audio", codec_id="A_AC3", language="fre"),
+        Track(index=3, kind="subtitles", codec_id="S_TEXT/UTF8", language="eng"),
+        Track(index=4, kind="subtitles", codec_id="S_TEXT/UTF8", language="ger"),
+    ),
+)
+
+
+class TestKeepLanguages:
+    def handler(
+        self,
+        layout: dict[str, Path],
+        settings: Settings,
+        muxer: StubMuxer,
+        *,
+        audio: tuple[str, ...] = (),
+        subtitles: tuple[str, ...] = (),
+    ) -> HandleImportUseCase:
+        return use_case(
+            replace(settings, keep_audio_languages=audio, keep_subtitle_languages=subtitles),
+            prober=StubProber(infos={layout["source"]: MULTI_LANGUAGE}),
+            muxer=muxer,
+        )
+
+    def test_strips_source_tracks_even_without_sidecars(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(layout, settings, muxer, audio=("eng",), subtitles=("eng",))
+
+        outcome = handler.execute(request_for(layout))
+
+        assert outcome.move_status == "RenameRequested"
+        assert outcome.reason == "removed 2 source track(s)"
+        plan = muxer.plans[0]
+        assert (plan.tracks, plan.keep_audio, plan.keep_subtitles) == ((), (1,), (3,))
+        assert [(r.index, r.language, r.reason) for r in outcome.removed_tracks] == [
+            (2, "fre", LANGUAGE_NOT_KEPT),
+            (4, "ger", LANGUAGE_NOT_KEPT),
+        ]
+
+    def test_a_kind_with_nothing_to_strip_is_left_alone(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(
+            layout, settings, muxer, audio=("eng", "fre"), subtitles=("eng",)
+        )
+
+        handler.execute(request_for(layout))
+
+        assert (muxer.plans[0].keep_audio, muxer.plans[0].keep_subtitles) == (None, (3,))
+
+    def test_nothing_to_strip_and_no_sidecars_still_defers(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(layout, settings, muxer, audio=("eng", "fre"))
+
+        outcome = handler.execute(request_for(layout))
+
+        assert outcome.move_status == "DeferMove"
+        assert "no external tracks" in outcome.reason
+
+    def test_unwanted_sidecars_are_rejected_and_not_handed_back(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.srt", "1\n")
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.spa.srt", "1\n")
+        handler = self.handler(layout, settings, muxer, subtitles=("eng", "rus"))
+
+        outcome = handler.execute(request_for(layout))
+
+        assert outcome.move_status == "RenameRequested"
+        assert outcome.reason == "embedded 1 external track(s), removed 1 source track(s)"
+        assert [t.language for t in muxer.plans[0].tracks] == ["rus"]
+        assert [(r.language, r.reason) for r in outcome.rejected_tracks] == [
+            ("spa", LANGUAGE_NOT_KEPT)
+        ]
+        assert outcome.extra_files == ()
+
+    def test_defers_rather_than_leave_the_file_silent(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(layout, settings, muxer, audio=("rus",))
+
+        outcome = handler.execute(request_for(layout))
+
+        assert outcome.move_status == "DeferMove"
+        assert "silent" in outcome.reason
+        assert muxer.plans == []
+
+    def test_an_audio_sidecar_can_replace_the_stripped_audio(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.ac3", b"audio")
+        handler = self.handler(layout, settings, muxer, audio=("rus",))
+
+        outcome = handler.execute(request_for(layout))
+
+        assert outcome.move_status == "RenameRequested"
+        assert muxer.plans[0].keep_audio == ()
+
+    def test_dry_run_reports_what_would_be_removed(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(layout, settings, muxer, audio=("eng",))
+
+        outcome = handler.execute(request_for(layout, dry_run=True))
+
+        assert outcome.reason == "dry run"
+        assert [r.index for r in outcome.removed_tracks] == [2]
+        assert muxer.plans == []
+
+    def test_each_stripped_track_is_part_of_the_story(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(layout, settings, muxer, audio=("eng",))
+
+        with capture_log(100) as entries:
+            handler.execute(request_for(layout))
+
+        assert any(
+            e.stage == "selection" and "stripping source audio fre" in e.message
+            for e in entries
+        )
+
+
 class TestTheStoryItTells:
     """The narrative the history shows is built from the same records stdout gets."""
 
@@ -372,6 +511,26 @@ def test_download_folder_is_never_modified(
     outcome = use_case(settings, muxer=muxer).execute(
         request_for(layout, transfer_mode=transfer_mode)
     )
+
+    assert outcome.move_status == "RenameRequested"
+    assert _snapshot(layout["downloads"]) == before
+
+
+@pytest.mark.parametrize("transfer_mode", ["Move", "Copy", "HardLinkOrCopy"])
+def test_download_folder_is_never_modified_by_a_cleanup_only_remux(
+    layout: dict[str, Path],
+    settings: Settings,
+    muxer: StubMuxer,
+    transfer_mode: str,
+) -> None:
+    before = _snapshot(layout["downloads"])
+    handler = use_case(
+        replace(settings, keep_audio_languages=("eng",)),
+        prober=StubProber(infos={layout["source"]: MULTI_LANGUAGE}),
+        muxer=muxer,
+    )
+
+    outcome = handler.execute(request_for(layout, transfer_mode=transfer_mode))
 
     assert outcome.move_status == "RenameRequested"
     assert _snapshot(layout["downloads"]) == before

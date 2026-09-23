@@ -15,7 +15,13 @@ import os
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 
-from src.settings.config import _TRUTHY, MAX_OPERATION_LOG_ENTRIES, ConfigError, Settings
+from src.settings.config import (
+    _TRUTHY,
+    MAX_OPERATION_LOG_ENTRIES,
+    ConfigError,
+    Settings,
+    parse_languages,
+)
 
 # loguru's levels; ``from_env`` accepts anything, but a typo chosen in a dropdown
 # would silence the daemon with no way to notice.
@@ -97,6 +103,12 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("skip_undetermined_language", "MUXARR_SKIP_UNDETERMINED", "selection", _as_bool),
     FieldSpec("max_external_tracks", "MUXARR_MAX_TRACKS", "selection", _as_int(1)),
     FieldSpec("sub_charset", "MUXARR_SUB_CHARSET", "selection", _as_optional_text),
+    FieldSpec(
+        "keep_audio_languages", "MUXARR_KEEP_AUDIO_LANGUAGES", "selection", parse_languages
+    ),
+    FieldSpec(
+        "keep_subtitle_languages", "MUXARR_KEEP_SUBTITLE_LANGUAGES", "selection", parse_languages
+    ),
     FieldSpec("mux_timeout_seconds", "MUXARR_MUX_TIMEOUT", "mux", _as_float(1.0)),
     FieldSpec("free_space_factor", "MUXARR_FREE_SPACE_FACTOR", "mux", _as_float(1.0)),
     FieldSpec("preserve_ownership", "MUXARR_PRESERVE_OWNERSHIP", "mux", _as_bool),
@@ -174,4 +186,6 @@ def to_raw(value: object) -> str:
         return ""
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return ",".join(str(item) for item in value)
     return str(value)

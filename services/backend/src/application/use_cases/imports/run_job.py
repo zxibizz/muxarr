@@ -112,6 +112,7 @@ class RunImportJobUseCase:
                 episodes=episode.episodes if episode else (),
                 added_tracks=outcome.added_tracks,
                 rejected_tracks=outcome.rejected_tracks,
+                removed_tracks=outcome.removed_tracks,
                 log=list(entries),
                 duration_ms=outcome.duration_ms,
                 source_bytes=outcome.source_bytes,

@@ -113,6 +113,33 @@ def test_selection_policy_is_derived_from_settings() -> None:
     assert policy.skip_undetermined_language is True
 
 
+class TestKeepLanguages:
+    def test_empty_by_default(self) -> None:
+        settings = Settings.from_env(env())
+
+        assert settings.keep_audio_languages == ()
+        assert settings.selection_policy.keep_subtitle_languages == frozenset()
+
+    def test_aliases_are_normalised_in_order_without_duplicates(self) -> None:
+        settings = Settings.from_env(
+            env(MUXARR_KEEP_AUDIO_LANGUAGES=" EN, russian ,deu,eng, und,")
+        )
+
+        assert settings.keep_audio_languages == ("eng", "rus", "ger", "und")
+
+    def test_an_unknown_language_is_rejected(self) -> None:
+        with pytest.raises(ConfigError, match="MUXARR_KEEP_SUBTITLE_LANGUAGES.*klingon"):
+            Settings.from_env(env(MUXARR_KEEP_SUBTITLE_LANGUAGES="eng,klingon"))
+
+    def test_they_reach_the_selection_policy(self) -> None:
+        policy = Settings.from_env(
+            env(MUXARR_KEEP_AUDIO_LANGUAGES="eng", MUXARR_KEEP_SUBTITLE_LANGUAGES="rus")
+        ).selection_policy
+
+        assert policy.keep_audio_languages == frozenset({"eng"})
+        assert policy.keep_subtitle_languages == frozenset({"rus"})
+
+
 class TestAiMode:
     def test_is_off_by_default(self) -> None:
         settings = Settings.from_env(env())

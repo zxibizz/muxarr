@@ -63,6 +63,38 @@ describe('HistoryPage', () => {
     expect(within(drawer).getAllByText('embedding subtitles English')).toHaveLength(2);
   });
 
+  it('lists the source tracks the keep lists stripped', async () => {
+    stubFetch({
+      history: {
+        items: [
+          anOperation({
+            removed_tracks: [
+              {
+                index: 2,
+                kind: 'audio',
+                language: 'fre',
+                name: 'French',
+                codec: 'ac3',
+                forced: false,
+                reason: 'language is not in the keep list',
+              },
+            ],
+          }),
+        ],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      },
+    });
+    render();
+
+    await userEvent.click(await screen.findByText('Show S01E01'));
+
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByText('Removed from source (1)')).toBeInTheDocument();
+    expect(within(drawer).getByText(/track 2, language is not in the keep list/)).toBeInTheDocument();
+  });
+
   it('says so when an operation has no log', async () => {
     stubFetch({
       history: { items: [anOperation({ log: [] })], total: 1, limit: 25, offset: 0 },
