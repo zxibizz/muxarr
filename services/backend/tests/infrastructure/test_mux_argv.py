@@ -160,6 +160,15 @@ def test_resolve_selectors_falls_back_to_zero_when_the_probe_fails(
     assert resolve_selectors(plan_for(tmp_path, track)) == {}
 
 
+def test_resolve_selectors_falls_back_to_zero_when_the_sidecar_holds_no_track(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    track = ExternalTrack(path=tmp_path / "rus.mka", kind="audio", language="rus")
+    stub_probe(monkeypatch, MediaInfo(path=track.path, container="Matroska", tracks=()))
+
+    assert resolve_selectors(plan_for(tmp_path, track)) == {}
+
+
 def test_resolve_selectors_prefers_a_track_of_the_expected_kind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

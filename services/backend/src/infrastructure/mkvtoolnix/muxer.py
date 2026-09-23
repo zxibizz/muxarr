@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.application.interfaces.muxer import MuxPlan
 from src.core.logging import get_logger
@@ -24,6 +25,9 @@ from src.infrastructure.mkvtoolnix.probe import (
     supports_modern_flag_syntax,
 )
 from src.infrastructure.process.runner import CommandResult, resolve_tool, run
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 log = get_logger(LogComponent.INFRA_MUX)
 
@@ -58,25 +62,27 @@ def resolve_selectors(plan: MuxPlan) -> dict[Path, int]:
     for track in plan.tracks:
         if track.path.suffix.lower() not in _MATROSKA_SUFFIXES:
             continue
-        track_id = _first_track_id(track)
-        if track_id is None or track_id == 0:
+        entry = log.bind(file=track.path.name)
+        track_id = _first_track_id(track, entry)
+        if track_id is None:
             continue
-        log.bind(file=track.path.name, track_id=track_id).debug(
-            "sidecar does not number its track from zero"
-        )
+        entry.debug(f"sidecar {track.kind} track is ID {track_id}")
         selectors[track.path] = track_id
     return selectors
 
 
-def _first_track_id(track: ExternalTrack) -> int | None:
+def _first_track_id(track: ExternalTrack, entry: Logger) -> int | None:
     try:
         info = probe_with_mkvmerge(track.path)
     except MuxarrError as exc:
         # Fall back to 0; a sidecar that is truly unreadable is caught by verify().
-        log.bind(file=track.path.name).warning(f"could not probe sidecar: {exc}")
+        entry.warning(f"could not probe sidecar: {exc}")
         return None
     candidates = info.of_kind(track.kind) or info.tracks
-    return candidates[0].index if candidates else None
+    if not candidates:
+        entry.warning(f"mkvmerge reads no track at all from this {track.kind} sidecar")
+        return None
+    return candidates[0].index
 
 
 def build_argv(
