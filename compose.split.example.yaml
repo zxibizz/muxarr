@@ -1,7 +1,6 @@
 # Split deployment: the web container (API + UI) and the worker (the only thing
 # that muxes) run separately and meet at a shared Postgres database. Copy to
-# compose.yaml, adjust paths and set MUXARR_TOKEN, MUXARR_DB_PASSWORD and
-# ARR_NETWORK in .env.
+# compose.yaml, adjust paths and set MUXARR_DB_PASSWORD and ARR_NETWORK in .env.
 #
 # For a single container on SQLite, use compose.example.yaml instead. This file
 # is for when you want to restart or resource-limit the worker on its own, or
@@ -25,7 +24,6 @@ x-muxarr-env: &muxarr-env
   PUID: ${PUID:-1000}
   PGID: ${PGID:-1000}
   MUXARR_READ_ROOTS: /downloads:/media
-  MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
   # URL-encode the password if it contains anything but letters and digits.
   MUXARR_DB_URL: postgresql+asyncpg://muxarr:${MUXARR_DB_PASSWORD:?set MUXARR_DB_PASSWORD in .env}@postgres:5432/muxarr
   MUXARR_LOG_LEVEL: INFO

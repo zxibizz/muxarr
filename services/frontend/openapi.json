@@ -60,6 +60,77 @@
         "title": "AiTestResult",
         "type": "object"
       },
+      "ApiKeyView": {
+        "properties": {
+          "api_key": {
+            "title": "Api Key",
+            "type": "string"
+          },
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "api_key",
+          "locked"
+        ],
+        "title": "ApiKeyView",
+        "type": "object"
+      },
+      "AuthStatusView": {
+        "properties": {
+          "authenticated": {
+            "title": "Authenticated",
+            "type": "boolean"
+          },
+          "credentials_locked": {
+            "title": "Credentials Locked",
+            "type": "boolean"
+          },
+          "method": {
+            "enum": [
+              "forms",
+              "external"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "required": {
+            "enum": [
+              "enabled",
+              "disabled_for_local_addresses"
+            ],
+            "title": "Required",
+            "type": "string"
+          },
+          "setup_required": {
+            "title": "Setup Required",
+            "type": "boolean"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "method",
+          "required",
+          "setup_required",
+          "authenticated",
+          "username",
+          "credentials_locked"
+        ],
+        "title": "AuthStatusView",
+        "type": "object"
+      },
       "ClearedModel": {
         "properties": {
           "deleted": {
@@ -71,6 +142,49 @@
           "deleted"
         ],
         "title": "ClearedModel",
+        "type": "object"
+      },
+      "Credentials": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Credentials",
+        "type": "object"
+      },
+      "CredentialsChange": {
+        "additionalProperties": false,
+        "properties": {
+          "current_password": {
+            "title": "Current Password",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "username",
+          "password"
+        ],
+        "title": "CredentialsChange",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -88,11 +202,6 @@
       },
       "Health": {
         "properties": {
-          "auth_required": {
-            "default": false,
-            "title": "Auth Required",
-            "type": "boolean"
-          },
           "read_roots": {
             "items": {
               "type": "string"
@@ -131,7 +240,6 @@
           "status",
           "version",
           "read_roots",
-          "auth_required",
           "worker_seen_at",
           "worker_alive"
         ],
@@ -957,6 +1065,36 @@
             ],
             "title": "Ai Timeout Seconds"
           },
+          "auth_method": {
+            "anyOf": [
+              {
+                "enum": [
+                  "forms",
+                  "external"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Method"
+          },
+          "auth_required": {
+            "anyOf": [
+              {
+                "enum": [
+                  "enabled",
+                  "disabled_for_local_addresses"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Required"
+          },
           "dedupe": {
             "anyOf": [
               {
@@ -1190,6 +1328,22 @@
             "title": "Ai Timeout Seconds",
             "type": "number"
           },
+          "auth_method": {
+            "enum": [
+              "forms",
+              "external"
+            ],
+            "title": "Auth Method",
+            "type": "string"
+          },
+          "auth_required": {
+            "enum": [
+              "enabled",
+              "disabled_for_local_addresses"
+            ],
+            "title": "Auth Required",
+            "type": "string"
+          },
           "dedupe": {
             "enum": [
               "off",
@@ -1299,6 +1453,8 @@
           "ai_name_tracks",
           "ai_api_key_set",
           "log_level",
+          "auth_method",
+          "auth_required",
           "locked"
         ],
         "title": "SettingsView",
@@ -1441,6 +1597,19 @@
         "title": "TrackModel",
         "type": "object"
       },
+      "UserView": {
+        "properties": {
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "UserView",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1545,33 +1714,25 @@
         ]
       }
     },
-    "/v1/history": {
-      "delete": {
-        "operationId": "clear_history_v1_history_delete",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+    "/v1/auth/credentials": {
+      "put": {
+        "operationId": "change_credentials_v1_auth_credentials_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialsChange"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ClearedModel"
+                  "$ref": "#/components/schemas/UserView"
                 }
               }
             },
@@ -1586,6 +1747,144 @@
               }
             },
             "description": "Validation Error"
+          }
+        },
+        "summary": "Change Credentials",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "logout_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/setup": {
+      "post": {
+        "operationId": "setup_v1_auth_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Setup",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/status": {
+      "get": {
+        "operationId": "auth_status_v1_auth_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Auth Status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/history": {
+      "delete": {
+        "operationId": "clear_history_v1_history_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearedModel"
+                }
+              }
+            },
+            "description": "Successful Response"
           }
         },
         "summary": "Clear History",
@@ -1666,22 +1965,6 @@
               ],
               "title": "Q"
             }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
           }
         ],
         "responses": {
@@ -1724,22 +2007,6 @@
               "title": "Operation Id",
               "type": "integer"
             }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
           }
         ],
         "responses": {
@@ -1774,24 +2041,6 @@
       "post": {
         "description": "Queue an import and return immediately; the worker picks it up.\n\nIdempotent on ``job_id`` so the shim can retry a submission whose reply was\nlost without queueing the mux twice.",
         "operationId": "import_media_v1_import_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1879,22 +2128,6 @@
               "title": "Offset",
               "type": "integer"
             }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
           }
         ],
         "responses": {
@@ -1949,22 +2182,6 @@
               "title": "Wait",
               "type": "number"
             }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
           }
         ],
         "responses": {
@@ -2008,22 +2225,6 @@
               "pattern": "^[A-Za-z0-9._:-]{8,128}$",
               "title": "Job Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
             }
           }
         ],
@@ -2080,22 +2281,6 @@
               "title": "Wait",
               "type": "number"
             }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
           }
         ],
         "responses": {
@@ -2129,24 +2314,6 @@
     "/v1/settings": {
       "get": {
         "operationId": "read_settings_v1_settings_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -2157,16 +2324,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "summary": "Read Settings",
@@ -2176,24 +2333,6 @@
       },
       "patch": {
         "operationId": "update_settings_v1_settings_patch",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2235,24 +2374,6 @@
     "/v1/settings/ai/test": {
       "post": {
         "operationId": "probe_ai_provider_v1_settings_ai_test_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2291,27 +2412,51 @@
         ]
       }
     },
+    "/v1/settings/api-key": {
+      "get": {
+        "operationId": "read_api_key_v1_settings_api_key_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read Api Key",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/settings/api-key/regenerate": {
+      "post": {
+        "operationId": "regenerate_api_key_v1_settings_api_key_regenerate_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Regenerate Api Key",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/stats": {
       "get": {
         "operationId": "get_stats_v1_stats_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -2322,16 +2467,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "summary": "Get Stats",
@@ -2343,24 +2478,6 @@
     "/v1/system": {
       "get": {
         "operationId": "get_system_v1_system_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -2371,16 +2488,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "summary": "Get System",

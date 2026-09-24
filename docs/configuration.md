@@ -16,7 +16,10 @@ variable out to manage that setting from the UI instead.
 | Variable | Default | UI | Meaning |
 | --- | --- | --- | --- |
 | `MUXARR_READ_ROOTS` | *required* | | Colon-separated paths Muxarr may read |
-| `MUXARR_TOKEN` | *unset* | | Bearer token; unauthenticated if unset |
+| `MUXARR_API_KEY` | *generated* | | Pins the API key; unset, one is generated on first start and shown in Settings → Security — see [Authentication](#authentication) |
+| `MUXARR_AUTH_METHOD` | `forms` | ✓ | `forms` (login page) or `external` (a reverse proxy signs users in) |
+| `MUXARR_AUTH_REQUIRED` | `enabled` | ✓ | `enabled` or `disabled_for_local_addresses` |
+| `MUXARR_USERNAME` / `MUXARR_PASSWORD` | *unset* | | Set together to pin the UI login; rewritten into the database on every start |
 | `MUXARR_HOST` / `MUXARR_PORT` | `127.0.0.1` / `8710` | | Bind address for `src.cli serve`. Ignored in the container image, where uvicorn binds `127.0.0.1:8000` and nginx serves `:8710` |
 | `MUXARR_MAX_CONCURRENT` | `1` | ✓ | Simultaneous remuxes, in the worker |
 | `MUXARR_JOB_TTL` | `3600` | ✓ | Seconds a finished job stays readable |
@@ -47,13 +50,48 @@ variable out to manage that setting from the UI instead.
 | `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
 | `MUXARR_MODE` | `all` | | Container image only: `all`, `web` or `worker` — see [Container modes](#container-modes) |
 
-Read roots, the database URL, the bind address, the API token and the scratch
-directory stay environment-only on purpose: they decide what Muxarr is allowed
-to touch and how it is reached, which is not something an HTTP request should
-be able to move.
+Read roots, the database URL, the bind address, the API key, the login and the
+scratch directory stay environment-only on purpose: they decide what Muxarr is
+allowed to touch and how it is reached, which is not something an HTTP request
+should be able to move. (The API key can still be *regenerated* from the UI
+when the environment does not pin it.)
 
 The AI key is write-only over HTTP. The UI can set or clear it and the daemon
 will say whether one is stored, but it is never sent back to the browser.
+
+## Authentication
+
+Muxarr follows the \*arr apps: two independent ways in.
+
+- **The API key** is what Radarr and Sonarr present, as `X-Api-Key` (the
+  legacy `Authorization: Bearer` header is accepted too). One is generated on
+  first start and shown under Settings → Security, where it can be copied or
+  regenerated. Set `MUXARR_API_KEY` to pin it instead, for example to share one
+  value through a `.env` file. The key always works, whatever the settings below
+  say, and scripts should always send it.
+- **The UI login** is a username and password. The first visit to a fresh
+  instance asks you to create them; until then the setup page is open to
+  whoever reaches it first, so do that before exposing the port. A sign-in
+  lasts 30 days from the last visit. Changing the login signs every other
+  browser out.
+
+`MUXARR_USERNAME` and `MUXARR_PASSWORD` pin the login: the Settings page then
+cannot change it, and the stored account is overwritten with them on every
+start. That is also how a forgotten password is reset — set both, restart,
+then remove them again if you would rather manage it from the UI.
+
+**Method** `external` skips the login page entirely, for an authenticating
+reverse proxy (Authelia, Authentik, oauth2-proxy, …) in front of Muxarr. It
+opens the whole UI and API to anything that reaches port 8710 *without* going
+through that proxy, including every container on the same Docker network.
+
+**Required** `disabled_for_local_addresses` skips the login for callers on
+loopback, RFC 1918, ULA and link-local addresses. Docker networks are among
+them, and so is a reverse proxy on one: behind a proxy, *every* request looks
+local. Only use it when Muxarr is reached directly.
+
+Writes from the browser must carry an `X-Requested-With` header, which the UI
+always sends and a cross-site form cannot; the API key is exempt.
 
 ## Container modes
 
@@ -91,7 +129,7 @@ Set these in the Radarr/Sonarr container, where the shim runs.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `MUXARR_URL` | `http://muxarr:8710` | Daemon address |
-| `MUXARR_TOKEN` | *unset* | Bearer token, if the daemon requires one |
+| `MUXARR_API_KEY` | *unset* | Muxarr's API key, from Settings → Security |
 | `MUXARR_TIMEOUT` | `14400` | Total seconds to wait for a remux |
 | `MUXARR_POLL_WAIT` | `25` | Seconds the daemon holds each poll open |
 | `MUXARR_POLL_INTERVAL` | `5` | Back-off after a failed request |

@@ -10,6 +10,12 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from src.application.interfaces.jobs import JobConflictError
+from src.application.use_cases.auth.exceptions import (
+    AlreadySetUpError,
+    AuthLockedError,
+    CredentialsRejectedError,
+    InvalidCredentialsError,
+)
 from src.application.use_cases.history.exceptions import OperationNotFoundError
 from src.domain.errors import MuxarrError
 from src.settings.config import ConfigError
@@ -20,6 +26,10 @@ DOMAIN_ERROR_MAP: dict[type[MuxarrError], int] = {
     JobConflictError: status.HTTP_409_CONFLICT,
     SettingsLockedError: status.HTTP_409_CONFLICT,
     ConfigError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    InvalidCredentialsError: status.HTTP_401_UNAUTHORIZED,
+    AlreadySetUpError: status.HTTP_409_CONFLICT,
+    AuthLockedError: status.HTTP_409_CONFLICT,
+    CredentialsRejectedError: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 

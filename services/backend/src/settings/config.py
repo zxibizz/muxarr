@@ -12,7 +12,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
 
-from src.domain.enums import AI_MODES, DEDUPE_MODES, UNDETERMINED, AiMode, DedupeMode
+from src.domain.auth import credentials_problem
+from src.domain.enums import (
+    AI_MODES,
+    AUTH_METHODS,
+    AUTH_REQUIRED,
+    DEDUPE_MODES,
+    UNDETERMINED,
+    AiMode,
+    AuthMethod,
+    AuthRequired,
+    DedupeMode,
+)
 from src.domain.errors import MuxarrError
 from src.domain.language import normalise_language
 from src.domain.selection import SelectionPolicy
@@ -47,7 +58,13 @@ class Settings:
     # Every path muxarr may read: download folders and library roots.
     # Writes are additionally restricted to the destination's own directory.
     read_roots: tuple[Path, ...]
-    auth_token: str | None = None
+    # Pins the API key; left unset, one is generated and stored on first start.
+    api_key: str | None = field(default=None, repr=False)
+    auth_method: AuthMethod = "forms"
+    auth_required: AuthRequired = "enabled"
+    # Set together, these pin the UI login and overwrite the stored user on start.
+    username: str | None = None
+    password: str | None = field(default=None, repr=False)
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     # Serialised by default: two concurrent remuxes on one spindle is worse than
@@ -130,9 +147,28 @@ class Settings:
         if ai_mode != "off" and not ai_model:
             raise ConfigError("MUXARR_AI_MODEL is required when MUXARR_AI_MODE is not 'off'")
 
+        username = source.get("MUXARR_USERNAME", "").strip() or None
+        password = source.get("MUXARR_PASSWORD") or None
+        if (username is None) != (password is None):
+            raise ConfigError("MUXARR_USERNAME and MUXARR_PASSWORD must be set together")
+        if username is not None and password is not None:
+            problem = credentials_problem(username, password)
+            if problem is not None:
+                raise ConfigError(f"MUXARR_USERNAME/MUXARR_PASSWORD: {problem}")
+
         return cls(
             read_roots=roots,
-            auth_token=source.get("MUXARR_TOKEN") or None,
+            api_key=source.get("MUXARR_API_KEY", "").strip() or None,
+            auth_method=parse_choice(
+                "MUXARR_AUTH_METHOD", source.get("MUXARR_AUTH_METHOD") or "forms", AUTH_METHODS
+            ),
+            auth_required=parse_choice(
+                "MUXARR_AUTH_REQUIRED",
+                source.get("MUXARR_AUTH_REQUIRED") or "enabled",
+                AUTH_REQUIRED,
+            ),
+            username=username,
+            password=password,
             host=source.get("MUXARR_HOST", DEFAULT_HOST),
             port=_parse_int(source, "MUXARR_PORT", DEFAULT_PORT),
             max_concurrent_muxes=max(1, _parse_int(source, "MUXARR_MAX_CONCURRENT", 1)),

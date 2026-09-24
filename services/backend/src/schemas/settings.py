@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.domain.enums import AiMode, DedupeMode
+from src.domain.enums import AiMode, AuthMethod, AuthRequired, DedupeMode
 from src.schemas.base import WireModel
 from src.settings.config import MAX_OPERATION_LOG_ENTRIES
 
@@ -45,6 +45,9 @@ class SettingsView(WireModel):
 
     # str, not LogLevel: MUXARR_LOG_LEVEL is not validated, and reading it must not 500.
     log_level: str
+
+    auth_method: AuthMethod
+    auth_required: AuthRequired
 
     # Pinned by an environment variable; the UI renders these read-only.
     locked: list[str]
@@ -83,6 +86,9 @@ class SettingsPatch(BaseModel):
     ai_name_tracks: bool | None = None
 
     log_level: LogLevel | None = None
+
+    auth_method: AuthMethod | None = None
+    auth_required: AuthRequired | None = None
 
 
 class AiTestRequest(BaseModel):

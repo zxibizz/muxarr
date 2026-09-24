@@ -22,6 +22,13 @@ DEDUPE_MODES: tuple[DedupeMode, ...] = get_args(DedupeMode)
 AiMode = Literal["off", "fallback", "always", "verify"]
 AI_MODES: tuple[AiMode, ...] = get_args(AiMode)
 
+# How a browser proves who it is. "external" trusts a reverse proxy in front.
+AuthMethod = Literal["forms", "external"]
+AUTH_METHODS: tuple[AuthMethod, ...] = get_args(AuthMethod)
+
+AuthRequired = Literal["enabled", "disabled_for_local_addresses"]
+AUTH_REQUIRED: tuple[AuthRequired, ...] = get_args(AuthRequired)
+
 # Where a candidate track came from; surfaced in the history so a human can tell
 # an inferred match from a filename-derived one.
 TrackSource = Literal["heuristic", "ai"]
@@ -63,6 +70,7 @@ class LogComponent(StrEnum):
     CORE = "core"
     WORKER = "worker"
 
+    USECASE_AUTH = "usecase.auth"
     USECASE_IMPORT = "usecase.import"
     USECASE_JOBS = "usecase.jobs"
 

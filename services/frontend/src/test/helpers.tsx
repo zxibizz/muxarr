@@ -7,6 +7,8 @@ import { vi } from 'vitest';
 import type {
   AddedTrack,
   AiTestResult,
+  ApiKey,
+  AuthStatus,
   Health,
   HistoryPage,
   Job,
@@ -72,7 +74,21 @@ export function someSettings(overrides: Partial<ServiceSettings> = {}): ServiceS
     ai_name_tracks: false,
     ai_api_key_set: false,
     log_level: 'INFO',
+    auth_method: 'forms',
+    auth_required: 'enabled',
     locked: [],
+    ...overrides,
+  };
+}
+
+export function anAuthStatus(overrides: Partial<AuthStatus> = {}): AuthStatus {
+  return {
+    method: 'forms',
+    required: 'enabled',
+    setup_required: false,
+    authenticated: true,
+    username: 'admin',
+    credentials_locked: false,
     ...overrides,
   };
 }
@@ -161,6 +177,8 @@ interface Responses {
   jobs?: JobPage;
   settings?: ServiceSettings;
   aiTest?: AiTestResult;
+  auth?: AuthStatus;
+  apiKey?: ApiKey;
   status?: number;
   /** Per-route override, so one endpoint can fail while the rest succeed. */
   statusByPath?: Record<string, number>;
@@ -175,7 +193,6 @@ export function stubFetch(responses: Responses = {}) {
       status: 'ok',
       version: '0.9.0',
       read_roots: ['/media'],
-      auth_required: true,
       worker_seen_at: '2026-09-22T10:00:00+00:00',
       worker_alive: true,
     },
@@ -194,10 +211,17 @@ export function stubFetch(responses: Responses = {}) {
     jobs = { items: [], total: 0, limit: 20, offset: 0 },
     settings = someSettings(),
     aiTest = { ok: true, message: 'tiny replied', latency_ms: 120 },
+    auth = anAuthStatus(),
+    apiKey = { api_key: '0123456789abcdef0123456789abcdef', locked: false },
   } = responses;
 
   const body = (path: string) => {
     if (path.startsWith('/healthz')) return health;
+    if (path.startsWith('/v1/auth/status')) return auth;
+    if (path.startsWith('/v1/auth/login') || path.startsWith('/v1/auth/setup')) {
+      return { ...auth, setup_required: false, authenticated: true, username: 'admin' };
+    }
+    if (path.startsWith('/v1/settings/api-key')) return apiKey;
     if (path.startsWith('/v1/stats')) return stats;
     if (path.startsWith('/v1/system')) return system;
     // A single job, not the page: /v1/jobs/{id}/detail.
@@ -217,7 +241,7 @@ export function stubFetch(responses: Responses = {}) {
     const path = String(input);
     const code = statusFor(path);
     if (code !== 200) {
-      return json({ detail: code === 401 ? 'invalid token' : 'the daemon refused that' }, code);
+      return json({ detail: code === 401 ? 'invalid or missing credentials' : 'the daemon refused that' }, code);
     }
     // A PATCH echoes what it was sent, as the daemon does.
     if (path.startsWith('/v1/settings') && init?.method === 'PATCH') {

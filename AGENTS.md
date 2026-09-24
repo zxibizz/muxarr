@@ -80,6 +80,11 @@ alembic/                 under services/backend/
     stale `services/frontend/openapi.json`, and CI on a stale `schema.gen.ts`.
 18. **Code keys off `RejectCode`, never off a reason's prose.** The prose is for
     humans and may be reworded; `selection.REJECT_REASONS` maps one to the other.
+19. **Every `/v1` route but `/v1/auth/{status,setup,login,logout}` depends on
+    `authorise`** (`api/dependencies/auth.py`). The API key (`X-Api-Key`, and
+    `Authorization: Bearer` for shims already deployed) always works; the UI
+    uses a session cookie, and cookie or login-waived writes must carry
+    `X-Requested-With` -- that is the CSRF guard.
 
 ## Commands
 

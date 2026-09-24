@@ -9,7 +9,7 @@ port of an existing table.
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Index, Integer, String, Text
+from sqlalchemy import BigInteger, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.db import Base
@@ -107,4 +107,40 @@ class AppSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False, server_default="{}")
     revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class User(Base):
+    """Someone allowed to sign in to the UI."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class LoginSession(Base):
+    """A signed-in browser. The id is a digest, so a leaked table grants no access."""
+
+    __tablename__ = "sessions"
+    __table_args__ = (Index("idx_sessions_user", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class AuthConfig(Base):
+    """Single row; the generated API key, when the environment does not pin one."""
+
+    __tablename__ = "auth_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    api_key: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)

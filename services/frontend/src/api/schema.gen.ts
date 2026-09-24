@@ -21,6 +21,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change Credentials */
+        put: operations["change_credentials_v1_auth_credentials_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Setup */
+        post: operations["setup_v1_auth_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auth Status */
+        get: operations["auth_status_v1_auth_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/history": {
         parameters: {
             query?: never;
@@ -196,6 +281,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/settings/api-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Api Key */
+        get: operations["read_api_key_v1_settings_api_key_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/settings/api-key/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Api Key */
+        post: operations["regenerate_api_key_v1_settings_api_key_regenerate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stats": {
         parameters: {
             query?: never;
@@ -260,10 +379,54 @@ export interface components {
             /** Ok */
             ok: boolean;
         };
+        /** ApiKeyView */
+        ApiKeyView: {
+            /** Api Key */
+            api_key: string;
+            /** Locked */
+            locked: boolean;
+        };
+        /** AuthStatusView */
+        AuthStatusView: {
+            /** Authenticated */
+            authenticated: boolean;
+            /** Credentials Locked */
+            credentials_locked: boolean;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "forms" | "external";
+            /**
+             * Required
+             * @enum {string}
+             */
+            required: "enabled" | "disabled_for_local_addresses";
+            /** Setup Required */
+            setup_required: boolean;
+            /** Username */
+            username: string | null;
+        };
         /** ClearedModel */
         ClearedModel: {
             /** Deleted */
             deleted: number;
+        };
+        /** Credentials */
+        Credentials: {
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        };
+        /** CredentialsChange */
+        CredentialsChange: {
+            /** Current Password */
+            current_password: string;
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -272,11 +435,6 @@ export interface components {
         };
         /** Health */
         Health: {
-            /**
-             * Auth Required
-             * @default false
-             */
-            auth_required: boolean;
             /** Read Roots */
             read_roots: string[];
             /**
@@ -595,6 +753,10 @@ export interface components {
             ai_name_tracks?: boolean | null;
             /** Ai Timeout Seconds */
             ai_timeout_seconds?: number | null;
+            /** Auth Method */
+            auth_method?: ("forms" | "external") | null;
+            /** Auth Required */
+            auth_required?: ("enabled" | "disabled_for_local_addresses") | null;
             /** Dedupe */
             dedupe?: ("off" | "language" | "language_codec") | null;
             /** Free Space Factor */
@@ -645,6 +807,16 @@ export interface components {
             ai_name_tracks: boolean;
             /** Ai Timeout Seconds */
             ai_timeout_seconds: number;
+            /**
+             * Auth Method
+             * @enum {string}
+             */
+            auth_method: "forms" | "external";
+            /**
+             * Auth Required
+             * @enum {string}
+             */
+            auth_required: "enabled" | "disabled_for_local_addresses";
             /**
              * Dedupe
              * @enum {string}
@@ -745,6 +917,11 @@ export interface components {
             /** Variant */
             variant: string | null;
         };
+        /** UserView */
+        UserView: {
+            /** Username */
+            username: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -798,6 +975,143 @@ export interface operations {
             };
         };
     };
+    change_credentials_v1_auth_credentials_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialsChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Credentials"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatusView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setup_v1_auth_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Credentials"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatusView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_status_v1_auth_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatusView"];
+                };
+            };
+        };
+    };
     list_history_v1_history_get: {
         parameters: {
             query?: {
@@ -807,9 +1121,7 @@ export interface operations {
                 app?: string | null;
                 q?: string | null;
             };
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -838,9 +1150,7 @@ export interface operations {
     clear_history_v1_history_delete: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -855,23 +1165,12 @@ export interface operations {
                     "application/json": components["schemas"]["ClearedModel"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     get_operation_v1_history__operation_id__get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 operation_id: number;
             };
@@ -902,9 +1201,7 @@ export interface operations {
     import_media_v1_import_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -941,9 +1238,7 @@ export interface operations {
                 limit?: number;
                 offset?: number;
             };
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -974,9 +1269,7 @@ export interface operations {
             query?: {
                 wait?: number;
             };
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 job_id: string;
             };
@@ -1007,9 +1300,7 @@ export interface operations {
     get_job_detail_v1_jobs__job_id__detail_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 job_id: string;
             };
@@ -1042,9 +1333,7 @@ export interface operations {
             query?: {
                 wait?: number;
             };
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path: {
                 job_id: string;
             };
@@ -1075,9 +1364,7 @@ export interface operations {
     read_settings_v1_settings_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1092,23 +1379,12 @@ export interface operations {
                     "application/json": components["schemas"]["SettingsView"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     update_settings_v1_settings_patch: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1141,9 +1417,7 @@ export interface operations {
     probe_ai_provider_v1_settings_ai_test_post: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1173,12 +1447,50 @@ export interface operations {
             };
         };
     };
+    read_api_key_v1_settings_api_key_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyView"];
+                };
+            };
+        };
+    };
+    regenerate_api_key_v1_settings_api_key_regenerate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyView"];
+                };
+            };
+        };
+    };
     get_stats_v1_stats_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1193,23 +1505,12 @@ export interface operations {
                     "application/json": components["schemas"]["StatsModel"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     get_system_v1_system_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1222,15 +1523,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatus"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

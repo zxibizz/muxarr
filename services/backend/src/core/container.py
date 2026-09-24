@@ -10,10 +10,26 @@ from collections.abc import Mapping
 from functools import cached_property
 
 from src.application.interfaces.ai import ChatCompleterFactory
+from src.application.interfaces.auth import (
+    ApiKeyRepository,
+    PasswordHasher,
+    SessionRepository,
+    UserRepository,
+)
 from src.application.interfaces.history import HistoryRepository
 from src.application.interfaces.jobs import JobRepository, WorkerStateRepository
 from src.application.interfaces.settings import SettingsRepository
 from src.application.interfaces.track_source import TrackDiscovery
+from src.application.use_cases.auth.api_key import EnsureApiKeyUseCase, RegenerateApiKeyUseCase
+from src.application.use_cases.auth.sessions import (
+    ChangeCredentialsUseCase,
+    GetAuthStatusUseCase,
+    LoginUseCase,
+    LogoutUseCase,
+    ResolveSessionUseCase,
+    SetupUseCase,
+    SyncEnvCredentialsUseCase,
+)
 from src.application.use_cases.history.operations import (
     ClearHistoryUseCase,
     GetOperationUseCase,
@@ -37,6 +53,12 @@ from src.infrastructure.ai.discovery import AiAssistedTrackDiscovery
 from src.infrastructure.ai.openai_compat import (
     OpenAICompatibleChatCompleter,
     OpenAICompatibleCompleterFactory,
+)
+from src.infrastructure.auth.hasher import Pbkdf2PasswordHasher
+from src.infrastructure.auth.repository import (
+    SqlAlchemyApiKeyRepository,
+    SqlAlchemySessionRepository,
+    SqlAlchemyUserRepository,
 )
 from src.infrastructure.filesystem.placement import FilesystemPlacement
 from src.infrastructure.filesystem.track_discovery import FilesystemTrackDiscovery
@@ -68,6 +90,10 @@ class AppContainer:
         worker_state: WorkerStateRepository | None = None,
         settings_store: SettingsRepository | None = None,
         completers: ChatCompleterFactory | None = None,
+        users: UserRepository | None = None,
+        sessions: SessionRepository | None = None,
+        api_keys: ApiKeyRepository | None = None,
+        hasher: PasswordHasher | None = None,
         env: Mapping[str, str] | None = None,
     ) -> None:
         self.settings = settings
@@ -76,11 +102,16 @@ class AppContainer:
         self._worker_state_override = worker_state
         self._settings_store_override = settings_store
         self._completers_override = completers
+        self._users_override = users
+        self._sessions_override = sessions
+        self._api_keys_override = api_keys
+        self._hasher_override = hasher
         # Which fields the environment pins. Snapshotted: a variable cannot
         # appear or vanish without the process restarting anyway.
         self.locked = locked_fields(env)
         self._env_settings = settings
         self._revision = -1
+        self._api_key: str | None = None
 
     @cached_property
     def db(self) -> DBManager:
@@ -109,6 +140,52 @@ class AppContainer:
     @cached_property
     def completers(self) -> ChatCompleterFactory:
         return self._completers_override or OpenAICompatibleCompleterFactory()
+
+    @cached_property
+    def users(self) -> UserRepository:
+        return self._users_override or SqlAlchemyUserRepository(self.db)
+
+    @cached_property
+    def sessions(self) -> SessionRepository:
+        return self._sessions_override or SqlAlchemySessionRepository(self.db)
+
+    @cached_property
+    def api_keys(self) -> ApiKeyRepository:
+        return self._api_keys_override or SqlAlchemyApiKeyRepository(self.db)
+
+    @cached_property
+    def hasher(self) -> PasswordHasher:
+        return self._hasher_override or Pbkdf2PasswordHasher()
+
+    @property
+    def api_key_pinned(self) -> bool:
+        return self._env_settings.api_key is not None
+
+    @property
+    def credentials_pinned(self) -> bool:
+        return self._env_settings.username is not None
+
+    async def api_key(self) -> str:
+        """The key in force, read once and then served from memory."""
+        if self._api_key is None:
+            self._api_key = await EnsureApiKeyUseCase(
+                store=self.api_keys, pinned=self._env_settings.api_key
+            ).execute()
+        return self._api_key
+
+    async def regenerate_api_key(self) -> str:
+        self._api_key = await RegenerateApiKeyUseCase(
+            store=self.api_keys, pinned=self.api_key_pinned
+        ).execute()
+        return self._api_key
+
+    async def bootstrap_auth(self) -> None:
+        await self.api_key()
+        env = self._env_settings
+        if env.username is not None and env.password is not None:
+            await SyncEnvCredentialsUseCase(
+                users=self.users, sessions=self.sessions, hasher=self.hasher
+            ).execute(env.username, env.password)
 
     async def sync_settings(self) -> bool:
         """Re-apply the stored overrides if they have changed.
@@ -245,6 +322,40 @@ class AppContainer:
     @cached_property
     def probe_ai_provider(self) -> ProbeAiProviderUseCase:
         return ProbeAiProviderUseCase(completers=self.completers)
+
+    @cached_property
+    def auth_status(self) -> GetAuthStatusUseCase:
+        return GetAuthStatusUseCase(users=self.users)
+
+    @cached_property
+    def login(self) -> LoginUseCase:
+        return LoginUseCase(users=self.users, sessions=self.sessions, hasher=self.hasher)
+
+    @cached_property
+    def logout(self) -> LogoutUseCase:
+        return LogoutUseCase(sessions=self.sessions)
+
+    @cached_property
+    def resolve_session(self) -> ResolveSessionUseCase:
+        return ResolveSessionUseCase(sessions=self.sessions)
+
+    @cached_property
+    def setup(self) -> SetupUseCase:
+        return SetupUseCase(
+            users=self.users,
+            sessions=self.sessions,
+            hasher=self.hasher,
+            pinned=self.credentials_pinned,
+        )
+
+    @cached_property
+    def change_credentials(self) -> ChangeCredentialsUseCase:
+        return ChangeCredentialsUseCase(
+            users=self.users,
+            sessions=self.sessions,
+            hasher=self.hasher,
+            pinned=self.credentials_pinned,
+        )
 
     async def shutdown(self) -> None:
         # Only touch the engine if something actually opened it.

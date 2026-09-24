@@ -82,5 +82,7 @@ def _view(container: AppContainer) -> SettingsView:
         ai_name_tracks=settings.ai_name_tracks,
         ai_api_key_set=bool(settings.ai_api_key),
         log_level=settings.log_level,
+        auth_method=settings.auth_method,
+        auth_required=settings.auth_required,
         locked=sorted(container.locked),
     )

@@ -23,7 +23,9 @@ services:
       # Both roots must exist inside the container; see ./dev-media below.
       MUXARR_READ_ROOTS: /downloads:/media
       MUXARR_DB_URL: sqlite+aiosqlite:////config/muxarr.db
-      MUXARR_TOKEN: ${MUXARR_TOKEN:-dev-token}
+      MUXARR_API_KEY: ${MUXARR_API_KEY:-dev-api-key}
+      MUXARR_USERNAME: admin
+      MUXARR_PASSWORD: muxarr-dev
       MUXARR_LOG_LEVEL: DEBUG
       # macOS/Windows bind mounts do not deliver inotify events.
       WATCHFILES_FORCE_POLLING: "true"

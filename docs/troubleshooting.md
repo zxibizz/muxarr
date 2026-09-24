@@ -36,6 +36,18 @@ Only relevant outside the official image, which ships mkvtoolnix. Install
 `PUID`/`PGID` must match the uid that owns your library, the same values your
 \*arr containers use. Muxarr creates the output file itself.
 
+**Every import is left to Radarr/Sonarr, and their log says `401`.**
+The shim is not sending the API key Muxarr expects. Copy it from Settings →
+Security into `MUXARR_API_KEY` on the Radarr/Sonarr container and restart it.
+Regenerating the key, or changing a pinned `MUXARR_API_KEY`, needs the same
+update. Check from inside the \*arr container with
+`curl -H "X-Api-Key: $MUXARR_API_KEY" $MUXARR_URL/v1/system`.
+
+**Locked out of the UI.**
+Set `MUXARR_USERNAME` and `MUXARR_PASSWORD` on the Muxarr container and
+restart: the stored login is overwritten with them. Remove them again
+afterwards to manage the login from the Settings page.
+
 **Nothing happens at all on import.**
 Check that the shim is actually wired up: *Settings → Media Management → show
 Advanced → Importing → Import Using Script*, with the path pointing at

@@ -54,7 +54,10 @@ def test_defaults() -> None:
     settings = Settings.from_env(env())
 
     assert settings.port == DEFAULT_PORT
-    assert settings.auth_token is None
+    assert settings.api_key is None
+    assert settings.auth_method == "forms"
+    assert settings.auth_required == "enabled"
+    assert settings.username is None
     assert settings.max_concurrent_muxes == 1
     assert settings.scratch_dir is None
     assert settings.dedupe == "language_codec"
@@ -142,8 +145,37 @@ def test_concurrency_is_clamped_to_at_least_one() -> None:
     assert Settings.from_env(env(MUXARR_MAX_CONCURRENT="-5")).max_concurrent_muxes == 1
 
 
-def test_empty_token_is_treated_as_unset() -> None:
-    assert Settings.from_env(env(MUXARR_TOKEN="")).auth_token is None
+class TestAuth:
+    def test_an_empty_api_key_is_treated_as_unset(self) -> None:
+        assert Settings.from_env(env(MUXARR_API_KEY="  ")).api_key is None
+
+    def test_secrets_stay_out_of_the_repr(self) -> None:
+        settings = Settings.from_env(
+            env(MUXARR_API_KEY="k3y", MUXARR_USERNAME="admin", MUXARR_PASSWORD="hunter2hunter2")
+        )
+
+        assert "k3y" not in repr(settings)
+        assert "hunter2" not in repr(settings)
+
+    def test_username_and_password_come_together(self) -> None:
+        with pytest.raises(ConfigError, match="set together"):
+            Settings.from_env(env(MUXARR_USERNAME="admin"))
+
+    def test_a_short_password_is_rejected(self) -> None:
+        with pytest.raises(ConfigError, match="at least 8"):
+            Settings.from_env(env(MUXARR_USERNAME="admin", MUXARR_PASSWORD="short"))
+
+    def test_an_unknown_method_is_rejected(self) -> None:
+        with pytest.raises(ConfigError, match="MUXARR_AUTH_METHOD"):
+            Settings.from_env(env(MUXARR_AUTH_METHOD="basic"))
+
+    def test_choices_are_read(self) -> None:
+        settings = Settings.from_env(
+            env(MUXARR_AUTH_METHOD="External", MUXARR_AUTH_REQUIRED="disabled_for_local_addresses")
+        )
+
+        assert settings.auth_method == "external"
+        assert settings.auth_required == "disabled_for_local_addresses"
 
 
 def test_selection_policy_is_derived_from_settings() -> None:

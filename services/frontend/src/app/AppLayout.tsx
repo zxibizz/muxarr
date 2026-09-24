@@ -3,6 +3,7 @@ import {
   AppShell,
   Badge,
   Burger,
+  Button,
   Container,
   Group,
   NavLink,
@@ -11,14 +12,18 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconAlertTriangle, IconHistory, IconServer2, IconSettings } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconHistory,
+  IconLogout,
+  IconServer2,
+  IconSettings,
+} from '@tabler/icons-react';
 import { Link, Outlet, useLocation } from 'react-router';
-import { useHealth, useSystem } from '../api/queries';
+import { useAuthStatus, useHealth, useLogout, useSystem } from '../api/queries';
 import type { SystemStatus } from '../api/types';
 import { LogoMark } from '../components/LogoMark';
-import { useAuthGate } from './auth-context';
 import classes from './layout.module.css';
-import { TokenPrompt } from './TokenPrompt';
 
 const NAV = [
   { to: '/', label: 'History', icon: IconHistory },
@@ -63,10 +68,11 @@ function WorkerStatus({ system, onNavigate }: { system: SystemStatus | undefined
 
 export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure(false);
-  const { needsToken, submitToken } = useAuthGate();
   const { pathname } = useLocation();
   const { data: system } = useSystem();
   const { data: health } = useHealth();
+  const { data: auth } = useAuthStatus();
+  const logout = useLogout();
 
   const queued = system ? system.queue.pending + system.queue.running : 0;
   const offline = system !== undefined && !system.worker.alive;
@@ -116,6 +122,23 @@ export function AppLayout() {
         <AppShell.Section>
           <Stack gap="sm">
             <WorkerStatus system={system} onNavigate={close} />
+            {auth?.method === 'forms' && auth.username && (
+              <Group justify="space-between" wrap="nowrap" px={6}>
+                <Text size="xs" c="dimmed" truncate>
+                  Signed in as {auth.username}
+                </Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="gray"
+                  leftSection={<IconLogout size={14} />}
+                  loading={logout.isPending}
+                  onClick={() => logout.mutate()}
+                >
+                  Sign out
+                </Button>
+              </Group>
+            )}
             {health && (
               <Text size="xs" c="dimmed" px={6}>
                 Muxarr v{health.version}
@@ -143,8 +166,6 @@ export function AppLayout() {
           </Stack>
         </Container>
       </AppShell.Main>
-
-      <TokenPrompt opened={needsToken} onSubmit={submitToken} />
     </AppShell>
   );
 }

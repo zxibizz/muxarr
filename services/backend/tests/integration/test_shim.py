@@ -264,7 +264,7 @@ class TestQueueFailures:
 
     def test_rejected_submission_defers(self, daemon: type[_Handler]) -> None:
         daemon.submit_code = 401
-        daemon.submit_body = b'{"detail":"invalid or missing token"}'
+        daemon.submit_body = b'{"detail":"invalid or missing credentials"}'
 
         assert assert_valid_protocol(run_shim(url_for(daemon))) == ["[MoveStatus] DeferMove"]
         assert daemon.polled == []
@@ -406,29 +406,29 @@ class TestPayload:
         assert sent["transfer_mode"] == '","app":"evil'
 
 
-def test_token_is_sent_on_both_submit_and_poll(daemon: type[_Handler]) -> None:
+def test_api_key_is_sent_on_both_submit_and_poll(daemon: type[_Handler]) -> None:
     captured: list[str] = []
 
     original_post = _Handler.do_POST
     original_get = _Handler.do_GET
 
     def spy_post(self: _Handler) -> None:
-        captured.append(self.headers.get("Authorization", ""))
+        captured.append(self.headers.get("X-Api-Key", ""))
         original_post(self)
 
     def spy_get(self: _Handler) -> None:
-        captured.append(self.headers.get("Authorization", ""))
+        captured.append(self.headers.get("X-Api-Key", ""))
         original_get(self)
 
     _Handler.do_POST = spy_post  # type: ignore[method-assign]
     _Handler.do_GET = spy_get  # type: ignore[method-assign]
     try:
-        run_shim(url_for(daemon), extra_env={"MUXARR_TOKEN": "abc123"})
+        run_shim(url_for(daemon), extra_env={"MUXARR_API_KEY": "abc123"})
     finally:
         _Handler.do_POST = original_post  # type: ignore[method-assign]
         _Handler.do_GET = original_get  # type: ignore[method-assign]
 
-    assert captured == ["Bearer abc123", "Bearer abc123"]
+    assert captured == ["abc123", "abc123"]
 
 
 def test_shim_has_no_bashisms() -> None:

@@ -13,18 +13,20 @@ from httpx import AsyncClient
 from src.api.app import create_app
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.core.container import AppContainer
+from src.db.session import DBManager
 from src.domain.journal import TrackDetail
 from src.domain.naming import EpisodeRef
 from src.infrastructure import probing
 from src.settings.config import Settings
 from tests.api.conftest import (
-    TOKEN,
+    API_KEY,
     VIDEO_ONLY,
     StubHandler,
     _client_for,
     auth,
     await_job,
     drain,
+    make_container,
 )
 from tests.conftest import touch
 
@@ -93,7 +95,26 @@ class TestAuth:
         self, client: AsyncClient, layout: dict[str, Path]
     ) -> None:
         response = await client.post(
-            "/v1/import", json=payload(layout), headers={"Authorization": TOKEN}
+            "/v1/import", json=payload(layout), headers={"Authorization": API_KEY}
+        )
+
+        assert response.status_code == 401
+
+    async def test_the_legacy_bearer_header_still_works(
+        self, client: AsyncClient, layout: dict[str, Path]
+    ) -> None:
+        """Shims already deployed send the key this way."""
+        response = await client.post(
+            "/v1/import", json=payload(layout), headers={"Authorization": f"Bearer {API_KEY}"}
+        )
+
+        assert response.status_code == 202
+
+    async def test_a_non_ascii_key_is_a_401_not_a_500(
+        self, client: AsyncClient, layout: dict[str, Path]
+    ) -> None:
+        response = await client.post(
+            "/v1/import", json=payload(layout), headers={"X-Api-Key": "ключ".encode()}
         )
 
         assert response.status_code == 401
@@ -104,26 +125,21 @@ class TestAuth:
         assert (await client.get(f"/v1/jobs/{job_id}")).status_code == 401
         assert (await client.get(f"/v1/jobs/{job_id}/protocol")).status_code == 401
 
-    async def test_open_instance_allows_anonymous(
+    async def test_external_auth_allows_anonymous(
         self,
-        container: AppContainer,
+        db: DBManager,
         settings: Settings,
         layout: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(probing, "probe", lambda _p: VIDEO_ONLY)
-        open_container = AppContainer(
-            replace(settings, auth_token=None),
-            history=container.history,
-            jobs=container.jobs,
-            worker_state=container.worker_state,
-            settings_store=container.settings_store,
-            env={},
-        )
+        open_container = make_container(replace(settings, auth_method="external"), db)
         app = create_app(open_container.settings, open_container)
 
         async for anonymous in _client_for(app):
-            response = await anonymous.post("/v1/import", json=payload(layout))
+            response = await anonymous.post(
+                "/v1/import", json=payload(layout), headers={"X-Requested-With": "test"}
+            )
             assert response.status_code == 202
 
 

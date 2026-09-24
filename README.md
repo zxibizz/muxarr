@@ -62,7 +62,6 @@ compose project.
          PUID: 1000                           # same as Radarr/Sonarr
          PGID: 1000
          MUXARR_READ_ROOTS: /downloads:/media # the container-side paths below
-         MUXARR_TOKEN: change-me              # openssl rand -hex 32
        volumes:
          - ./config:/config
          - /opt/muxarr/shims:/shims           # Radarr/Sonarr mount this too
@@ -78,7 +77,9 @@ compose project.
    docker compose up -d
    ```
 
-   The UI is now on <http://localhost:8710>.
+   The UI is now on <http://localhost:8710>. The first visit asks you to create
+   the login; then copy the **API key** from Settings → Security for the next
+   step.
 
    > Every media path must be mounted at the **same path** in the \*arr
    > containers and in Muxarr. Radarr/Sonarr pass absolute paths; if they mean
@@ -91,7 +92,7 @@ compose project.
    ```yaml
        environment:
          MUXARR_URL: http://<muxarr-host-ip>:8710   # not localhost: that is this container
-         MUXARR_TOKEN: change-me                    # the same token as muxarr's
+         MUXARR_API_KEY: <from Settings → Security>
        volumes:
          - /opt/muxarr/shims:/config/scripts:ro
    ```
@@ -172,8 +173,9 @@ guess at. The history is stored in SQLite under `/config` (or in Postgres, if
 `MUXARR_DB_URL` points there), so it survives restarts — mount that volume or you
 will lose it.
 
-If `MUXARR_TOKEN` is set, the UI asks for it once and keeps it in the browser's
-local storage.
+Access works the way it does in the \*arr apps: the UI has its own login, and
+Radarr/Sonarr present an API key. Both are managed under Settings → Security;
+see [configuration](docs/configuration.md#authentication) for the options.
 
 ## Configuration
 
@@ -181,6 +183,16 @@ Most settings can be changed from the **Settings** page in the web UI, which
 takes effect within a few seconds — no restart, in either process. The rest are
 environment variables on the daemon; `MUXARR_READ_ROOTS` is the only required
 one.
+
+`MUXARR_READ_ROOTS` limits which paths Muxarr will touch. Radarr/Sonarr send
+absolute paths over HTTP, and those paths end up on mkvmerge's command line. So
+each path is fully resolved, symlinks included, and must land inside one of
+these roots, or the import is deferred. The limit applies to writes as well: the
+finished file has to sit under a root, and Muxarr only ever writes into that
+file's own directory. Set it to your download and library paths as the container
+sees them, separated by colons, and nothing wider. In particular, leave `/config`
+out, since it holds the database. There is no default, because any guess would
+either break imports or switch the check off.
 
 A variable that is actually set in your compose file **wins and locks the
 field**: the UI renders it read-only and names the variable, so compose stays

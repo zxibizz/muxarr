@@ -9,12 +9,17 @@ import {
   IconPlayerPlay,
 } from '@tabler/icons-react';
 import { describeError } from '../../api/client';
-import { useHealth, useSystem } from '../../api/queries';
-import type { SystemStatus } from '../../api/types';
+import { useAuthStatus, useHealth, useSystem } from '../../api/queries';
+import type { AuthStatus, SystemStatus } from '../../api/types';
 import { KeyValue } from '../../components/KeyValue';
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { formatRelative, formatTimestamp } from '../../lib/format';
+
+function describeAuth(auth: AuthStatus): string {
+  if (auth.method === 'external') return 'external (reverse proxy)';
+  return auth.required === 'enabled' ? 'login' : 'login, except local addresses';
+}
 
 function WorkerCard({ system }: { system: SystemStatus | undefined }) {
   const worker = system?.worker;
@@ -69,6 +74,7 @@ function WorkerCard({ system }: { system: SystemStatus | undefined }) {
 export function SystemPage() {
   const system = useSystem();
   const health = useHealth();
+  const auth = useAuthStatus();
   const queue = system.data?.queue;
   const error = describeError(system.error);
 
@@ -113,7 +119,7 @@ export function SystemPage() {
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
             <KeyValue label="Version">{health.data ? `v${health.data.version}` : '—'}</KeyValue>
             <KeyValue label="Authentication">
-              {health.data ? (health.data.auth_required ? 'token required' : 'open') : '—'}
+              {auth.data ? describeAuth(auth.data) : '—'}
             </KeyValue>
           </SimpleGrid>
           <KeyValue label="Read roots">

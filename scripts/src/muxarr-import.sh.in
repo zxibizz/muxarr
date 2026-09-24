@@ -26,7 +26,7 @@
 #
 # Configuration (environment):
 #   MUXARR_URL            default http://muxarr:8710
-#   MUXARR_TOKEN          bearer token; omit if the daemon is unauthenticated
+#   MUXARR_API_KEY        from Muxarr's Settings > Security (or its MUXARR_API_KEY)
 #   MUXARR_TIMEOUT        total seconds to wait for a remux, default 14400 (4h)
 #   MUXARR_POLL_WAIT      seconds the daemon holds each poll open, default 25
 #   MUXARR_POLL_INTERVAL  seconds to back off after a failed request, default 5
@@ -36,7 +36,7 @@
 # No `set -u`: every @App@ variable is referenced with an explicit default anyway.
 
 MUXARR_URL="${MUXARR_URL:-http://muxarr:8710}"
-MUXARR_TOKEN="${MUXARR_TOKEN:-}"
+MUXARR_API_KEY="${MUXARR_API_KEY:-}"
 MUXARR_TIMEOUT="${MUXARR_TIMEOUT:-14400}"
 MUXARR_POLL_WAIT="${MUXARR_POLL_WAIT:-25}"
 MUXARR_POLL_INTERVAL="${MUXARR_POLL_INTERVAL:-5}"
@@ -90,12 +90,12 @@ http_post() {
     if [ "$HTTP_CLIENT" = curl ]; then
         set -- -sS -X POST --max-time "$REQUEST_TIMEOUT" \
             -H 'Content-Type: application/json'
-        [ -n "$MUXARR_TOKEN" ] && set -- "$@" -H "Authorization: Bearer $MUXARR_TOKEN"
+        [ -n "$MUXARR_API_KEY" ] && set -- "$@" -H "X-Api-Key: $MUXARR_API_KEY"
         curl "$@" --data "$_payload" "$_endpoint" 2>/dev/null
     else
         set -- -q -O - --timeout="$REQUEST_TIMEOUT" \
             --header='Content-Type: application/json'
-        [ -n "$MUXARR_TOKEN" ] && set -- "$@" --header="Authorization: Bearer $MUXARR_TOKEN"
+        [ -n "$MUXARR_API_KEY" ] && set -- "$@" --header="X-Api-Key: $MUXARR_API_KEY"
         wget "$@" --post-data="$_payload" "$_endpoint" 2>/dev/null
     fi
 }
@@ -104,11 +104,11 @@ http_get() {
     _endpoint="$1"
     if [ "$HTTP_CLIENT" = curl ]; then
         set -- -sS --max-time "$REQUEST_TIMEOUT"
-        [ -n "$MUXARR_TOKEN" ] && set -- "$@" -H "Authorization: Bearer $MUXARR_TOKEN"
+        [ -n "$MUXARR_API_KEY" ] && set -- "$@" -H "X-Api-Key: $MUXARR_API_KEY"
         curl "$@" "$_endpoint" 2>/dev/null
     else
         set -- -q -O - --timeout="$REQUEST_TIMEOUT"
-        [ -n "$MUXARR_TOKEN" ] && set -- "$@" --header="Authorization: Bearer $MUXARR_TOKEN"
+        [ -n "$MUXARR_API_KEY" ] && set -- "$@" --header="X-Api-Key: $MUXARR_API_KEY"
         wget "$@" "$_endpoint" 2>/dev/null
     fi
 }

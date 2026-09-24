@@ -22,7 +22,6 @@ async def healthz(container: Annotated[AppContainer, Depends(get_container)]) ->
     return Health(
         version=__version__,
         read_roots=[str(r) for r in container.guard.read_roots],
-        auth_required=container.settings.auth_token is not None,
         worker_seen_at=worker.last_seen_at,
         worker_alive=worker.alive,
     )

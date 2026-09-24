@@ -249,7 +249,8 @@ class TestRecording:
         assert job["history_id"] is None
 
 
-async def test_healthz_reports_auth_state(client: AsyncClient) -> None:
+async def test_healthz_does_not_describe_the_auth_setup(client: AsyncClient) -> None:
+    """It is unauthenticated; how to get in is /v1/auth/status's business."""
     body = (await client.get("/healthz")).json()
 
-    assert body["auth_required"] is True
+    assert not any(key.startswith("auth") for key in body)

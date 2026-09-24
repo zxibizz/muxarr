@@ -2,9 +2,9 @@
 # with the API, the worker and the UI (MUXARR_MODE=all, the default) on SQLite.
 # compose.split.example.yaml runs the API and the worker apart, on Postgres.
 #
-# Copy to compose.yaml next to a .env holding MUXARR_TOKEN and ARR_NETWORK (see
-# .env.example), then `docker compose up -d`. What to add to your Radarr/Sonarr
-# services is at the bottom of this file.
+# Copy to compose.yaml next to a .env holding ARR_NETWORK (see .env.example),
+# then `docker compose up -d` and open http://<host>:8710 to create a login.
+# What to add to your Radarr/Sonarr services is at the bottom of this file.
 #
 # THE ONE RULE: every media path must be mounted at the SAME path inside the
 # *arr containers and inside Muxarr. Radarr/Sonarr hand Muxarr absolute paths;
@@ -28,7 +28,6 @@ services:
       PGID: ${PGID:-1000}
       # Colon-separated. Must cover both download and library paths.
       MUXARR_READ_ROOTS: /downloads:/media
-      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
       # Anything below this line can also be managed from the Settings page.
       # Setting it here pins it: the UI shows it read-only and names the
       # variable, so this file stays the source of truth for what it declares.
@@ -81,7 +80,7 @@ networks:
 #
 #     environment:
 #       MUXARR_URL: http://muxarr:8710
-#       MUXARR_TOKEN: <the same value as in Muxarr's .env>
+#       MUXARR_API_KEY: <from Muxarr's Settings > Security>
 #     volumes:
 #       - /opt/muxarr/shims:/config/scripts:ro
 #

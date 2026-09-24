@@ -1,3 +1,9 @@
+# An outer TLS proxy's scheme, so the session cookie is marked Secure behind it.
+map $http_x_forwarded_proto $muxarr_forwarded_proto {
+    default $http_x_forwarded_proto;
+    "" $scheme;
+}
+
 server {
     listen 8710 default_server;
     listen [::]:8710 default_server;
@@ -18,8 +24,10 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        # Overwritten, not appended: "disabled for local addresses" trusts this,
+        # and a client-supplied chain would let anyone claim to be local.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $muxarr_forwarded_proto;
 
         # /v1/jobs/{id}/protocol holds the request open for up to
         # MUXARR_MAX_POLL_WAIT seconds. Anything below that turns a healthy

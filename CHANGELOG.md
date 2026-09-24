@@ -50,6 +50,19 @@ within the same major version.
 
 ### Changed
 
+- **Authentication works the way it does in the \*arr apps.** `MUXARR_TOKEN`
+  is gone, replaced by two separate credentials:
+  - an **API key** for Radarr/Sonarr, generated on first start and shown (and
+    regenerable) under Settings → Security, or pinned with `MUXARR_API_KEY`.
+    The shims now read `MUXARR_API_KEY` and send it as `X-Api-Key`;
+    `Authorization: Bearer` is still accepted from older shims.
+  - a **UI login** (username and password, 30-day session cookie), created on
+    the first visit or pinned with `MUXARR_USERNAME`/`MUXARR_PASSWORD`.
+
+  `MUXARR_AUTH_METHOD` (`forms` or `external`, for an authenticating reverse
+  proxy) and `MUXARR_AUTH_REQUIRED` (`enabled` or
+  `disabled_for_local_addresses`) are editable in the UI too. There is no longer
+  an unauthenticated mode, and `/healthz` no longer reports `auth_required`.
 - **`Dockerfile.all-in-one` is now `Dockerfile`** (its s6 overlay moved to
   `cicd/containers/prod/`). Only matters if you build the image yourself.
 - History search ignores case on every database (it already did on SQLite).

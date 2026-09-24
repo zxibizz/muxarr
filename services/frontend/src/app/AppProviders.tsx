@@ -1,21 +1,20 @@
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { isUnauthorised, setToken } from '../api/client';
-import { AuthGateContext } from './auth-context';
+import { isUnauthorised } from '../api/client';
+import { keys } from '../api/queries';
 
 /**
- * Owns the query client so one place decides that a 401 means "prompt for a token".
+ * Owns the query client so one place decides that a 401 means "sign in again".
  * Every page would otherwise repeat the check, and miss it on new endpoints.
  */
 export function AppProviders({ children }: { children: ReactNode }) {
-  const [needsToken, setNeedsToken] = useState(false);
-
   const [client] = useState(() => {
+    // Re-reading the status is what sends AuthGate to the login page.
     const onError = (error: unknown) => {
-      if (isUnauthorised(error)) setNeedsToken(true);
+      if (isUnauthorised(error)) void client.invalidateQueries({ queryKey: keys.auth });
     };
-    return new QueryClient({
+    const client = new QueryClient({
       queryCache: new QueryCache({ onError }),
       mutationCache: new MutationCache({ onError }),
       defaultOptions: {
@@ -23,22 +22,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         queries: { retry: false, refetchOnWindowFocus: false },
       },
     });
+    return client;
   });
 
-  const submitToken = useCallback(
-    (token: string) => {
-      setToken(token);
-      setNeedsToken(false);
-      void client.invalidateQueries();
-    },
-    [client],
-  );
-
-  const gate = useMemo(() => ({ needsToken, submitToken }), [needsToken, submitToken]);
-
-  return (
-    <QueryClientProvider client={client}>
-      <AuthGateContext.Provider value={gate}>{children}</AuthGateContext.Provider>
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }

@@ -21,7 +21,7 @@ from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
 from src.infrastructure.settings.repository import SqlAlchemySettingsRepository
 from src.settings.config import Settings
-from tests.api.conftest import TOKEN, _client_for, auth
+from tests.api.conftest import API_KEY, _client_for, auth
 
 
 async def get_settings(client: AsyncClient) -> dict[str, Any]:
@@ -240,7 +240,7 @@ class TestAiProbe:
 
         stored = Settings(
             read_roots=settings.read_roots,
-            auth_token=TOKEN,
+            api_key=API_KEY,
             db_url=settings.db_url,
             ai_api_key="sk-stored",
         )

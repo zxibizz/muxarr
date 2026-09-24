@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { renderRouted, someSettings, stubFetch } from '../../test/helpers';
+import { anAuthStatus, renderRouted, someSettings, stubFetch } from '../../test/helpers';
 import { FIELDS, SECTIONS } from './fields';
 import { SettingsPage } from './SettingsPage';
 
@@ -199,5 +199,42 @@ describe('the AI provider test', () => {
 
     const alert = await screen.findByText(/provider reachable/i);
     expect(within(alert.closest('[role="alert"]') ?? alert).getByText(/42 ms/)).toBeTruthy();
+  });
+});
+
+describe('the security section', () => {
+  it('shows the API key and regenerates it only once confirmed', async () => {
+    const fetchStub = stubFetch();
+    await loaded('/settings?section=security');
+    const regenerations = () =>
+      fetchStub.mock.calls.filter(([path]) => String(path).endsWith('/api-key/regenerate'));
+
+    expect(await screen.findByDisplayValue('0123456789abcdef0123456789abcdef')).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', { name: /regenerate api key/i }));
+    const dialog = await screen.findByRole('dialog');
+    expect(regenerations()).toHaveLength(0);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /^regenerate$/i }));
+
+    expect(await screen.findByText('API key regenerated')).toBeInTheDocument();
+    expect(regenerations()).toHaveLength(1);
+  });
+
+  it('offers no regeneration for a pinned key', async () => {
+    stubFetch({ apiKey: { api_key: 'from-compose', locked: true } });
+    await loaded('/settings?section=security');
+
+    expect(await screen.findByDisplayValue('from-compose')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /regenerate api key/i })).not.toBeInTheDocument();
+    expect(screen.getByText('MUXARR_API_KEY', { selector: 'code' })).toBeInTheDocument();
+  });
+
+  it('locks the login fields when the environment pins them', async () => {
+    stubFetch({ auth: anAuthStatus({ credentials_locked: true }) });
+    await loaded('/settings?section=security');
+
+    expect(await screen.findByLabelText(/^username/i)).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^change$/i })).toBeDisabled();
   });
 });

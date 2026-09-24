@@ -19,6 +19,12 @@ from src.api.app import create_app
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.core.container import AppContainer
 from src.db.session import DBManager
+from src.infrastructure.auth.hasher import Pbkdf2PasswordHasher
+from src.infrastructure.auth.repository import (
+    SqlAlchemyApiKeyRepository,
+    SqlAlchemySessionRepository,
+    SqlAlchemyUserRepository,
+)
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
@@ -29,7 +35,10 @@ from tests.stubs import VIDEO_ONLY
 
 __all__ = ["VIDEO_ONLY"]
 
-TOKEN = "s3cret-token"
+API_KEY = "s3cret-api-key"
+
+# The production work factor costs ~0.5s a hash; the tests only need the format.
+FAST_HASHER = Pbkdf2PasswordHasher(iterations=1_000)
 
 
 class StubHandler:
@@ -47,7 +56,7 @@ class StubHandler:
 
 
 def auth() -> dict[str, str]:
-    return {"Authorization": f"Bearer {TOKEN}"}
+    return {"X-Api-Key": API_KEY}
 
 
 @pytest.fixture
@@ -68,24 +77,35 @@ def layout(tmp_path: Path) -> dict[str, Path]:
 def settings(tmp_path: Path) -> Settings:
     return Settings(
         read_roots=(tmp_path / "downloads", tmp_path / "library"),
-        auth_token=TOKEN,
+        api_key=API_KEY,
         db_url="sqlite+aiosqlite:///:memory:",
     )
 
 
+def make_container(settings: Settings, db: DBManager, **overrides: Any) -> AppContainer:
+    """A container whose every repository is pinned to the fixture's engine.
+
+    Anything left to default would open a second, separate in-memory database.
+    """
+    wiring: dict[str, Any] = {
+        "history": SqlAlchemyHistoryRepository(db),
+        "jobs": SqlAlchemyJobRepository(db),
+        "worker_state": SqlAlchemyWorkerStateRepository(db),
+        "settings_store": SqlAlchemySettingsRepository(db),
+        "users": SqlAlchemyUserRepository(db),
+        "sessions": SqlAlchemySessionRepository(db),
+        "api_keys": SqlAlchemyApiKeyRepository(db),
+        "hasher": FAST_HASHER,
+        # The real environment would pin whatever the developer happens to export.
+        "env": {},
+    }
+    wiring.update(overrides)
+    return AppContainer(settings, **wiring)
+
+
 @pytest.fixture
 async def container(settings: Settings, db: DBManager) -> AppContainer:
-    # Every repository is pinned to the fixture's engine, so the container never
-    # opens a second (and separate) in-memory database of its own.
-    return AppContainer(
-        settings,
-        history=SqlAlchemyHistoryRepository(db),
-        jobs=SqlAlchemyJobRepository(db),
-        worker_state=SqlAlchemyWorkerStateRepository(db),
-        settings_store=SqlAlchemySettingsRepository(db),
-        # The real environment would pin whatever the developer happens to export.
-        env={},
-    )
+    return make_container(settings, db)
 
 
 async def drain(container: AppContainer) -> int:

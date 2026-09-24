@@ -43,6 +43,11 @@ def create_app(settings: Settings, container: AppContainer | None = None) -> Fas
         except Exception:
             log.exception("could not load the stored settings; using the environment")
         try:
+            await resolved.bootstrap_auth()
+        except Exception:
+            # Retried lazily on the first request that needs the API key.
+            log.exception("could not prepare the API key and login")
+        try:
             yield
         finally:
             await resolved.shutdown()
@@ -75,7 +80,3 @@ def serve(settings: Settings | None = None) -> None:
 
 def _start_logging(settings: Settings) -> None:
     configure_logging(level=settings.log_level, serialize=settings.log_json)
-    if settings.auth_token is None:
-        log.warning(
-            "MUXARR_TOKEN is not set; the API is unauthenticated. Bind to a private network only."
-        )

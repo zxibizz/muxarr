@@ -43,7 +43,7 @@ body:
     attributes:
       label: GET /v1/system output
       description: >
-        `curl -H "Authorization: Bearer $MUXARR_TOKEN" http://muxarr:8710/v1/system`.
+        `curl -H "X-Api-Key: $MUXARR_API_KEY" http://muxarr:8710/v1/system`.
         Worker liveness and queue depth explain a surprising number of reports.
       render: json
     validations:
@@ -65,7 +65,7 @@ body:
     attributes:
       label: Environment
       description: >
-        How Muxarr is deployed, the relevant `MUXARR_*` variables (not the token),
+        How Muxarr is deployed, the relevant `MUXARR_*` variables (not the API key),
         and the `mkvmerge --version` from inside the container.
       placeholder: |
         Deployment: docker compose, ghcr.io/zxibizz/muxarr:0.9.2

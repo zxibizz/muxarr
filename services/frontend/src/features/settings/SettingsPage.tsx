@@ -12,6 +12,7 @@ import { AiSection } from './sections/AiSection';
 import { LoggingSection } from './sections/LoggingSection';
 import { MuxingSection } from './sections/MuxingSection';
 import { QueueSection } from './sections/QueueSection';
+import { SecuritySection } from './sections/SecuritySection';
 import { SelectionSection } from './sections/SelectionSection';
 import { useSettingsForm } from './useSettingsForm';
 
@@ -72,6 +73,9 @@ function SettingsForm({ settings, section, onSectionChange }: FormProps) {
           </Tabs.Panel>
           <Tabs.Panel value="logging" pt="lg">
             <LoggingSection {...editor.api} />
+          </Tabs.Panel>
+          <Tabs.Panel value="security" pt="lg">
+            <SecuritySection {...editor.api} />
           </Tabs.Panel>
         </Tabs>
 
