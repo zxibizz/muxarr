@@ -1,6 +1,6 @@
 # Architecture
 
-muxarr is two processes around one table, plus a shell script that runs somewhere
+Muxarr is two processes around one table, plus a shell script that runs somewhere
 else entirely.
 
 ```mermaid
@@ -66,7 +66,7 @@ sequenceDiagram
 ```
 
 Every unexpected condition inside the import becomes `DeferMove`, which makes
-the \*arr app import the file itself as though muxarr were absent. A job in
+the \*arr app import the file itself as though Muxarr were absent. A job in
 state `failed` therefore means the daemon itself broke; the shim fails that
 import rather than let \*arr move a file a mux may still be rewriting.
 

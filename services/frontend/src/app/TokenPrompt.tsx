@@ -34,7 +34,7 @@ export function TokenPrompt({ opened, onSubmit }: Props) {
       >
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            This muxarr instance is protected. Enter the value of <Code>MUXARR_TOKEN</Code>; it is
+            This Muxarr instance is protected. Enter the value of <Code>MUXARR_TOKEN</Code>; it is
             kept in this browser only.
           </Text>
           <PasswordInput

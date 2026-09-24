@@ -98,7 +98,7 @@ within the same major version.
 ### Added
 
 - **Every history entry now carries the log of the import that produced it.**
-  Opening an operation shows what muxarr did, in order: what the source already
+  Opening an operation shows what Muxarr did, in order: what the source already
   contained, which sidecars were found and how each was identified, the verdict
   and reason for every candidate, the remux itself, and the outcome — followed
   by the full log it was distilled from. Kept per import and trimmed with the
@@ -140,7 +140,7 @@ within the same major version.
   retention, AI and the log level can now be changed from the browser and take
   effect within seconds — in both the API and the worker process, with no
   restart. Read roots, the database URL, the bind address, the API token and
-  the scratch directory stay environment-only: they decide what muxarr may
+  the scratch directory stay environment-only: they decide what Muxarr may
   touch and how it is reached.
   A variable that is actually set in the environment **wins and locks its
   field**, which is rendered read-only and names the variable, so an existing
@@ -164,7 +164,7 @@ within the same major version.
   `MUXARR_AI_MODEL`, `MUXARR_AI_TIMEOUT` and `MUXARR_AI_MAX_ENTRIES`.
   Only file and folder *names* are sent, relative to the release folder; never
   file contents and never absolute paths. A proposal is only accepted if it
-  names a file muxarr already listed on disk, the track kind still comes from
+  names a file Muxarr already listed on disk, the track kind still comes from
   the extension, and an unrecognised language falls back to `und`. Any provider
   failure degrades to the filename result rather than failing the import.
   AI-chosen tracks are marked `[ai]` in the history.

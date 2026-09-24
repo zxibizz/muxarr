@@ -47,7 +47,7 @@ def create_app(settings: Settings, container: AppContainer | None = None) -> Fas
         finally:
             await resolved.shutdown()
 
-    app = FastAPI(title="muxarr", version=__version__, lifespan=lifespan)
+    app = FastAPI(title="Muxarr", version=__version__, lifespan=lifespan)
     app.state.container = resolved
     register_error_handlers(app)
     register_routes(app)

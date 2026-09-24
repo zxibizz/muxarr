@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        muxarr logs the decision it made for every import and why. The logs plus
+        Muxarr logs the decision it made for every import and why. The logs plus
         `GET /v1/system` answer most questions on their own, so please include both.
 
         Security issues go through [private reporting](https://github.com/zxibizz/muxarr/security/advisories/new)
@@ -25,7 +25,7 @@ body:
       label: How to reproduce
       placeholder: |
         1. Sonarr imports a release containing ...
-        2. muxarr logs ...
+        2. Muxarr logs ...
         3. The resulting file has ...
     validations:
       required: true
@@ -33,7 +33,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: muxarr version
+      label: Muxarr version
       description: The `version` field from `curl http://muxarr:8710/healthz`, or your image tag.
     validations:
       required: true
@@ -52,7 +52,7 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: muxarr logs
+      label: Muxarr logs
       description: >
         `docker logs muxarr` around the time of the import. Redact paths if you
         need to, but keep them recognisable — path mismatches are a common cause.
@@ -65,7 +65,7 @@ body:
     attributes:
       label: Environment
       description: >
-        How muxarr is deployed, the relevant `MUXARR_*` variables (not the token),
+        How Muxarr is deployed, the relevant `MUXARR_*` variables (not the token),
         and the `mkvmerge --version` from inside the container.
       placeholder: |
         Deployment: docker compose, ghcr.io/zxibizz/muxarr:0.9.2
@@ -82,7 +82,7 @@ body:
     attributes:
       label: Checks
       options:
-        - label: Every media path is mounted at the same path in the *arr containers and in muxarr.
+        - label: Every media path is mounted at the same path in the *arr containers and in Muxarr.
           required: true
         - label: I am running the latest release.
           required: false

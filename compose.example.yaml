@@ -1,20 +1,15 @@
-# Example deployment: one container running the API, the worker and the UI
-# (MUXARR_MODE=all, the default) on SQLite. compose.split.example.yaml runs the
-# API and the worker as separate containers on Postgres. Copy to compose.yaml
-# and adjust paths.
+# Muxarr as an add-on to the Radarr/Sonarr stack you already run: one container
+# with the API, the worker and the UI (MUXARR_MODE=all, the default) on SQLite.
+# compose.split.example.yaml runs the API and the worker apart, on Postgres.
+#
+# Copy to compose.yaml next to a .env holding MUXARR_TOKEN and ARR_NETWORK (see
+# .env.example), then `docker compose up -d`. What to add to your Radarr/Sonarr
+# services is at the bottom of this file.
 #
 # THE ONE RULE: every media path must be mounted at the SAME path inside the
-# *arr containers and inside muxarr. Radarr/Sonarr hand muxarr absolute paths;
-# if /media means something different in each container, muxarr will reject them
+# *arr containers and inside Muxarr. Radarr/Sonarr hand Muxarr absolute paths;
+# if /media means something different in each container, Muxarr will reject them
 # as outside its read roots and silently defer every import.
-#
-# The anchors below are how that rule is enforced: edit a path once and all
-# three services follow. Inlining one of them into a single service is how the
-# two sides drift apart.
-
-x-media:
-  downloads: &downloads /srv/downloads:/downloads
-  media: &media /srv/media:/media
 
 services:
   muxarr:
@@ -29,8 +24,8 @@ services:
     environment:
       # s6 starts as root and drops to these before running anything. Match the
       # uid/gid that owns your library -- the *arr containers' PUID/PGID.
-      PUID: 1000
-      PGID: 1000
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
       # Colon-separated. Must cover both download and library paths.
       MUXARR_READ_ROOTS: /downloads:/media
       MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
@@ -59,104 +54,39 @@ services:
       # The operation history lives here and is migrated on every start.
       # Drop this and every restart begins with an empty history.
       - ./muxarr-config:/config
-      # muxarr copies the shims it ships with into here on every start, so
-      # nothing needs a checkout of the source. Do not mount this over
+      # Muxarr copies the shims it ships with into here on every start, and the
+      # *arr containers mount the same host directory. Do not mount this over
       # /app/scripts instead: that hides the image's own copy behind whatever
-      # the volume already holds, which is the staleness this is fixing.
-      - shims:/shims
-      - *downloads
-      - *media
+      # the directory already holds, which is the staleness this is fixing.
+      - /opt/muxarr/shims:/shims
+      # Copy these from your Radarr/Sonarr service's volumes, both sides of the
+      # colon, and keep MUXARR_READ_ROOTS above in step with the right-hand side.
+      - /srv/downloads:/downloads
+      - /srv/media:/media
     networks: [arr]
     ports:
       # nginx serves the web UI and proxies /v1 to the API behind it. Drop this
       # if you only want the *arr containers to reach it.
       - "8710:8710"
 
-  sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
-    container_name: sonarr
-    restart: unless-stopped
-    depends_on:
-      muxarr:
-        # Healthy, not started: the shims are published during muxarr's init,
-        # and /healthz only answers once that has finished.
-        condition: service_healthy
-    environment:
-      PUID: 1000
-      PGID: 1000
-      TZ: Etc/UTC
-      # Read by the shim, not by Sonarr itself.
-      MUXARR_URL: http://muxarr:8710
-      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
-    volumes:
-      - ./sonarr-config:/config
-      - *downloads
-      - *media
-      - shims:/config/scripts:ro
-    ports:
-      - "8989:8989"
-    networks: [arr]
-
-  radarr:
-    image: lscr.io/linuxserver/radarr:latest
-    container_name: radarr
-    restart: unless-stopped
-    depends_on:
-      muxarr:
-        condition: service_healthy
-    environment:
-      PUID: 1000
-      PGID: 1000
-      TZ: Etc/UTC
-      MUXARR_URL: http://muxarr:8710
-      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
-    volumes:
-      - ./radarr-config:/config
-      - *downloads
-      - *media
-      - shims:/config/scripts:ro
-    ports:
-      - "7878:7878"
-    networks: [arr]
-
-volumes:
-  shims:
-    # Named explicitly so the other stack can find it; compose would otherwise
-    # prefix it with the project directory's name.
-    name: muxarr-shims
-
 networks:
   arr:
-    driver: bridge
+    # The network Radarr/Sonarr are already on, so they can resolve
+    # http://muxarr:8710. `docker inspect radarr` lists it under Networks.
+    external: true
+    name: ${ARR_NETWORK:?set ARR_NETWORK in .env to the network Radarr/Sonarr are on}
 
 # ---------------------------------------------------------------------------
-# If the *arr containers live in their own compose stack
+# Add to EACH of your Radarr and Sonarr services, in their own compose file:
 #
-# 1. DNS. Each project gets its own bridge network, so http://muxarr:8710 stops
-#    resolving and the shim quietly defers every import. Share a network:
+#     environment:
+#       MUXARR_URL: http://muxarr:8710
+#       MUXARR_TOKEN: <the same value as in Muxarr's .env>
+#     volumes:
+#       - /opt/muxarr/shims:/config/scripts:ro
 #
-#        docker network create arr-shared
-#
-#    then in BOTH projects, replacing the `arr` network above:
-#
-#        networks:
-#          arr-shared:
-#            external: true
-#
-# 2. The shims. Keep the shims volume attached to muxarr here; the other stack
-#    only mounts it, and must declare it external because compose will not
-#    create a volume it does not own:
-#
-#        volumes:
-#          shims:
-#            external: true
-#            name: muxarr-shims
-#
-#    depends_on cannot reach across projects, so `up` the muxarr stack first
-#    after an upgrade -- otherwise the *arr containers run the previous shims
-#    until muxarr has restarted.
-#
-# MUXARR_TOKEN is read from the *arr container's own environment, so it has to
-# be repeated in that stack's .env. THE ONE RULE still applies across the two
-# files, and nothing enforces it for you once the anchors are split.
+# Pasting the muxarr service into the same compose file as Radarr/Sonarr works
+# too: drop the `networks:` blocks and give the *arr services
+# `depends_on: {muxarr: {condition: service_healthy}}` so they never start
+# before the shims are published.
 # ---------------------------------------------------------------------------

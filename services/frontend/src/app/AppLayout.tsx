@@ -31,7 +31,7 @@ function Brand() {
     <Group gap={10} wrap="nowrap">
       <LogoMark size={30} />
       <Text fw={700} size="lg" lts={-0.2}>
-        muxarr
+        Muxarr
       </Text>
     </Group>
   );
@@ -118,7 +118,7 @@ export function AppLayout() {
             <WorkerStatus system={system} onNavigate={close} />
             {health && (
               <Text size="xs" c="dimmed" px={6}>
-                muxarr v{health.version}
+                Muxarr v{health.version}
               </Text>
             )}
           </Stack>

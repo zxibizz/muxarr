@@ -54,7 +54,7 @@ export async function request<T>(path: string, init: RequestInit = {}, body?: un
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch (cause) {
-    throw new ApiError(0, `cannot reach the muxarr daemon (${String(cause)})`);
+    throw new ApiError(0, `cannot reach the Muxarr daemon (${String(cause)})`);
   }
 
   if (!response.ok) {

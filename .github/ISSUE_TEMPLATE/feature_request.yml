@@ -1,11 +1,11 @@
 name: Feature request
-description: Suggest a capability muxarr does not have.
+description: Suggest a capability Muxarr does not have.
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Two things muxarr will not do, so you can save the typing: it never
+        Two things Muxarr will not do, so you can save the typing: it never
         transcodes (stream-copy only, by design), and it never writes to the
         download folder.
 
@@ -13,7 +13,7 @@ body:
     id: problem
     attributes:
       label: The problem
-      description: What are you trying to do that muxarr makes hard or impossible today?
+      description: What are you trying to do that Muxarr makes hard or impossible today?
     validations:
       required: true
 

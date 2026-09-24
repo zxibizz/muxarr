@@ -15,7 +15,7 @@ variable out to manage that setting from the UI instead.
 
 | Variable | Default | UI | Meaning |
 | --- | --- | --- | --- |
-| `MUXARR_READ_ROOTS` | *required* | | Colon-separated paths muxarr may read |
+| `MUXARR_READ_ROOTS` | *required* | | Colon-separated paths Muxarr may read |
 | `MUXARR_TOKEN` | *unset* | | Bearer token; unauthenticated if unset |
 | `MUXARR_HOST` / `MUXARR_PORT` | `127.0.0.1` / `8710` | | Bind address for `src.cli serve`. Ignored in the container image, where uvicorn binds `127.0.0.1:8000` and nginx serves `:8710` |
 | `MUXARR_MAX_CONCURRENT` | `1` | ✓ | Simultaneous remuxes, in the worker |
@@ -48,7 +48,7 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_MODE` | `all` | | Container image only: `all`, `web` or `worker` — see [Container modes](#container-modes) |
 
 Read roots, the database URL, the bind address, the API token and the scratch
-directory stay environment-only on purpose: they decide what muxarr is allowed
+directory stay environment-only on purpose: they decide what Muxarr is allowed
 to touch and how it is reached, which is not something an HTTP request should
 be able to move.
 
@@ -57,7 +57,7 @@ will say whether one is stored, but it is never sent back to the browser.
 
 ## Container modes
 
-The image runs any part of muxarr, picked by `MUXARR_MODE`:
+The image runs any part of Muxarr, picked by `MUXARR_MODE`:
 
 | Mode | Runs | Needs |
 | --- | --- | --- |
@@ -99,7 +99,7 @@ Set these in the Radarr/Sonarr container, where the shim runs.
 
 ## AI mode
 
-muxarr normally matches sidecars by filename: episode markers, language tags and
+Muxarr normally matches sidecars by filename: episode markers, language tags and
 folder names. That covers most releases, but not all of them — a folder called
 `Zvuk 1/` holding an untagged `.mka` is unattributable by any rule, and a season
 pack whose subtitles are numbered rather than named is ambiguous by design.
@@ -149,13 +149,13 @@ library layout above the release folder is disclosed either.
 
 The reply is treated as untrusted input:
 
-- a proposed file must be one muxarr already listed on disk; the model cannot
+- a proposed file must be one Muxarr already listed on disk; the model cannot
   introduce a path, and a reply naming anything else is discarded
 - whether a track is audio or subtitles comes from its extension, not the model
 - an unrecognised language becomes `und` rather than a guess
 - track names and dub tags are stripped of control characters and length-capped
 
-If the provider is slow, unreachable, or answers with nonsense, muxarr logs a
+If the provider is slow, unreachable, or answers with nonsense, Muxarr logs a
 warning and uses the filename result. An import is never failed because an API
 call was.
 

@@ -35,7 +35,7 @@ export function HistoryPage() {
     <Stack gap="xl">
       <PageHeader
         title="History"
-        description="Every import Radarr and Sonarr handed to muxarr, including the ones it left alone."
+        description="Every import Radarr and Sonarr handed to Muxarr, including the ones it left alone."
       />
 
       <StatsRow />

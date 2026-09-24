@@ -46,7 +46,7 @@ function Overview({ operation }: { operation: Operation }) {
       <Stack gap="md">
         <CopyPath label="Source" path={operation.source_path} />
         <CopyPath label="Destination requested by *arr" path={operation.destination_path} />
-        {operation.media_file && <CopyPath label="File muxarr produced" path={operation.media_file} />}
+        {operation.media_file && <CopyPath label="File Muxarr produced" path={operation.media_file} />}
       </Stack>
     </Stack>
   );

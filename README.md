@@ -1,10 +1,10 @@
-# muxarr
+# Muxarr
 
 [![CI](https://github.com/zxibizz/muxarr/actions/workflows/ci.yml/badge.svg)](https://github.com/zxibizz/muxarr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![ghcr.io](https://img.shields.io/badge/ghcr.io-zxibizz%2Fmuxarr-blue?logo=docker&logoColor=white)](https://github.com/zxibizz/muxarr/pkgs/container/muxarr)
 
-**Sidecars in, one clean MKV out.** muxarr embeds external audio and subtitle
+**Sidecars in, one clean MKV out.** Muxarr embeds external audio and subtitle
 tracks into the video container at the moment Radarr/Sonarr import a download,
 using the **Import Using Script** hook.
 
@@ -29,7 +29,7 @@ change to how you download, rename or organise anything.
 
 - **Stream-copy only.** No transcoding, ever. A mux costs one sequential read
   and one sequential write; a 40 GB remux is disk-bound, not CPU-bound.
-- **The download folder is read-only.** muxarr never writes, renames or deletes
+- **The download folder is read-only.** Muxarr never writes, renames or deletes
   anything on the source side, in any transfer mode. Seeding is unaffected, and
   cleanup stays with your download client's Completed Download Handling.
 - **Fail safe by construction.** Any error degrades to `DeferMove`, and
@@ -43,7 +43,84 @@ change to how you download, rename or organise anything.
   produced it — what the source already held, which sidecars were found, why
   each was taken or passed over — and the UI shows it back to you.
 
-![The muxarr import history: what was muxed, what was skipped and which tracks went in](docs/images/history.png)
+![The Muxarr import history: what was muxed, what was skipped and which tracks went in](docs/images/history.png)
+
+## Quick start
+
+Muxarr sits next to the Radarr/Sonarr stack you already run, as its own small
+compose project.
+
+1. **Start Muxarr.** Save this as `compose.yaml` in a new directory:
+
+   ```yaml
+   services:
+     muxarr:
+       image: ghcr.io/zxibizz/muxarr:0.9.2
+       container_name: muxarr
+       restart: unless-stopped
+       environment:
+         PUID: 1000                           # same as Radarr/Sonarr
+         PGID: 1000
+         MUXARR_READ_ROOTS: /downloads:/media # the container-side paths below
+         MUXARR_TOKEN: change-me              # openssl rand -hex 32
+       volumes:
+         - ./config:/config
+         - /opt/muxarr/shims:/shims           # Radarr/Sonarr mount this too
+         - /srv/downloads:/downloads          # exactly as in Radarr/Sonarr
+         - /srv/media:/media
+       ports:
+         - "8710:8710"
+   ```
+
+   Then:
+
+   ```sh
+   docker compose up -d
+   ```
+
+   The UI is now on <http://localhost:8710>.
+
+   > Every media path must be mounted at the **same path** in the \*arr
+   > containers and in Muxarr. Radarr/Sonarr pass absolute paths; if they mean
+   > different things in each container, Muxarr rejects them and defers.
+
+   `PUID`/`PGID` must own your library: Muxarr creates the final file.
+
+2. **Wire up Radarr and Sonarr.** In *their* compose file, add to each service:
+
+   ```yaml
+       environment:
+         MUXARR_URL: http://<muxarr-host-ip>:8710   # not localhost: that is this container
+         MUXARR_TOKEN: change-me                    # the same token as muxarr's
+       volumes:
+         - /opt/muxarr/shims:/config/scripts:ro
+   ```
+
+   Then `docker compose up -d` there too. The shims ship inside the Muxarr
+   image, which republishes them into `/opt/muxarr/shims` on every start, so
+   nothing needs a checkout of this repo and an upgrade reaches Radarr/Sonarr
+   without restarting them.
+
+3. **Configure Radarr/Sonarr.** Settings → Media Management → *show Advanced* →
+   Importing:
+   - tick **Import Using Script**
+   - set **Import Script Path** to `/config/scripts/muxarr-import-radarr.sh` in
+     Radarr, or `/config/scripts/muxarr-import-sonarr.sh` in Sonarr
+   - leave **Import Extra Files** as you had it; Muxarr suppresses the duplicate
+     sidecar copy only for imports it actually muxed
+
+4. **Check it.** `docker exec radarr curl -s http://<muxarr-host-ip>:8710/healthz`,
+   then import something and watch `docker logs -f muxarr`.
+
+   > `worker_alive` in that response must be `true`. If it is not, imports will
+   > queue with nothing to run them and every one of them will eventually fail.
+
+Prefer one compose file for everything? Paste the `muxarr` service into it
+instead and use `MUXARR_URL: http://muxarr:8710`; the notes at the end of
+[compose.example.yaml](compose.example.yaml) say what else changes, and how to
+join the \*arr network from a separate stack. To run the API and the worker as
+separate containers on Postgres, start from
+[compose.split.example.yaml](compose.split.example.yaml).
 
 ## How it fits together
 
@@ -72,7 +149,7 @@ same job id, which the API treats idempotently.
 There is one shim per app — `muxarr-import-radarr.sh` and
 `muxarr-import-sonarr.sh` — because each reads a different set of \*arr
 environment variables. Both are dependency-free POSIX `sh` (needs only `curl` or
-`wget`). All the heavy dependencies live in the muxarr container.
+`wget`). All the heavy dependencies live in the Muxarr container.
 [docs/architecture.md](docs/architecture.md) goes deeper.
 
 ## Web UI
@@ -97,48 +174,6 @@ will lose it.
 
 If `MUXARR_TOKEN` is set, the UI asks for it once and keeps it in the browser's
 local storage.
-
-## Setup
-
-1. **Deploy.** Copy `compose.example.yaml` to `compose.yaml`, set `MUXARR_TOKEN`
-   in a `.env` file, and adjust the volume paths. The image is published at
-   `ghcr.io/zxibizz/muxarr` — pin a version tag rather than `latest`:
-
-   ```yaml
-   image: ghcr.io/zxibizz/muxarr:0.9.2
-   ```
-
-   Set `PUID`/`PGID` to the uid that owns your library — muxarr creates the
-   final file, so it must match.
-
-   > Every media path must be mounted at the **same path** in the \*arr
-   > containers and in muxarr. Radarr/Sonarr pass absolute paths; if they mean
-   > different things in each container, muxarr rejects them and defers.
-
-   > `/config` holds the operation history. Migrations run on every start.
-
-   To run the API and the worker as separate containers on Postgres, start from
-   `compose.split.example.yaml` instead.
-
-2. **Share the shims.** They ship inside the muxarr image, which copies them
-   into a `muxarr-shims` volume on every start; the \*arr containers mount it
-   read-only at `/config/scripts`. Nothing needs a checkout of this repo, and an
-   upgraded image republishes them. Depend on muxarr being *healthy*, not
-   merely started, or the \*arr containers can come up before the copy.
-
-3. **Configure Radarr/Sonarr.** Settings → Media Management → *show Advanced* →
-   Importing:
-   - tick **Import Using Script**
-   - set **Import Script Path** to `/config/scripts/muxarr-import-radarr.sh` in
-     Radarr, or `/config/scripts/muxarr-import-sonarr.sh` in Sonarr
-   - leave **Import Extra Files** as you had it; muxarr suppresses the duplicate
-     sidecar copy only for imports it actually muxed
-
-4. **Check it.** `curl http://muxarr:8710/healthz` from inside the \*arr
-   container, then import something and watch the muxarr logs.
-
-   > `worker_alive` in that response must be `true`. If it is not, imports will
-   > queue with nothing to run them and every one of them will eventually fail.
 
 ## Configuration
 

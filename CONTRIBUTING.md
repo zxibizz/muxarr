@@ -1,6 +1,6 @@
-# Contributing to muxarr
+# Contributing to Muxarr
 
-Thanks for taking an interest. muxarr sits in the path of someone's media
+Thanks for taking an interest. Muxarr sits in the path of someone's media
 library, so the bar for correctness is higher than the size of the project
 suggests — a bug here does not produce a stack trace, it produces a wrong file
 where a good one used to be.
@@ -64,7 +64,7 @@ review. They are explained in full in [AGENTS.md](AGENTS.md).
   or repurpose those two.
 - **`HandleImportUseCase.execute` never raises.** Every unexpected condition
   becomes a `DeferMove`, and Radarr/Sonarr import the file themselves as though
-  muxarr were not installed. Failing loudly is the wrong answer here.
+  Muxarr were not installed. Failing loudly is the wrong answer here.
 - **The download folder is never written to.** There is a parametrised test
   asserting a byte-for-byte snapshot across every transfer mode.
 - **New external dependencies go behind a Protocol** in
@@ -92,7 +92,7 @@ Check the generated file by hand — autogenerate does not know about SQLite's
 `ALTER TABLE` limits, and existing users will run your migration against a
 database with real data in it. Test the downgrade too.
 
-muxarr runs on SQLite and Postgres, and CI runs the repository tests and the
+Muxarr runs on SQLite and Postgres, and CI runs the repository tests and the
 migrations against both. To do the same locally, point the suite at a throwaway
 Postgres; every test drops and recreates the tables in it:
 
@@ -138,7 +138,7 @@ image tag, and never moves `latest`.
 ## Reporting bugs
 
 Open an issue with the bug template. The single most useful thing you can
-include is the output of `GET /v1/system` and the muxarr logs around the
+include is the output of `GET /v1/system` and the Muxarr logs around the
 import — the daemon logs the decision it made and why.
 
 Security issues go to [SECURITY.md](SECURITY.md) instead, not to the issue

@@ -48,7 +48,7 @@ export function HistoryTable({ operations, loading, filtered, onSelect }: Props)
       <EmptyState icon={IconInbox} title="Nothing matches these filters" />
     ) : (
       <EmptyState icon={IconInbox} title="No imports yet">
-        muxarr records every import Radarr or Sonarr hands it, including the ones it left alone.
+        Muxarr records every import Radarr or Sonarr hands it, including the ones it left alone.
         Import something and it shows up here.
       </EmptyState>
     );

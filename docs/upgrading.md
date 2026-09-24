@@ -27,8 +27,8 @@ Then:
 3. Pull the new tag and recreate the container. Migrations run automatically on
    every start, before the API or worker come up.
 4. The shims are republished from the image on every start, so the \*arr
-   containers pick up the new ones with no action — as long as they depend on
-   muxarr being *healthy* and the shims volume is not mounted over.
+   containers pick up the new ones with no action — as long as the shims
+   directory is not mounted over.
 
 Downgrading across a migration is not supported: bring the old database back
 from your backup instead.

@@ -1,14 +1,16 @@
 # Split deployment: the web container (API + UI) and the worker (the only thing
 # that muxes) run separately and meet at a shared Postgres database. Copy to
-# compose.yaml, adjust paths and set MUXARR_TOKEN and MUXARR_DB_PASSWORD in .env.
+# compose.yaml, adjust paths and set MUXARR_TOKEN, MUXARR_DB_PASSWORD and
+# ARR_NETWORK in .env.
 #
 # For a single container on SQLite, use compose.example.yaml instead. This file
 # is for when you want to restart or resource-limit the worker on its own, or
 # keep mkvmerge and write access to the library out of the container that
-# faces the network.
+# faces the network. Wiring Radarr/Sonarr up is the same as there (see the end
+# of compose.example.yaml), with MUXARR_URL pointing at muxarr-web.
 #
 # THE ONE RULE: every media path must be mounted at the SAME path inside the
-# *arr containers and inside the muxarr WORKER. Radarr/Sonarr hand muxarr
+# *arr containers and inside the Muxarr WORKER. Radarr/Sonarr hand Muxarr
 # absolute paths; if /media means something different in each container, the
 # worker rejects them as outside its read roots and every import is deferred.
 # The web container never opens a media file, so it needs no media mounts.
@@ -16,16 +18,12 @@
 # Run exactly ONE worker. A starting worker fails every job still marked
 # running, on the assumption that it is the one that died mid-mux.
 
-x-media:
-  downloads: &downloads /srv/downloads:/downloads
-  media: &media /srv/media:/media
-
-# Both muxarr containers read the same configuration. Keep it here rather than
+# Both Muxarr containers read the same configuration. Keep it here rather than
 # on one service: a variable set on only one of them is locked in the UI while
 # the other still follows the Settings page.
 x-muxarr-env: &muxarr-env
-  PUID: 1000
-  PGID: 1000
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
   MUXARR_READ_ROOTS: /downloads:/media
   MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
   # URL-encode the password if it contains anything but letters and digits.
@@ -40,7 +38,6 @@ x-muxarr: &muxarr
   #   context: .
   #   dockerfile: Dockerfile
   restart: unless-stopped
-  networks: [arr]
 
 services:
   postgres:
@@ -59,7 +56,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks: [arr]
 
   muxarr-web:
     <<: *muxarr
@@ -74,7 +70,10 @@ services:
       MUXARR_MODE: web
     volumes:
       # Republished from the image on every start; see compose.example.yaml.
-      - shims:/shims
+      - /opt/muxarr/shims:/shims
+    # The only Muxarr container the *arr apps talk to; Postgres and the worker
+    # stay on this stack's own network.
+    networks: [default, arr]
     ports:
       - "8710:8710"
 
@@ -92,62 +91,13 @@ services:
       # Uncomment only if the library is on NFS/SMB or a union filesystem.
       # MUXARR_SCRATCH_DIR: /scratch
     volumes:
-      - *downloads
-      - *media
-
-  sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
-    container_name: sonarr
-    restart: unless-stopped
-    depends_on:
-      muxarr-web:
-        # Healthy, not started: the shims are published during muxarr's init.
-        condition: service_healthy
-    environment:
-      PUID: 1000
-      PGID: 1000
-      TZ: Etc/UTC
-      # Read by the shim, not by Sonarr itself. Always the WEB container.
-      MUXARR_URL: http://muxarr-web:8710
-      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
-    volumes:
-      - ./sonarr-config:/config
-      - *downloads
-      - *media
-      - shims:/config/scripts:ro
-    ports:
-      - "8989:8989"
-    networks: [arr]
-
-  radarr:
-    image: lscr.io/linuxserver/radarr:latest
-    container_name: radarr
-    restart: unless-stopped
-    depends_on:
-      muxarr-web:
-        condition: service_healthy
-    environment:
-      PUID: 1000
-      PGID: 1000
-      TZ: Etc/UTC
-      MUXARR_URL: http://muxarr-web:8710
-      MUXARR_TOKEN: ${MUXARR_TOKEN:?set MUXARR_TOKEN in .env}
-    volumes:
-      - ./radarr-config:/config
-      - *downloads
-      - *media
-      - shims:/config/scripts:ro
-    ports:
-      - "7878:7878"
-    networks: [arr]
-
-volumes:
-  shims:
-    name: muxarr-shims
+      # Copy these from your Radarr/Sonarr service's volumes, both sides of the
+      # colon, and keep MUXARR_READ_ROOTS in step with the right-hand side.
+      - /srv/downloads:/downloads
+      - /srv/media:/media
 
 networks:
   arr:
-    driver: bridge
-
-# If the *arr containers live in their own compose stack, the notes at the end
-# of compose.example.yaml apply unchanged, with muxarr-web in place of muxarr.
+    # The network Radarr/Sonarr are already on; see compose.example.yaml.
+    external: true
+    name: ${ARR_NETWORK:?set ARR_NETWORK in .env to the network Radarr/Sonarr are on}
