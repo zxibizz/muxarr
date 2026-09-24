@@ -33,8 +33,10 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_SKIP_IMAGE_SUBTITLES` | `false` | ✓ | Exclude PGS/VobSub |
 | `MUXARR_SKIP_UNDETERMINED` | `false` | ✓ | Exclude tracks with unknown language |
 | `MUXARR_MAX_TRACKS` | `24` | ✓ | Cap on embedded tracks |
-| `MUXARR_KEEP_AUDIO_LANGUAGES` | *unset* | ✓ | Comma-separated languages (`eng,rus`, `en`, `russian`) to keep. Every other audio track is stripped from the source and not embedded from sidecars; list `und` to keep untagged tracks. An import that would lose all its audio is left to *arr |
+| `MUXARR_KEEP_AUDIO_LANGUAGES` | *unset* | ✓ | Comma-separated languages (`eng,rus`, `en`, `russian`) to keep. Every other audio track is stripped from the source and not embedded from sidecars; list `und` to keep untagged tracks, `original` for the movie's or series' original language as \*arr reports it. An import that would lose all its audio is left to *arr |
 | `MUXARR_KEEP_SUBTITLE_LANGUAGES` | *unset* | ✓ | The same, for subtitles, forced ones included |
+| `MUXARR_SKIP_TAGS` | *unset* | ✓ | Comma-separated \*arr tags. A movie or series carrying any of them is imported as though Muxarr were absent |
+| `MUXARR_REQUIRE_TAGS` | *unset* | ✓ | Comma-separated \*arr tags. When set, only a movie or series carrying one of them is muxed |
 | `MUXARR_MUX_TIMEOUT` | `14400` | ✓ | Seconds before a single mkvmerge run is killed |
 | `MUXARR_FREE_SPACE_FACTOR` | `1.05` | ✓ | Free space required before a mux, as a multiple of the expected output |
 | `MUXARR_SUB_CHARSET` | *unset* | ✓ | Force a `--sub-charset` for text subtitles, e.g. `windows-1251` |
@@ -52,6 +54,7 @@ variable out to manage that setting from the UI instead.
 | `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
 | `TZ` | `UTC` | | Time zone for log timestamps, e.g. `Europe/Berlin`; the UI always shows your browser's |
 | `MUXARR_MODE` | `all` | | Container image only: `all`, `web` or `worker` — see [Container modes](#container-modes) |
+| `MUXARR_URL_BASE` | *unset* | | Container image only: serve the UI and API under a sub-path such as `/muxarr` — see [URL base](#url-base) |
 
 Read roots, the database URL, the bind address, the API key, the login, the
 auth method, the local and proxy networks and the scratch directory stay
@@ -116,6 +119,24 @@ the same either way; this only matters for `disabled_for_local_addresses`.
 
 Writes from the browser must carry an `X-Requested-With` header, which the UI
 always sends and a cross-site form cannot; the API key is exempt.
+
+### URL base
+
+`MUXARR_URL_BASE=/muxarr` serves the UI and the API under that sub-path, the
+way the \*arr apps' URL Base does, for a proxy that routes `example.com/muxarr`
+to the container without stripping the prefix. The API also stays at the root,
+so the shims keep working with a `MUXARR_URL` that has no base in it; one that
+includes it works too.
+
+## What Radarr/Sonarr tell Muxarr
+
+Besides the two paths, the shims forward what \*arr puts in the import script's
+environment: the instance name, the movie or series title, its original
+language and tags, and \*arr's own URL. The history shows them and links back to
+the movie or series when Settings → General → Application URL is set in \*arr.
+They also drive `original` in the keep lists and the tag rules above. An import
+from an older shim carries none of it: `original` then keeps every language of
+its kind, and `MUXARR_REQUIRE_TAGS` defers.
 
 ## Container modes
 

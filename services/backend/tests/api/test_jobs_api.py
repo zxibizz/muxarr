@@ -77,5 +77,58 @@ async def test_detail_404(client: AsyncClient) -> None:
     assert (await client.get("/v1/jobs/unknown-job-id/detail", headers=auth())).status_code == 404
 
 
+async def test_arr_context_reaches_the_job_and_the_history(
+    client: AsyncClient, container: AppContainer, layout: dict[str, Path]
+) -> None:
+    job_id = uuid.uuid4().hex
+    await client.post(
+        "/v1/import",
+        json={
+            "job_id": job_id,
+            "app": "radarr",
+            "source_path": str(layout["source"]),
+            "destination_path": str(layout["destination"]),
+            "arr": {
+                "instance": "Radarr 4K",
+                "url": "http://radarr:7878/",
+                "title": "Some Movie",
+                "year": "2024",
+                "slug": "693134",
+                "original_language": "en",
+                "tags": "4K|dubs|",
+            },
+        },
+        headers=auth(),
+    )
+    await drain(container)
+
+    job = (await client.get(f"/v1/jobs/{job_id}/detail", headers=auth())).json()
+    operation = (await client.get(f"/v1/history/{job['history_id']}", headers=auth())).json()
+
+    expected = {
+        "instance": "Radarr 4K",
+        "title": "Some Movie",
+        "year": 2024,
+        "original_language": "eng",
+        "tags": ["4k", "dubs"],
+        "link": "http://radarr:7878/movie/693134",
+    }
+    assert job["arr"] == expected
+    assert operation["arr"] == expected
+
+
+async def test_an_import_without_arr_context_still_works(
+    client: AsyncClient, container: AppContainer, layout: dict[str, Path]
+) -> None:
+    """Shims from before 0.11 send none."""
+    job_id = await queue(client, layout)
+    await drain(container)
+
+    job = (await client.get(f"/v1/jobs/{job_id}/detail", headers=auth())).json()
+
+    assert job["state"] == "succeeded"
+    assert job["arr"] is None
+
+
 async def test_jobs_require_a_token(client: AsyncClient) -> None:
     assert (await client.get("/v1/jobs")).status_code == 401

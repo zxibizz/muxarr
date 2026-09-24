@@ -24,6 +24,8 @@ export type Credentials = Schemas['Credentials'];
 export type CredentialsChange = Schemas['CredentialsChange'];
 export type UserView = Schemas['UserView'];
 export type ApiKey = Schemas['ApiKeyView'];
+export type ArrContext = Schemas['ArrModel'];
+export type HealthIssue = Schemas['HealthIssueModel'];
 
 export type App = Operation['app'];
 export type MoveStatus = Operation['move_status'];

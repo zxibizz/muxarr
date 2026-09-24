@@ -10,6 +10,7 @@ import pytest
 from src.application.use_cases.imports.dto import ImportRequest
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
 from src.core.logging import capture_log
+from src.domain.arr import ArrContext
 from src.domain.errors import MuxError, ProbeError
 from src.domain.media import ExternalTrack, MediaInfo, Track
 from src.domain.naming import EpisodeRef
@@ -450,6 +451,71 @@ class TestKeepLanguages:
         assert any(
             e.stage == "selection" and "stripping source audio fre" in e.message for e in entries
         )
+
+    def test_original_is_what_arr_reports(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(layout, settings, muxer, audio=("original",))
+
+        handler.execute(request_for(layout, arr=ArrContext(original_language="fre")))
+
+        assert muxer.plans[0].keep_audio == (2,)
+
+    def test_original_sits_beside_named_languages(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        handler = self.handler(layout, settings, muxer, audio=("eng", "original"))
+
+        handler.execute(request_for(layout, arr=ArrContext(original_language="ger")))
+
+        assert muxer.plans[0].keep_audio == (1,)
+
+    def test_an_unknown_original_keeps_every_language_of_its_kind(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        """Better to keep too much than strip the one track the user asked for."""
+        handler = self.handler(layout, settings, muxer, audio=("original",), subtitles=("eng",))
+
+        handler.execute(request_for(layout))
+
+        assert (muxer.plans[0].keep_audio, muxer.plans[0].keep_subtitles) == (None, (3,))
+
+
+class TestTagScope:
+    def test_a_skip_tag_defers_before_anything_is_read(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        prober = StubProber(infos={layout["source"]: MULTI_LANGUAGE})
+        handler = use_case(
+            replace(settings, skip_tags=("no-mux",), keep_audio_languages=("eng",)),
+            prober=prober,
+            muxer=muxer,
+        )
+
+        outcome = handler.execute(request_for(layout, arr=ArrContext(tags=("4k", "no-mux"))))
+
+        assert outcome.move_status == "DeferMove"
+        assert outcome.reason == "tagged no-mux in *arr"
+        assert muxer.plans == []
+
+    @pytest.mark.parametrize("arr", [ArrContext(tags=("anime",)), None])
+    def test_a_missing_required_tag_defers(
+        self, layout: dict[str, Path], settings: Settings, arr: ArrContext | None
+    ) -> None:
+        handler = use_case(replace(settings, require_tags=("muxarr", "dubs")))
+
+        outcome = handler.execute(request_for(layout, arr=arr))
+
+        assert outcome.reason == "not tagged muxarr, dubs in *arr"
+
+    def test_a_required_tag_lets_the_import_through(
+        self, layout: dict[str, Path], settings: Settings
+    ) -> None:
+        handler = use_case(replace(settings, require_tags=("muxarr",)))
+
+        outcome = handler.execute(request_for(layout, arr=ArrContext(tags=("muxarr",))))
+
+        assert "tagged" not in outcome.reason
 
 
 class TestTheStoryItTells:

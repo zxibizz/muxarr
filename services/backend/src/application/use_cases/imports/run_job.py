@@ -119,6 +119,7 @@ class RunImportJobUseCase:
                     source_bytes=outcome.source_bytes,
                     output_bytes=outcome.output_bytes,
                     dry_run=request.dry_run,
+                    arr=request.arr,
                 )
             )
         except Exception:

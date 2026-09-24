@@ -26,6 +26,7 @@ from src.application.interfaces.jobs import (
 )
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.db.session import DBManager
+from src.domain.arr import ArrContext
 from src.domain.enums import App, JobState, MoveStatus
 from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.models import Job
@@ -52,6 +53,7 @@ class SqlAlchemyJobRepository:
             destination_path=str(request.destination_path),
             transfer_mode=request.transfer_mode,
             dry_run=int(request.dry_run),
+            arr=json.dumps(request.arr.to_dict()) if request.arr else None,
             created_at=now,
             updated_at=now,
         )
@@ -257,6 +259,7 @@ def _to_record(row: Job) -> JobRecord:
             destination_path=Path(row.destination_path),
             transfer_mode=row.transfer_mode,
             dry_run=bool(row.dry_run),
+            arr=ArrContext.from_stored(json.loads(row.arr)) if row.arr else None,
         ),
         outcome=_outcome_from_json(row.outcome) if row.outcome else None,
         error=row.error,

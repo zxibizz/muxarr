@@ -11,12 +11,19 @@ server {
     root /static;
     index index.html;
 
+    # nginx would build redirects from its own :8710, which is wrong behind a port
+    # mapping or a reverse proxy; a relative Location is right everywhere.
+    absolute_redirect off;
+
     # The shim POSTs an absolute path per track; the default 1m is ample, but a
     # season pack with many sidecars is not worth a 413.
     client_max_body_size 4m;
 
     gzip on;
     gzip_types text/css text/javascript application/javascript application/json;
+
+    # MUXARR_URL_BASE, written at start-up; empty when there is none.
+    include /etc/nginx/muxarr/url-base.conf;
 
     # The API contract is unprefixed: shims in the wild already POST /v1/import.
     location /v1/ {

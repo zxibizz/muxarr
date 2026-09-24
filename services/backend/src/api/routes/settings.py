@@ -67,6 +67,8 @@ def _view(container: AppContainer) -> SettingsView:
         sub_charset=settings.sub_charset,
         keep_audio_languages=list(settings.keep_audio_languages),
         keep_subtitle_languages=list(settings.keep_subtitle_languages),
+        skip_tags=list(settings.skip_tags),
+        require_tags=list(settings.require_tags),
         mux_timeout_seconds=settings.mux_timeout_seconds,
         free_space_factor=settings.free_space_factor,
         preserve_ownership=settings.preserve_ownership,

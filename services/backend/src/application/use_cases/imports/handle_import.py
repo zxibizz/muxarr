@@ -115,11 +115,13 @@ class HandleImportUseCase:
             )
 
     def _import(self, request: ImportRequest, findings: _Findings) -> ImportOutcome:
+        self._check_scope(request)
         source, destination = self._check_paths(request)
         info = self._probe_source(source)
-        pruning = self._prune(info)
+        policy = self._policy(request)
+        pruning = self._prune(info, policy)
 
-        accepted, rejected = self._choose(request, source, pruning)
+        accepted, rejected = self._choose(request, source, pruning, policy)
         findings.rejected = tuple(_rejection(r) for r in rejected)
         _check_worth_muxing(info, pruning, accepted, findings.rejected)
         output = self._check_output(destination)
@@ -148,6 +150,32 @@ class HandleImportUseCase:
             rejected_tracks=findings.rejected,
             removed_tracks=findings.removed,
         )
+
+    def _check_scope(self, request: ImportRequest) -> None:
+        skip, require = self._settings.skip_tags, self._settings.require_tags
+        if not skip and not require:
+            return
+        tags = set(request.arr.tags) if request.arr else set()
+        if skipped := sorted(tags.intersection(skip)):
+            raise _DeferError(f"tagged {', '.join(skipped)} in *arr", LogStage.GUARD)
+        if require and not tags.intersection(require):
+            wanted = ", ".join(require)
+            raise _DeferError(f"not tagged {wanted} in *arr", LogStage.GUARD)
+
+    def _policy(self, request: ImportRequest) -> selection.SelectionPolicy:
+        policy = self._settings.selection_policy
+        if not policy.wants_original:
+            return policy
+        original = request.arr.original_language if request.arr else None
+        if original is None:
+            _note(
+                LogStage.SELECTION,
+                "*arr did not report an original language, so a keep list naming "
+                "'original' keeps every language of its kind",
+            )
+        else:
+            _note(LogStage.SELECTION, f"original language is {original}, as *arr reports it")
+        return policy.with_original(original)
 
     def _check_paths(self, request: ImportRequest) -> tuple[Path, Path]:
         try:
@@ -183,8 +211,8 @@ class HandleImportUseCase:
                 ).debug(f"existing {existing.kind} track: {existing.language}")
         return info
 
-    def _prune(self, info: MediaInfo) -> selection.Pruning:
-        pruning = selection.prune(info, self._settings.selection_policy)
+    def _prune(self, info: MediaInfo, policy: selection.SelectionPolicy) -> selection.Pruning:
+        pruning = selection.prune(info, policy)
         why = selection.REJECT_REASONS["language_not_kept"]
         for stripped in pruning.removed:
             _note(
@@ -195,11 +223,12 @@ class HandleImportUseCase:
         return pruning
 
     def _choose(
-        self, request: ImportRequest, source: Path, pruning: selection.Pruning
+        self,
+        request: ImportRequest,
+        source: Path,
+        pruning: selection.Pruning,
+        policy: selection.SelectionPolicy,
     ) -> tuple[tuple[ExternalTrack, ...], tuple[selection.Rejection, ...]]:
-        settings = self._settings
-        policy = settings.selection_policy
-
         candidates = self._tracks.discover(source, episode=request.episode_ref)
         if not candidates and not pruning:
             raise _DeferError("no external tracks found beside the source", LogStage.DISCOVERY)
@@ -219,8 +248,8 @@ class HandleImportUseCase:
             max_tracks=policy.max_external_tracks,
             skip_image_subtitles=policy.skip_image_subtitles,
             skip_undetermined=policy.skip_undetermined_language,
-            keep_audio=",".join(settings.keep_audio_languages) or "all",
-            keep_subtitles=",".join(settings.keep_subtitle_languages) or "all",
+            keep_audio=",".join(sorted(policy.keep_audio_languages)) or "all",
+            keep_subtitles=",".join(sorted(policy.keep_subtitle_languages)) or "all",
         )
         present, missing = _split_missing(candidates)
         chosen = selection.select(pruning.kept, present, policy)

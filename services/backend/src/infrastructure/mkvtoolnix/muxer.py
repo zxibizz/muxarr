@@ -201,6 +201,9 @@ def verify(plan: MuxPlan, source_info: MediaInfo) -> MediaInfo:
 class MkvmergeMuxer:
     """Adapter object for the container; delegates to the module functions."""
 
+    def version(self) -> tuple[int, int] | None:
+        return mkvmerge_version()
+
     def supports_modern_flags(self) -> bool:
         return supports_modern_flag_syntax(mkvmerge_version())
 

@@ -18,11 +18,14 @@ from src.domain.enums import (
     AI_MODES,
     AUTH_METHODS,
     AUTH_REQUIRED,
+    CONTAINER_MODES,
     DEDUPE_MODES,
+    ORIGINAL_LANGUAGE,
     UNDETERMINED,
     AiMode,
     AuthMethod,
     AuthRequired,
+    ContainerMode,
     DedupeMode,
 )
 from src.domain.errors import MuxarrError
@@ -93,6 +96,9 @@ class Settings:
     # Languages to keep; any other track in the source or a sidecar is dropped.
     keep_audio_languages: tuple[str, ...] = ()
     keep_subtitle_languages: tuple[str, ...] = ()
+    # *arr tags: any of skip_tags defers the import; require_tags, if set, must match one.
+    skip_tags: tuple[str, ...] = ()
+    require_tags: tuple[str, ...] = ()
     mux_timeout_seconds: float = 4 * 60 * 60.0
     free_space_factor: float = 1.05
     preserve_ownership: bool = True
@@ -101,6 +107,8 @@ class Settings:
     # Emit one JSON object per record instead of the human-readable console line.
     log_json: bool = False
     db_url: str = DEFAULT_DB_URL
+    # Which processes this container runs (MUXARR_MODE); only the image sets it.
+    container_mode: ContainerMode = "all"
     # Off by default: enabling it sends release folder and file NAMES to a third party.
     ai_mode: AiMode = "off"
     ai_base_url: str = DEFAULT_AI_BASE_URL
@@ -202,6 +210,8 @@ class Settings:
             keep_subtitle_languages=parse_languages(
                 "MUXARR_KEEP_SUBTITLE_LANGUAGES", source.get("MUXARR_KEEP_SUBTITLE_LANGUAGES", "")
             ),
+            skip_tags=parse_tags(source.get("MUXARR_SKIP_TAGS", "")),
+            require_tags=parse_tags(source.get("MUXARR_REQUIRE_TAGS", "")),
             mux_timeout_seconds=_parse_float(source, "MUXARR_MUX_TIMEOUT", 4 * 60 * 60.0),
             free_space_factor=_parse_float(source, "MUXARR_FREE_SPACE_FACTOR", 1.05),
             preserve_ownership=_parse_bool(source, "MUXARR_PRESERVE_OWNERSHIP", default=True),
@@ -209,6 +219,9 @@ class Settings:
             log_level=source.get("MUXARR_LOG_LEVEL", "INFO").upper(),
             log_json=_parse_bool(source, "MUXARR_LOG_JSON"),
             db_url=normalise_db_url(source.get("MUXARR_DB_URL", "")),
+            container_mode=parse_choice(
+                "MUXARR_MODE", source.get("MUXARR_MODE") or "all", CONTAINER_MODES
+            ),
             ai_mode=ai_mode,
             ai_base_url=source.get("MUXARR_AI_BASE_URL", "").strip() or DEFAULT_AI_BASE_URL,
             ai_api_key=source.get("MUXARR_AI_API_KEY") or None,
@@ -255,12 +268,20 @@ def parse_languages(env: str, raw: str) -> tuple[str, ...]:
         token = part.strip().lower()
         if not token:
             continue
-        code = UNDETERMINED if token == UNDETERMINED else normalise_language(token)
+        if token in (UNDETERMINED, ORIGINAL_LANGUAGE):
+            code: str | None = token
+        else:
+            code = normalise_language(token)
         if code is None:
             raise ConfigError(f"{env} holds an unknown language {part.strip()!r}")
         if code not in codes:
             codes.append(code)
     return tuple(codes)
+
+
+def parse_tags(raw: str) -> tuple[str, ...]:
+    """Comma-separated *arr tag labels, lower-cased as *arr stores them."""
+    return tuple(dict.fromkeys(t.strip().lower() for t in raw.split(",") if t.strip()))
 
 
 def parse_networks(env: str, raw: str) -> tuple[IPNetwork, ...]:

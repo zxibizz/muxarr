@@ -44,6 +44,9 @@ class StubMuxer:
         self.plans: list[MuxPlan] = []
         self._error = error
 
+    def version(self) -> tuple[int, int] | None:
+        return (90, 0)
+
     def supports_modern_flags(self) -> bool:
         return True
 

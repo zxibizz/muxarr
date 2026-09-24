@@ -71,6 +71,30 @@ describe('HistoryPage', () => {
     expect(within(drawer).getByText('by filename')).toBeInTheDocument();
   });
 
+  it('links back to the series in *arr and names the instance', async () => {
+    stubFetch({
+      history: page([
+        anOperation({
+          arr: {
+            instance: 'Sonarr Anime',
+            title: 'Show',
+            year: 2024,
+            original_language: 'jpn',
+            tags: ['anime', 'dubs'],
+            link: 'http://sonarr:8989/series/show',
+          },
+        }),
+      ]),
+    });
+    const drawer = await openOperation();
+
+    expect(screen.getAllByText('Sonarr Anime').length).toBeGreaterThan(0);
+    const link = within(drawer).getByRole('link', { name: /show \(2024\)/i });
+    expect(link).toHaveAttribute('href', 'http://sonarr:8989/series/show');
+    expect(within(drawer).getByText('jpn')).toBeInTheDocument();
+    expect(within(drawer).getByText('anime, dubs')).toBeInTheDocument();
+  });
+
   it('labels a passed-over sidecar by why it was skipped', async () => {
     stubFetch({ history: page([anOperation({ rejected_tracks: [aRejection()] })]) });
     const drawer = await openOperation();

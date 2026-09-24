@@ -59,6 +59,8 @@ export function someSettings(overrides: Partial<ServiceSettings> = {}): ServiceS
     sub_charset: null,
     keep_audio_languages: [],
     keep_subtitle_languages: [],
+    skip_tags: [],
+    require_tags: [],
     mux_timeout_seconds: 14400,
     free_space_factor: 1.05,
     preserve_ownership: true,
@@ -133,6 +135,7 @@ export function aJob(overrides: Partial<Job> = {}): Job {
     destination_path: '/media/Show/Season 01/Show - S01E02.mkv',
     transfer_mode: 'Move',
     dry_run: false,
+    arr: null,
     created_at: '2026-09-22T10:00:00+00:00',
     updated_at: '2026-09-22T10:00:05+00:00',
     log: [aLogEntry()],
@@ -165,6 +168,7 @@ export function anOperation(overrides: Partial<Operation> = {}): Operation {
     source_bytes: 1024,
     output_bytes: 2048,
     dry_run: false,
+    arr: null,
     ...overrides,
   };
 }
@@ -206,6 +210,7 @@ export function stubFetch(responses: Responses = {}) {
         max_concurrent_muxes: 1,
       },
       queue: { pending: 0, running: 0, succeeded: 1, failed: 0 },
+      health: [],
     },
     history = { items: [anOperation()], total: 1, limit: 25, offset: 0 },
     jobs = { items: [], total: 0, limit: 20, offset: 0 },

@@ -16,8 +16,10 @@ from src.application.interfaces.history import HistoryRepository
 from src.application.interfaces.jobs import JobRecord, JobRepository, WorkerStateRepository
 from src.application.use_cases.imports.reconcile import ReconcileInterruptedJobsUseCase
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
+from src.application.use_cases.system.health import CheckWorkerHealthUseCase
 from src.core.logging import get_logger
 from src.domain.enums import LogComponent
+from src.domain.health import HealthIssue
 from src.settings.config import Settings
 
 log = get_logger(LogComponent.WORKER)
@@ -41,6 +43,10 @@ SWEEP_INTERVAL = 60.0
 # finished reading the confirmation.
 SETTINGS_POLL_INTERVAL = 5.0
 
+# Mounts and tools rarely change under a running container; a fix should still
+# show up on the System page without a restart.
+HEALTH_CHECK_INTERVAL = 300.0
+
 
 class ImportWorker:
     def __init__(
@@ -55,6 +61,7 @@ class ImportWorker:
         reconcile: Callable[[], ReconcileInterruptedJobsUseCase],
         settings: Callable[[], Settings],
         sync: Callable[[], Awaitable[bool]] | None = None,
+        health: Callable[[], CheckWorkerHealthUseCase] | None = None,
     ) -> None:
         self._jobs = jobs
         self._worker_state = worker_state
@@ -63,10 +70,13 @@ class ImportWorker:
         self._reconcile = reconcile
         self._settings = settings
         self._sync = sync
+        self._health = health
         self._stop = asyncio.Event()
         self._last_heartbeat = 0.0
         self._last_sweep = 0.0
         self._last_reload = 0.0
+        self._last_check = 0.0
+        self._last_issues: list[HealthIssue] = []
 
     def stop(self) -> None:
         self._stop.set()
@@ -90,6 +100,7 @@ class ImportWorker:
             else:
                 await self._idle()
                 await self._sweep()
+                await self._check()
 
         if running:
             log.info("waiting for in-flight muxes", count=len(running))
@@ -145,9 +156,30 @@ class ImportWorker:
             return
         self._last_reload = now
         try:
-            await self._sync()
+            if await self._sync():
+                # A new scratch dir, say, deserves a fresh verdict.
+                self._last_check = 0.0
         except Exception:
             log.exception("could not reload settings")
+
+    async def _check(self) -> None:
+        if self._health is None:
+            return
+        now = time.monotonic()
+        if self._last_check and now - self._last_check < HEALTH_CHECK_INTERVAL:
+            return
+        self._last_check = now
+        try:
+            issues = await asyncio.to_thread(self._health().execute)
+            await self._worker_state.report(issues)
+        except Exception:
+            log.exception("could not run the health checks")
+            return
+        if issues == self._last_issues:
+            return
+        self._last_issues = issues
+        for issue in issues:
+            log.warning("health check failed", code=issue.code, detail=issue.message)
 
     async def _beat(self) -> None:
         now = time.monotonic()

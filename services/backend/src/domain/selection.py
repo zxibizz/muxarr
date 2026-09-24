@@ -6,10 +6,10 @@ dropped, so re-running an import never grows a file without bound.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from src.domain.codecs import IMAGE_SUBTITLE_FAMILIES
-from src.domain.enums import DedupeMode, RejectCode, TrackKind
+from src.domain.enums import ORIGINAL_LANGUAGE, DedupeMode, RejectCode, TrackKind
 from src.domain.language import normalise_language
 from src.domain.media import ExternalTrack, MediaInfo, Track
 
@@ -57,6 +57,23 @@ class SelectionPolicy:
     def prunes(self, kind: TrackKind) -> bool:
         return bool(self._keep_list(kind))
 
+    @property
+    def wants_original(self) -> bool:
+        return ORIGINAL_LANGUAGE in self.keep_audio_languages | self.keep_subtitle_languages
+
+    def with_original(self, language: str | None) -> SelectionPolicy:
+        """Resolve the ``original`` keep-list entry for one import.
+
+        Unknown, a list naming it keeps everything of its kind: stripping the very
+        track the user asked to keep, because *arr did not say which it was, is
+        the one outcome worse than keeping too much.
+        """
+        return replace(
+            self,
+            keep_audio_languages=_resolve(self.keep_audio_languages, language),
+            keep_subtitle_languages=_resolve(self.keep_subtitle_languages, language),
+        )
+
     def _keep_list(self, kind: TrackKind) -> frozenset[str]:
         if kind == "audio":
             return self.keep_audio_languages
@@ -79,6 +96,14 @@ class Pruning:
 def canonical_language(code: str) -> str:
     """One spelling per language, so ``ger`` and ``deu`` compare equal."""
     return normalise_language(code) or code.strip().lower()
+
+
+def _resolve(wanted: frozenset[str], original: str | None) -> frozenset[str]:
+    if ORIGINAL_LANGUAGE not in wanted:
+        return wanted
+    if original is None:
+        return frozenset()
+    return (wanted - {ORIGINAL_LANGUAGE}) | {canonical_language(original)}
 
 
 def prune(existing: MediaInfo, policy: SelectionPolicy | None = None) -> Pruning:

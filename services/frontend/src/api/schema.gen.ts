@@ -386,6 +386,66 @@ export interface components {
             /** Locked */
             locked: boolean;
         };
+        /** ArrModel */
+        ArrModel: {
+            /** Instance */
+            instance: string;
+            /** Link */
+            link: string | null;
+            /** Original Language */
+            original_language: string | null;
+            /** Tags */
+            tags: string[];
+            /** Title */
+            title: string;
+            /** Year */
+            year: number | null;
+        };
+        /**
+         * ArrPayload
+         * @description As the shim sends it: every value a string, straight from the environment.
+         *
+         *     Lenient on purpose. A value that fails validation here would 422 the whole
+         *     import and delay *arr for a minute of retries, over a detail that is only
+         *     ever informational or an input to an optional rule.
+         */
+        ArrPayload: {
+            /**
+             * Instance
+             * @default
+             */
+            instance: string;
+            /**
+             * Original Language
+             * @default
+             */
+            original_language: string;
+            /**
+             * Slug
+             * @default
+             */
+            slug: string;
+            /**
+             * Tags
+             * @default
+             */
+            tags: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /**
+             * Year
+             * @default
+             */
+            year: string;
+        };
         /** AuthStatusView */
         AuthStatusView: {
             /** Authenticated */
@@ -453,6 +513,21 @@ export interface components {
             /** Worker Seen At */
             worker_seen_at: string | null;
         };
+        /** HealthIssueModel */
+        HealthIssueModel: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "worker_offline" | "mkvmerge_missing" | "mkvmerge_outdated" | "read_root_missing" | "read_root_unreadable" | "scratch_dir_unusable" | "sqlite_split" | "login_off" | "proxies_untrusted";
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "notice" | "warning" | "error";
+            /** Message */
+            message: string;
+        };
         /** HistoryPage */
         HistoryPage: {
             /** Items */
@@ -471,6 +546,7 @@ export interface components {
              * @enum {string}
              */
             app: "radarr" | "sonarr";
+            arr?: components["schemas"]["ArrPayload"] | null;
             /** Destination Path */
             destination_path: string;
             /**
@@ -526,6 +602,7 @@ export interface components {
              * @enum {string}
              */
             app: "radarr" | "sonarr";
+            arr: components["schemas"]["ArrModel"] | null;
             /** Created At */
             created_at: string;
             /** Destination Path */
@@ -615,6 +692,7 @@ export interface components {
              * @enum {string}
              */
             app: "radarr" | "sonarr";
+            arr: components["schemas"]["ArrModel"] | null;
             /** Created At */
             created_at: string;
             /** Destination Path */
@@ -779,8 +857,12 @@ export interface components {
             operation_log_max_entries?: number | null;
             /** Preserve Ownership */
             preserve_ownership?: boolean | null;
+            /** Require Tags */
+            require_tags?: string[] | null;
             /** Skip Image Subtitles */
             skip_image_subtitles?: boolean | null;
+            /** Skip Tags */
+            skip_tags?: string[] | null;
             /** Skip Undetermined Language */
             skip_undetermined_language?: boolean | null;
             /** Sub Charset */
@@ -844,8 +926,12 @@ export interface components {
             operation_log_max_entries: number;
             /** Preserve Ownership */
             preserve_ownership: boolean;
+            /** Require Tags */
+            require_tags: string[];
             /** Skip Image Subtitles */
             skip_image_subtitles: boolean;
+            /** Skip Tags */
+            skip_tags: string[];
             /** Skip Undetermined Language */
             skip_undetermined_language: boolean;
             /** Sub Charset */
@@ -866,6 +952,8 @@ export interface components {
         };
         /** SystemStatus */
         SystemStatus: {
+            /** Health */
+            health: components["schemas"]["HealthIssueModel"][];
             queue: components["schemas"]["QueueStatusModel"];
             /** Version */
             version: string;

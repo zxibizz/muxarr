@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -18,6 +19,7 @@ from src.application.interfaces.jobs import JobRecord
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
 from src.application.use_cases.imports.reconcile import ReconcileInterruptedJobsUseCase
 from src.db.session import DBManager
+from src.domain.health import HealthIssue
 from src.domain.paths import PathGuard
 from src.infrastructure.filesystem.placement import FilesystemPlacement, staging_path_for
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
@@ -69,6 +71,7 @@ def build(
     settings: Callable[[], Settings] | None = None,
     sync: Callable[[], Awaitable[bool]] | None = None,
     read_roots: tuple[Path, ...] = (Path("/downloads"),),
+    health: Callable[[], Any] | None = None,
 ) -> ImportWorker:
     fixed = Settings(read_roots=read_roots, history_max_records=history_max_records)
     reconcile = ReconcileInterruptedJobsUseCase(
@@ -85,6 +88,7 @@ def build(
         reconcile=lambda: reconcile,
         settings=settings or (lambda: fixed),
         sync=sync,
+        health=health,
     )
 
 
@@ -122,6 +126,24 @@ async def test_the_heartbeat_is_written(
     await run_briefly(build(jobs, worker_state, history, RecordingRunner(jobs)))
 
     assert await worker_state.last_seen() is not None
+
+
+async def test_health_checks_are_reported_for_the_api(
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
+) -> None:
+    """In a split deployment, only the worker can see its own mounts."""
+    issue = HealthIssue("error", "read_root_missing", "/media is missing")
+
+    class Checks:
+        def execute(self) -> list[HealthIssue]:
+            return [issue]
+
+    worker = build(jobs, worker_state, history, RecordingRunner(jobs), health=Checks)
+    await run_briefly(worker)
+
+    assert await worker_state.issues() == [issue]
 
 
 async def test_bookkeeping_failure_does_not_leave_a_job_running(

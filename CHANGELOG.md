@@ -14,6 +14,22 @@ within the same major version.
 
 ### Added
 
+- **The shims forward what Radarr/Sonarr know about an import**: instance name,
+  title and year, original language, tags and \*arr's own URL. The history
+  shows them, names the instance, and links back to the movie or series.
+  Deployed shims keep working; they just send none of it.
+- **`original` in the keep lists** stands for the original language \*arr
+  reports, like Radarr's "Original" language. Unknown, it keeps everything of
+  its kind rather than risk stripping the track you meant.
+- **Tag rules**: `MUXARR_SKIP_TAGS` leaves a tagged movie or series to \*arr,
+  `MUXARR_REQUIRE_TAGS` leaves everything untagged to it. Both are on the
+  Settings page.
+- **`MUXARR_URL_BASE`** serves the UI and API under a sub-path such as
+  `/muxarr`, like the \*arr apps' URL Base. The API stays at the root too.
+- **Health checks** on the System page and in `GET /v1/system`: unmounted or
+  unreadable read roots, a missing or old mkvmerge and an unwritable scratch dir
+  (checked by the worker, where they matter), an offline worker, SQLite in a
+  split deployment, a switched-off login.
 - **`MUXARR_TRUSTED_PROXIES`**: reverse proxies whose `X-Forwarded-For` is
   believed, so `disabled_for_local_addresses` judges the real caller rather
   than a proxy on a Docker network, which made every request look local.
@@ -30,6 +46,11 @@ within the same major version.
 
 ### Fixed
 
+- **The transfer mode was always recorded as `Move`.** Radarr/Sonarr lower-case
+  the names of the variables they give an import script, so the shims never saw
+  `Radarr_TransferMode`. They now read `radarr_transfermode` first.
+- nginx redirects are relative, so they no longer point at the container's own
+  port behind a port mapping or a reverse proxy.
 - **A stopped container no longer leaves a staging file behind.** A mux killed
   mid-write left a hidden `.muxarr-*.part` the size of the movie in the library
   folder. The worker now removes it when it fails the interrupted job at

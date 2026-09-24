@@ -22,6 +22,7 @@ from src.settings.config import (
     ConfigError,
     Settings,
     parse_languages,
+    parse_tags,
 )
 
 # loguru's levels; ``from_env`` accepts anything, but a typo chosen in a dropdown
@@ -54,6 +55,11 @@ def _as_optional_text(env: str, raw: str) -> object:
 def _as_bool(env: str, raw: str) -> object:
     del env
     return raw.strip().lower() in TRUTHY
+
+
+def _as_tags(env: str, raw: str) -> object:
+    del env
+    return parse_tags(raw)
 
 
 def _as_int(minimum: int, maximum: int | None = None) -> Callable[[str, str], object]:
@@ -108,6 +114,8 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec(
         "keep_subtitle_languages", "MUXARR_KEEP_SUBTITLE_LANGUAGES", "selection", parse_languages
     ),
+    FieldSpec("skip_tags", "MUXARR_SKIP_TAGS", "selection", _as_tags),
+    FieldSpec("require_tags", "MUXARR_REQUIRE_TAGS", "selection", _as_tags),
     FieldSpec("mux_timeout_seconds", "MUXARR_MUX_TIMEOUT", "mux", _as_float(1.0)),
     FieldSpec("free_space_factor", "MUXARR_FREE_SPACE_FACTOR", "mux", _as_float(1.0)),
     FieldSpec("preserve_ownership", "MUXARR_PRESERVE_OWNERSHIP", "mux", _as_bool),

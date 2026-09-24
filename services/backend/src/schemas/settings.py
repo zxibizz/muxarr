@@ -25,6 +25,8 @@ class SettingsView(WireModel):
     sub_charset: str | None
     keep_audio_languages: list[str]
     keep_subtitle_languages: list[str]
+    skip_tags: list[str]
+    require_tags: list[str]
 
     mux_timeout_seconds: float
     free_space_factor: float
@@ -67,6 +69,9 @@ class SettingsPatch(BaseModel):
     # Null or [] keeps every language.
     keep_audio_languages: list[str] | None = None
     keep_subtitle_languages: list[str] | None = None
+    # Null or [] turns the rule off.
+    skip_tags: list[str] | None = None
+    require_tags: list[str] | None = None
 
     mux_timeout_seconds: float | None = Field(default=None, ge=1)
     free_space_factor: float | None = Field(default=None, ge=1)

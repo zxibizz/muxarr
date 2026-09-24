@@ -14,7 +14,12 @@ from fastapi import APIRouter, Depends
 from src import __version__
 from src.api.dependencies.auth import authorise, get_container
 from src.core.container import AppContainer
-from src.schemas.system import QueueStatusModel, SystemStatus, WorkerStatusModel
+from src.schemas.system import (
+    HealthIssueModel,
+    QueueStatusModel,
+    SystemStatus,
+    WorkerStatusModel,
+)
 
 router = APIRouter(prefix="/v1", tags=["system"], dependencies=[Depends(authorise)])
 
@@ -28,4 +33,5 @@ async def get_system(
         version=__version__,
         worker=WorkerStatusModel(**asdict(status.worker)),
         queue=QueueStatusModel(**asdict(status.queue)),
+        health=[HealthIssueModel(**asdict(issue)) for issue in status.health],
     )

@@ -123,10 +123,11 @@ def run_shim(
         "MUXARR_POLL_INTERVAL": "1",
         "MUXARR_MAX_RETRIES": "2",
     }
+    # Lower-case, as *arr really sends them: its StringDictionary lower-cases every name.
     if app == "radarr":
-        env |= {"Radarr_TransferMode": "Move"}
+        env |= {"radarr_transfermode": "Move"}
     elif app == "sonarr":
-        env |= {"Sonarr_TransferMode": "HardLinkOrCopy"}
+        env |= {"sonarr_transfermode": "HardLinkOrCopy"}
     env |= extra_env or {}
 
     return subprocess.run(
@@ -398,12 +399,68 @@ class TestPayload:
         run_shim(
             url_for(daemon),
             app="sonarr",
-            extra_env={"Sonarr_TransferMode": '","app":"evil'},
+            extra_env={"sonarr_transfermode": '","app":"evil'},
         )
 
         sent = daemon.received[0]
         assert sent["app"] == "sonarr"
         assert sent["transfer_mode"] == '","app":"evil'
+
+    def test_the_documented_mixed_case_spelling_still_works(self, daemon: type[_Handler]) -> None:
+        run_shim(
+            url_for(daemon),
+            extra_env={"radarr_transfermode": "", "Radarr_TransferMode": "Copy"},
+        )
+
+        assert daemon.received[0]["transfer_mode"] == "Copy"
+
+    def test_radarr_context_is_forwarded(self, daemon: type[_Handler]) -> None:
+        run_shim(
+            url_for(daemon),
+            extra_env={
+                "radarr_instancename": "Radarr 4K",
+                "radarr_applicationurl": "https://radarr.example",
+                "radarr_movie_title": 'Dune: "Part Two"',
+                "radarr_movie_year": "2024",
+                "radarr_movie_tmdbid": "693134",
+                "radarr_movie_originallanguage": "eng",
+                "radarr_movie_tags": "4k|no-mux",
+            },
+        )
+
+        assert daemon.received[0]["arr"] == {
+            "instance": "Radarr 4K",
+            "url": "https://radarr.example",
+            "title": 'Dune: "Part Two"',
+            "year": "2024",
+            "slug": "693134",
+            "original_language": "eng",
+            "tags": "4k|no-mux",
+        }
+
+    def test_sonarr_context_uses_the_series_variables(self, daemon: type[_Handler]) -> None:
+        run_shim(
+            url_for(daemon),
+            app="sonarr",
+            extra_env={
+                "sonarr_series_title": "Severance",
+                "sonarr_series_titleslug": "severance",
+                "sonarr_series_originallanguage": "eng",
+            },
+        )
+
+        arr = daemon.received[0]["arr"]
+        assert isinstance(arr, dict)
+        assert (arr["title"], arr["slug"], arr["year"]) == ("Severance", "severance", "")
+
+    def test_control_characters_in_context_cannot_break_the_json(
+        self, daemon: type[_Handler]
+    ) -> None:
+        run_shim(url_for(daemon), extra_env={"radarr_movie_title": "Line\tone\x01"})
+
+        arr = daemon.received[0]["arr"]
+        assert isinstance(arr, dict)
+        assert arr["title"] == "Lineone"
 
 
 def test_api_key_is_sent_on_both_submit_and_poll(daemon: type[_Handler]) -> None:

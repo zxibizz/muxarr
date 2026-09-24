@@ -1,4 +1,4 @@
-import { Group, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
+import { Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { IconInbox } from '@tabler/icons-react';
 import type { KeyboardEvent } from 'react';
 import type { Operation } from '../../api/types';
@@ -116,9 +116,14 @@ export function HistoryTable({ operations, loading, filtered, onSelect }: Props)
                   )}
                 </Table.Td>
                 <Table.Td visibleFrom="md">
-                  <Group gap={4}>
+                  <Stack gap={2} align="flex-start">
                     <AppBadge app={operation.app} />
-                  </Group>
+                    {operation.arr?.instance && (
+                      <Text size="xs" c="dimmed" lineClamp={1}>
+                        {operation.arr.instance}
+                      </Text>
+                    )}
+                  </Stack>
                 </Table.Td>
                 <Table.Td visibleFrom="lg">
                   <Tooltip label={formatTimestamp(operation.created_at)}>

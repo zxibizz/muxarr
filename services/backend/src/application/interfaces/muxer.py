@@ -32,6 +32,10 @@ class MuxPlan:
 
 
 class Muxer(Protocol):
+    def version(self) -> tuple[int, int] | None:
+        """Major and minor of the installed mkvmerge, or None if it is missing."""
+        ...
+
     def supports_modern_flags(self) -> bool: ...
 
     def run(self, plan: MuxPlan, source_info: MediaInfo, *, timeout: float) -> MediaInfo: ...

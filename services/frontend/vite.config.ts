@@ -7,6 +7,8 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8710';
 
 export default defineConfig({
   plugins: [react()],
+  // Relative asset URLs, resolved against the <base href> the container sets.
+  base: './',
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -1,0 +1,48 @@
+#!/command/with-contenv sh
+# MUXARR_URL_BASE serves the UI and API under a sub-path (e.g. /muxarr), like the
+# *arr apps' URL Base. The API stays reachable at the root as well: shims already
+# deployed call MUXARR_URL/v1/... and a URL base must not break them.
+set -eu
+
+if [ "${MUXARR_MODE:-all}" = "worker" ]; then
+    exit 0
+fi
+
+snippet=/etc/nginx/muxarr/url-base.conf
+index=/static/index.html
+
+base=$(printf '%s' "${MUXARR_URL_BASE:-}" | sed -e 's#/*$##')
+if [ -n "${base}" ]; then
+    case "${base}" in
+        /*) ;;
+        *) base="/${base}" ;;
+    esac
+    # It is spliced into nginx config and HTML, so nothing but plain path segments.
+    if ! printf '%s' "${base}" | grep -Eq '^(/[A-Za-z0-9._~-]+)+$'; then
+        echo "MUXARR_URL_BASE must look like /muxarr; got '${MUXARR_URL_BASE}'" >&2
+        exit 1
+    fi
+    cat > "${snippet}" <<EOF
+# Generated from MUXARR_URL_BASE by /etc/cont-init.d/04-url-base.
+rewrite ^${base}/(.*)\$ /\$1 last;
+
+location = ${base} {
+    return 301 ${base}/;
+}
+
+# The bare root sends a browser to the base; the rewritten base itself lands here too.
+location = / {
+    if (\$request_uri = /) {
+        return 302 ${base}/;
+    }
+    add_header Cache-Control "no-cache";
+    try_files /index.html =404;
+}
+EOF
+    echo "muxarr url base: ${base}"
+else
+    : > "${snippet}"
+fi
+
+# Relative asset and API URLs in the SPA all resolve against this.
+sed -i "s#<base href=\"[^\"]*\"#<base href=\"${base}/\"#" "${index}"

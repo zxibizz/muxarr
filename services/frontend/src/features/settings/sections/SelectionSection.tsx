@@ -19,10 +19,10 @@ export function SelectionSection({ field, bind }: SettingsFormApi) {
       <SettingRow
         binding={field('keep_audio_languages')}
         label="Keep audio languages"
-        description="Strip every other audio track, in the source and in sidecars. Empty keeps all."
+        description="Strip every other audio track, in the source and in sidecars. 'original' is the language *arr reports for the movie or series. Empty keeps all."
       >
         <TagsInput
-          placeholder="eng, rus, und"
+          placeholder="original, eng, und"
           splitChars={[',', ' ']}
           clearable
           {...bind('keep_audio_languages')}
@@ -69,6 +69,20 @@ export function SelectionSection({ field, bind }: SettingsFormApi) {
         inline
       >
         <Switch {...bind('skip_undetermined_language', { type: 'checkbox' })} />
+      </SettingRow>
+      <SettingRow
+        binding={field('skip_tags')}
+        label="Skip tags"
+        description="A movie or series with any of these tags in Radarr/Sonarr is imported as though Muxarr were absent."
+      >
+        <TagsInput placeholder="no-mux" splitChars={[',', ' ']} clearable {...bind('skip_tags')} />
+      </SettingRow>
+      <SettingRow
+        binding={field('require_tags')}
+        label="Require tags"
+        description="When set, only a movie or series with one of these tags is muxed. Empty muxes everything."
+      >
+        <TagsInput placeholder="muxarr" splitChars={[',', ' ']} clearable {...bind('require_tags')} />
       </SettingRow>
     </SettingsSection>
   );

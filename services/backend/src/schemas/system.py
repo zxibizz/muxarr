@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from src.domain.health import HealthCode, HealthLevel
 from src.schemas.base import WireModel
 
 
@@ -21,7 +22,14 @@ class QueueStatusModel(WireModel):
     failed: int
 
 
+class HealthIssueModel(WireModel):
+    level: HealthLevel
+    code: HealthCode
+    message: str
+
+
 class SystemStatus(WireModel):
     version: str
     worker: WorkerStatusModel
     queue: QueueStatusModel
+    health: list[HealthIssueModel]

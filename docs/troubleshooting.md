@@ -3,7 +3,9 @@
 Start with the logs. Muxarr writes one line per import saying what it decided
 and why, and the same reasoning is in the UI under each row. `docker logs
 muxarr` and the **System** page (or `GET /v1/system`) answer most questions
-between them.
+between them. The System page's **Health** list names the setup problems Muxarr
+can detect itself: an unmounted read root, a missing mkvmerge, an unwritable
+scratch directory, an offline worker, a login that is switched off.
 
 **Every import is skipped, and the reason mentions read roots.**
 The paths Radarr/Sonarr handed over do not exist inside the Muxarr container, or

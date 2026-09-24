@@ -1,6 +1,18 @@
-import { Alert, Badge, Divider, Drawer, Group, SimpleGrid, Stack, Tabs, Text, Title } from '@mantine/core';
-import { IconInfoCircle, IconListCheck, IconStack2 } from '@tabler/icons-react';
-import type { Operation } from '../../api/types';
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Divider,
+  Drawer,
+  Group,
+  SimpleGrid,
+  Stack,
+  Tabs,
+  Text,
+  Title,
+} from '@mantine/core';
+import { IconExternalLink, IconInfoCircle, IconListCheck, IconStack2 } from '@tabler/icons-react';
+import type { ArrContext, Operation } from '../../api/types';
 import { AppBadge } from '../../components/AppBadge';
 import { EmptyState } from '../../components/EmptyState';
 import { CopyPath, KeyValue } from '../../components/KeyValue';
@@ -39,6 +51,7 @@ function Overview({ operation }: { operation: Operation }) {
             {operation.episodes.length > 0 && ` · episode ${operation.episodes.join(', ')}`}
           </KeyValue>
         )}
+        {operation.arr && <ArrDetails app={operation.app} arr={operation.arr} />}
       </SimpleGrid>
 
       <Divider />
@@ -49,6 +62,28 @@ function Overview({ operation }: { operation: Operation }) {
         {operation.media_file && <CopyPath label="File Muxarr produced" path={operation.media_file} />}
       </Stack>
     </Stack>
+  );
+}
+
+function ArrDetails({ app, arr }: { app: Operation['app']; arr: ArrContext }) {
+  const name = app === 'radarr' ? 'Radarr' : 'Sonarr';
+  const title = arr.year ? `${arr.title} (${arr.year})` : arr.title;
+  return (
+    <>
+      {arr.title && (
+        <KeyValue label={`In ${arr.instance || name}`}>
+          {arr.link ? (
+            <Anchor href={arr.link} target="_blank" rel="noopener noreferrer" size="sm">
+              {title} <IconExternalLink size={12} style={{ verticalAlign: '-1px' }} />
+            </Anchor>
+          ) : (
+            title
+          )}
+        </KeyValue>
+      )}
+      <KeyValue label="Original language">{arr.original_language ?? '—'}</KeyValue>
+      <KeyValue label="Tags">{arr.tags.length > 0 ? arr.tags.join(', ') : '—'}</KeyValue>
+    </>
   );
 }
 

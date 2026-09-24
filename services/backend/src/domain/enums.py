@@ -14,6 +14,10 @@ TrackKind = Literal["video", "audio", "subtitles"]
 # ISO 639-2 "undetermined"; mkvmerge's own default for an untagged track.
 UNDETERMINED = "und"
 
+# A keep-list entry standing for the movie's or series' original language, as *arr
+# reports it -- what Radarr calls "Original" in a language profile.
+ORIGINAL_LANGUAGE = "original"
+
 DedupeMode = Literal["off", "language", "language_codec"]
 DEDUPE_MODES: tuple[DedupeMode, ...] = get_args(DedupeMode)
 
@@ -28,6 +32,10 @@ AUTH_METHODS: tuple[AuthMethod, ...] = get_args(AuthMethod)
 
 AuthRequired = Literal["enabled", "disabled_for_local_addresses"]
 AUTH_REQUIRED: tuple[AuthRequired, ...] = get_args(AuthRequired)
+
+# Which processes one container runs; web and worker need a shared Postgres.
+ContainerMode = Literal["all", "web", "worker"]
+CONTAINER_MODES: tuple[ContainerMode, ...] = get_args(ContainerMode)
 
 # Where a candidate track came from; surfaced in the history so a human can tell
 # an inferred match from a filename-derived one.

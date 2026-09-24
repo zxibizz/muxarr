@@ -21,6 +21,7 @@ from typing import Protocol
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest
 from src.domain.enums import TERMINAL_JOB_STATES, JobState
 from src.domain.errors import MuxarrError
+from src.domain.health import HealthIssue
 from src.domain.journal import LogEntry
 
 MAX_JOB_PAGE_SIZE = 200
@@ -123,3 +124,9 @@ class WorkerStateRepository(Protocol):
     async def heartbeat(self) -> None: ...
 
     async def last_seen(self) -> str | None: ...
+
+    async def report(self, issues: Sequence[HealthIssue]) -> None:
+        """Replace the worker's health checks; only it can see its mounts and tools."""
+        ...
+
+    async def issues(self) -> list[HealthIssue]: ...

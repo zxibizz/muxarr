@@ -15,12 +15,19 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE / "src" / "muxarr-import.sh.in"
-APPS = {"radarr": "Radarr", "sonarr": "Sonarr"}
+# Placeholder -> value per app. @slug@ names the variable holding the item's route in
+# the *arr UI: Radarr's movie pages are keyed by TMDb id, Sonarr's by title slug.
+APPS = {
+    "radarr": {"@App@": "Radarr", "@app@": "radarr", "@item@": "movie", "@slug@": "tmdbid"},
+    "sonarr": {"@App@": "Sonarr", "@app@": "sonarr", "@item@": "series", "@slug@": "titleslug"},
+}
 
 
 def render(app: str) -> str:
     text = TEMPLATE.read_text(encoding="utf-8")
-    return text.replace("@App@", APPS[app]).replace("@app@", app)
+    for placeholder, value in APPS[app].items():
+        text = text.replace(placeholder, value)
+    return text
 
 
 def target(app: str) -> Path:

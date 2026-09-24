@@ -78,6 +78,110 @@
         "title": "ApiKeyView",
         "type": "object"
       },
+      "ArrModel": {
+        "properties": {
+          "instance": {
+            "title": "Instance",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "original_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Language"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "instance",
+          "title",
+          "year",
+          "original_language",
+          "tags",
+          "link"
+        ],
+        "title": "ArrModel",
+        "type": "object"
+      },
+      "ArrPayload": {
+        "description": "As the shim sends it: every value a string, straight from the environment.\n\nLenient on purpose. A value that fails validation here would 422 the whole\nimport and delay *arr for a minute of retries, over a detail that is only\never informational or an input to an optional rule.",
+        "properties": {
+          "instance": {
+            "default": "",
+            "title": "Instance",
+            "type": "string"
+          },
+          "original_language": {
+            "default": "",
+            "title": "Original Language",
+            "type": "string"
+          },
+          "slug": {
+            "default": "",
+            "title": "Slug",
+            "type": "string"
+          },
+          "tags": {
+            "default": "",
+            "title": "Tags",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "year": {
+            "default": "",
+            "title": "Year",
+            "type": "string"
+          }
+        },
+        "title": "ArrPayload",
+        "type": "object"
+      },
       "AuthStatusView": {
         "properties": {
           "authenticated": {
@@ -246,6 +350,45 @@
         "title": "Health",
         "type": "object"
       },
+      "HealthIssueModel": {
+        "properties": {
+          "code": {
+            "enum": [
+              "worker_offline",
+              "mkvmerge_missing",
+              "mkvmerge_outdated",
+              "read_root_missing",
+              "read_root_unreadable",
+              "scratch_dir_unusable",
+              "sqlite_split",
+              "login_off",
+              "proxies_untrusted"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "notice",
+              "warning",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "code",
+          "message"
+        ],
+        "title": "HealthIssueModel",
+        "type": "object"
+      },
       "HistoryPage": {
         "properties": {
           "items": {
@@ -286,6 +429,16 @@
             ],
             "title": "App",
             "type": "string"
+          },
+          "arr": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "destination_path": {
             "title": "Destination Path",
@@ -404,6 +557,16 @@
             "title": "App",
             "type": "string"
           },
+          "arr": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -498,6 +661,7 @@
           "destination_path",
           "transfer_mode",
           "dry_run",
+          "arr",
           "created_at",
           "updated_at",
           "log"
@@ -674,6 +838,16 @@
             "title": "App",
             "type": "string"
           },
+          "arr": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -815,7 +989,8 @@
           "duration_ms",
           "source_bytes",
           "output_bytes",
-          "dry_run"
+          "dry_run",
+          "arr"
         ],
         "title": "OperationModel",
         "type": "object"
@@ -1240,6 +1415,20 @@
             ],
             "title": "Preserve Ownership"
           },
+          "require_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Require Tags"
+          },
           "skip_image_subtitles": {
             "anyOf": [
               {
@@ -1250,6 +1439,20 @@
               }
             ],
             "title": "Skip Image Subtitles"
+          },
+          "skip_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Tags"
           },
           "skip_undetermined_language": {
             "anyOf": [
@@ -1395,9 +1598,23 @@
             "title": "Preserve Ownership",
             "type": "boolean"
           },
+          "require_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Require Tags",
+            "type": "array"
+          },
           "skip_image_subtitles": {
             "title": "Skip Image Subtitles",
             "type": "boolean"
+          },
+          "skip_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skip Tags",
+            "type": "array"
           },
           "skip_undetermined_language": {
             "title": "Skip Undetermined Language",
@@ -1423,6 +1640,8 @@
           "sub_charset",
           "keep_audio_languages",
           "keep_subtitle_languages",
+          "skip_tags",
+          "require_tags",
           "mux_timeout_seconds",
           "free_space_factor",
           "preserve_ownership",
@@ -1480,6 +1699,13 @@
       },
       "SystemStatus": {
         "properties": {
+          "health": {
+            "items": {
+              "$ref": "#/components/schemas/HealthIssueModel"
+            },
+            "title": "Health",
+            "type": "array"
+          },
           "queue": {
             "$ref": "#/components/schemas/QueueStatusModel"
           },
@@ -1494,7 +1720,8 @@
         "required": [
           "version",
           "worker",
-          "queue"
+          "queue",
+          "health"
         ],
         "title": "SystemStatus",
         "type": "object"

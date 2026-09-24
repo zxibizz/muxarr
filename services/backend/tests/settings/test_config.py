@@ -205,6 +205,19 @@ class TestAuth:
             Settings.from_env(env(**{name: "traefik"}))
 
 
+def test_keep_lists_accept_original() -> None:
+    settings = Settings.from_env(env(MUXARR_KEEP_AUDIO_LANGUAGES="Original, en, und"))
+
+    assert settings.keep_audio_languages == ("original", "eng", "und")
+
+
+def test_tags_are_lower_cased_and_deduplicated() -> None:
+    settings = Settings.from_env(env(MUXARR_SKIP_TAGS="No-Mux, no-mux,,4k", MUXARR_REQUIRE_TAGS=""))
+
+    assert settings.skip_tags == ("no-mux", "4k")
+    assert settings.require_tags == ()
+
+
 def test_selection_policy_is_derived_from_settings() -> None:
     settings = Settings.from_env(
         env(MUXARR_DEDUPE="language", MUXARR_MAX_TRACKS="3", MUXARR_SKIP_UNDETERMINED="yes")

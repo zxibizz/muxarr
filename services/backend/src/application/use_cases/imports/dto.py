@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.domain.arr import ArrContext
 from src.domain.enums import App, MoveStatus
 from src.domain.journal import RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.naming import EpisodeRef, parse_episode_marker
@@ -31,6 +32,7 @@ class ImportRequest:
     destination_path: Path
     transfer_mode: str = "Move"
     dry_run: bool = False
+    arr: ArrContext | None = None
 
     @property
     def episode_ref(self) -> EpisodeRef | None:

@@ -10,7 +10,7 @@ import {
 } from '@tabler/icons-react';
 import { describeError } from '../../api/client';
 import { useAuthStatus, useHealth, useSystem } from '../../api/queries';
-import type { AuthStatus, SystemStatus } from '../../api/types';
+import type { AuthStatus, HealthIssue, SystemStatus } from '../../api/types';
 import { KeyValue } from '../../components/KeyValue';
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
@@ -19,6 +19,44 @@ import { formatRelative, formatTimestamp } from '../../lib/format';
 function describeAuth(auth: AuthStatus): string {
   if (auth.method === 'external') return 'external (reverse proxy)';
   return auth.required === 'enabled' ? 'login' : 'login, except local addresses';
+}
+
+const LEVEL_COLOR: Record<HealthIssue['level'], string> = {
+  error: 'red',
+  warning: 'yellow',
+  notice: 'blue',
+};
+
+function HealthCard({ system }: { system: SystemStatus | undefined }) {
+  // An offline worker already has the banner above; saying it twice adds nothing.
+  const issues = system?.health.filter((issue) => issue.code !== 'worker_offline');
+
+  return (
+    <Stack gap="sm">
+      <Title order={2}>Health</Title>
+      {issues === undefined ? (
+        <Skeleton height={48} />
+      ) : issues.length === 0 ? (
+        <Group gap="xs">
+          <IconCircleCheck size={18} color="var(--mantine-color-teal-5)" />
+          <Text size="sm" c="dimmed">
+            No problems found.
+          </Text>
+        </Group>
+      ) : (
+        issues.map((issue) => (
+          <Alert
+            key={`${issue.code}:${issue.message}`}
+            color={LEVEL_COLOR[issue.level]}
+            variant="outline"
+            icon={<IconAlertTriangle size={18} />}
+          >
+            {issue.message}
+          </Alert>
+        ))
+      )}
+    </Stack>
+  );
 }
 
 function WorkerCard({ system }: { system: SystemStatus | undefined }) {
@@ -99,6 +137,8 @@ export function SystemPage() {
       )}
 
       <WorkerCard system={system.data} />
+
+      <HealthCard system={system.data} />
 
       <Stack gap="sm">
         <Title order={2}>Job queue</Title>

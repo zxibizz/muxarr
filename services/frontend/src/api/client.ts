@@ -1,3 +1,5 @@
+import { withBase } from '../lib/base';
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -32,7 +34,7 @@ export async function request<T>(path: string, init: RequestInit = {}, body?: un
 
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await fetch(withBase(path), {
       ...init,
       headers,
       credentials: 'same-origin',

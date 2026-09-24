@@ -28,7 +28,7 @@ async def list_history(
         limit=limit, offset=offset, status=move_status, app=app_name, query=q
     )
     return HistoryPage(
-        items=[OperationModel(**asdict(op)) for op in page.items],
+        items=[OperationModel.from_record(op) for op in page.items],
         total=page.total,
         limit=page.limit,
         offset=page.offset,
@@ -41,7 +41,7 @@ async def get_operation(
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> OperationModel:
     found = await container.get_operation.execute(operation_id)
-    return OperationModel(**asdict(found))
+    return OperationModel.from_record(found)
 
 
 @router.delete("/history", response_model=ClearedModel)

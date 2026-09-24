@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from src.domain.arr import ArrContext
 from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 
 MAX_PAGE_SIZE = 500
@@ -36,6 +37,7 @@ class NewOperation:
     source_bytes: int | None = None
     output_bytes: int | None = None
     dry_run: bool = False
+    arr: ArrContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +62,7 @@ class OperationRecord:
     source_bytes: int | None
     output_bytes: int | None
     dry_run: bool
+    arr: ArrContext | None = None
 
     @property
     def muxed(self) -> bool:

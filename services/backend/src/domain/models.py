@@ -49,6 +49,8 @@ class Operation(Base):
     source_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     output_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     dry_run: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # What *arr said about the import (title, instance, tags...), as JSON.
+    arr: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Job(Base):
@@ -71,6 +73,7 @@ class Job(Base):
     destination_path: Mapped[str] = mapped_column(Text, nullable=False)
     transfer_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="Move")
     dry_run: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    arr: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -91,6 +94,8 @@ class WorkerState(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     last_seen: Mapped[str] = mapped_column(Text, nullable=False)
+    # The worker's own health checks, as JSON: only it can see its mounts and tools.
+    checks: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
 
 
 class AppSettings(Base):

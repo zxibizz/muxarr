@@ -77,6 +77,7 @@ describe('App', () => {
           max_concurrent_muxes: 1,
         },
         queue: { pending: 2, running: 0, succeeded: 0, failed: 0 },
+        health: [],
       },
     });
     renderWithProviders(<App />);

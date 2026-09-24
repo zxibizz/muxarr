@@ -21,6 +21,7 @@ from src.application.interfaces.history import (
     Stats,
 )
 from src.db.session import DBManager
+from src.domain.arr import ArrContext
 from src.domain.journal import LogEntry, RejectedTrack, RemovedTrack, TrackDetail
 from src.domain.models import Operation
 
@@ -52,6 +53,7 @@ class SqlAlchemyHistoryRepository:
             source_bytes=op.source_bytes,
             output_bytes=op.output_bytes,
             dry_run=int(op.dry_run),
+            arr=json.dumps(op.arr.to_dict()) if op.arr else None,
         )
         async with self._db.session() as session:
             session.add(row)
@@ -200,4 +202,5 @@ def _to_record(row: Operation) -> OperationRecord:
         source_bytes=row.source_bytes,
         output_bytes=row.output_bytes,
         dry_run=bool(row.dry_run),
+        arr=ArrContext.from_stored(json.loads(row.arr)) if row.arr else None,
     )

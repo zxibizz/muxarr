@@ -9,6 +9,8 @@ export const ENV_VARS: Record<SettingsField, string> = {
   sub_charset: 'MUXARR_SUB_CHARSET',
   keep_audio_languages: 'MUXARR_KEEP_AUDIO_LANGUAGES',
   keep_subtitle_languages: 'MUXARR_KEEP_SUBTITLE_LANGUAGES',
+  skip_tags: 'MUXARR_SKIP_TAGS',
+  require_tags: 'MUXARR_REQUIRE_TAGS',
   mux_timeout_seconds: 'MUXARR_MUX_TIMEOUT',
   free_space_factor: 'MUXARR_FREE_SPACE_FACTOR',
   preserve_ownership: 'MUXARR_PRESERVE_OWNERSHIP',
@@ -51,6 +53,8 @@ export const SECTIONS = [
       'sub_charset',
       'skip_image_subtitles',
       'skip_undetermined_language',
+      'skip_tags',
+      'require_tags',
     ],
   },
   {

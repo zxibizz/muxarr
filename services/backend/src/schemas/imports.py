@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from src.application.interfaces.jobs import JobRecord
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
 from src.domain.enums import App, JobState, MoveStatus
+from src.schemas.arr import ArrModel, ArrPayload
 from src.schemas.base import WireModel
 from src.schemas.journal import LogEntryModel, RejectedTrackModel, RemovedTrackModel, TrackModel
 
@@ -24,6 +25,7 @@ class ImportPayload(BaseModel):
     destination_path: str
     transfer_mode: str = "Move"
     dry_run: bool = False
+    arr: ArrPayload | None = None
 
     def to_request(self) -> ImportRequest:
         return ImportRequest(
@@ -32,6 +34,7 @@ class ImportPayload(BaseModel):
             destination_path=Path(self.destination_path),
             transfer_mode=self.transfer_mode,
             dry_run=self.dry_run,
+            arr=self.arr.to_context() if self.arr else None,
         )
 
     def fingerprint(self) -> str:
@@ -97,6 +100,7 @@ class JobDetailModel(JobModel):
     destination_path: str
     transfer_mode: str
     dry_run: bool
+    arr: ArrModel | None
     created_at: str
     updated_at: str
     log: list[LogEntryModel] = Field(default_factory=list)
@@ -116,6 +120,7 @@ class JobDetailModel(JobModel):
             destination_path=str(request.destination_path),
             transfer_mode=request.transfer_mode,
             dry_run=request.dry_run,
+            arr=ArrModel.from_context(request.app, request.arr),
             created_at=job.created_at,
             updated_at=job.updated_at,
             log=[LogEntryModel.model_validate(e.to_dict()) for e in job.log],

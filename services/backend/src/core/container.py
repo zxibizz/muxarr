@@ -45,6 +45,7 @@ from src.application.use_cases.imports.run_job import RunImportJobUseCase
 from src.application.use_cases.settings.probe_ai import ProbeAiProviderUseCase
 from src.application.use_cases.settings.read import GetSettingsUseCase
 from src.application.use_cases.settings.update import UpdateSettingsUseCase
+from src.application.use_cases.system.health import CheckWorkerHealthUseCase
 from src.application.use_cases.system.status import GetSystemStatusUseCase
 from src.core.logging import configure_logging, get_logger
 from src.db.session import DBManager
@@ -297,6 +298,7 @@ class AppContainer:
             reconcile=lambda: self.reconcile_jobs,
             settings=lambda: self.settings,
             sync=self.sync_settings,
+            health=lambda: CheckWorkerHealthUseCase(settings=self.settings, muxer=MkvmergeMuxer()),
         )
 
     @cached_property
@@ -321,7 +323,7 @@ class AppContainer:
             jobs=self.jobs,
             worker_state=self.worker_state,
             stale_after_seconds=WORKER_STALE_AFTER,
-            max_concurrent_muxes=self.settings.max_concurrent_muxes,
+            settings=self.settings,
         )
 
     @cached_property

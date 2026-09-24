@@ -5,6 +5,7 @@ import { SetupPage } from '../features/auth/SetupPage';
 import { HistoryPage } from '../features/history/HistoryPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { SystemPage } from '../features/system/SystemPage';
+import { BASE_PATH } from '../lib/base';
 import { AppLayout } from './AppLayout';
 
 export function AppRoutes() {
@@ -26,7 +27,7 @@ export function AppRoutes() {
 
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={BASE_PATH || undefined}>
       <AppRoutes />
     </BrowserRouter>
   );

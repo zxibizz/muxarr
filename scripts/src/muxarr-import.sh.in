@@ -72,6 +72,12 @@ json_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+# For the informational fields: a control character would make the JSON invalid
+# and cost the whole import a minute of retries.
+json_text() {
+    json_escape "$1" | tr -d '\001-\037'
+}
+
 # Generated once and reused for every retry, so a resubmission after a lost reply
 # re-attaches to the running mux instead of starting a second one.
 new_job_id() {
@@ -115,7 +121,9 @@ http_get() {
 
 SOURCE="${1:-}"
 DESTINATION="${2:-}"
-TRANSFER="${@App@_TransferMode:-Move}"
+# @App@ passes its variables through a .NET StringDictionary, which lower-cases
+# every name; the mixed-case spelling is the documented one, kept as a fallback.
+TRANSFER="${@app@_transfermode:-${@App@_TransferMode:-Move}}"
 
 if [ -z "$SOURCE" ] || [ -z "$DESTINATION" ]; then
     defer "missing source or destination argument"
@@ -132,11 +140,21 @@ fi
 JOB_ID=$(new_job_id)
 POLL_ENDPOINT="${MUXARR_URL%/}/v1/jobs/${JOB_ID}/protocol?wait=${MUXARR_POLL_WAIT}"
 
-PAYLOAD=$(printf '{"job_id":"%s","app":"@app@","source_path":"%s","destination_path":"%s","transfer_mode":"%s"}' \
+ARR=$(printf '{"instance":"%s","url":"%s","title":"%s","year":"%s","slug":"%s","original_language":"%s","tags":"%s"}' \
+    "$(json_text "${@app@_instancename:-}")" \
+    "$(json_text "${@app@_applicationurl:-}")" \
+    "$(json_text "${@app@_@item@_title:-}")" \
+    "$(json_text "${@app@_@item@_year:-}")" \
+    "$(json_text "${@app@_@item@_@slug@:-}")" \
+    "$(json_text "${@app@_@item@_originallanguage:-}")" \
+    "$(json_text "${@app@_@item@_tags:-}")")
+
+PAYLOAD=$(printf '{"job_id":"%s","app":"@app@","source_path":"%s","destination_path":"%s","transfer_mode":"%s","arr":%s}' \
     "$JOB_ID" \
     "$(json_escape "$SOURCE")" \
     "$(json_escape "$DESTINATION")" \
-    "$(json_escape "$TRANSFER")")
+    "$(json_escape "$TRANSFER")" \
+    "$ARR")
 
 DEADLINE=$(( $(date +%s) + MUXARR_TIMEOUT ))
 

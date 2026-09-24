@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+from typing import cast
+
 from pydantic import Field
 
+from src.application.interfaces.history import OperationRecord
 from src.domain.enums import App, MoveStatus
+from src.schemas.arr import ArrModel
 from src.schemas.base import WireModel
 from src.schemas.journal import LogEntryModel, RejectedTrackModel, RemovedTrackModel, TrackModel
 
@@ -30,6 +35,13 @@ class OperationModel(WireModel):
     source_bytes: int | None = None
     output_bytes: int | None = None
     dry_run: bool = False
+    arr: ArrModel | None = None
+
+    @classmethod
+    def from_record(cls, record: OperationRecord) -> OperationModel:
+        fields = asdict(record)
+        fields["arr"] = ArrModel.from_context(cast("App", record.app), record.arr)
+        return cls(**fields)
 
 
 class HistoryPage(WireModel):
