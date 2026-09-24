@@ -36,6 +36,8 @@ within the same major version.
   startup.
 - The compose examples set `stop_grace_period: 90s`. Docker's default of 10s
   killed a running mux before the container's own grace period applied.
+- The UI reads a timestamp stored without a UTC offset as UTC rather than as
+  the viewer's local time, and full timestamps now name the time zone.
 
 ## [0.10.2] - 2026-09-24
 

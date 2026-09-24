@@ -1,11 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   displayName,
   formatBytes,
+  formatClock,
   formatContextValue,
   formatDuration,
   formatRelative,
   formatSizeDelta,
+  formatTimestamp,
   shortenPath,
 } from './format';
 
@@ -85,6 +87,34 @@ describe('formatRelative', () => {
 
   it('passes an unparseable value straight through', () => {
     expect(formatRelative('not a date')).toBe('not a date');
+  });
+});
+
+describe("timestamps in the viewer's time zone", () => {
+  // Node re-reads TZ on assignment, so this moves the "browser" to Tokyo (UTC+9).
+  beforeEach(() => {
+    vi.stubEnv('TZ', 'Asia/Tokyo');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('converts UTC to local wall-clock time', () => {
+    expect(formatClock('2026-09-22T10:00:00Z')).toMatch(/19:00:00|7:00:00/);
+    expect(formatClock('2026-09-22T12:00:00+02:00')).toMatch(/19:00:00|7:00:00/);
+  });
+
+  it('reads an offset-less value as UTC, not as local time', () => {
+    expect(formatClock('2026-09-22 10:00:00')).toBe(formatClock('2026-09-22T10:00:00Z'));
+    expect(formatTimestamp('2026-09-22T10:00:00')).toBe(formatTimestamp('2026-09-22T10:00:00Z'));
+  });
+
+  it('names the zone on a full timestamp', () => {
+    expect(formatTimestamp('2026-09-22T10:00:00Z')).toMatch(/GMT\+9|JST/);
+  });
+
+  it('passes an unparseable value straight through', () => {
+    expect(formatTimestamp('garbage')).toBe('garbage');
   });
 });
 

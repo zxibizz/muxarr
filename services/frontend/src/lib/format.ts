@@ -30,19 +30,31 @@ export function formatDuration(ms: number): string {
   return `${minutes}m ${Math.round(seconds % 60)}s`;
 }
 
+// The API sends UTC with an offset, but JS reads an offset-less date-time as
+// *local*, which would shift anything stored without one by the viewer's offset.
+const OFFSET_LESS = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+function parseTimestamp(iso: string): Date {
+  const trimmed = iso.trim();
+  return new Date(OFFSET_LESS.test(trimmed) ? `${trimmed.replace(' ', 'T')}Z` : trimmed);
+}
+
+/** Date and time in the viewer's time zone, with the zone named. */
 export function formatTimestamp(iso: string): string {
-  const when = new Date(iso);
-  return Number.isNaN(when.getTime()) ? iso : when.toLocaleString();
+  const when = parseTimestamp(iso);
+  return Number.isNaN(when.getTime())
+    ? iso
+    : when.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' });
 }
 
 /** Wall-clock time only; log lines are all from the same import. */
 export function formatClock(iso: string): string {
-  const when = new Date(iso);
+  const when = parseTimestamp(iso);
   return Number.isNaN(when.getTime()) ? iso : when.toLocaleTimeString();
 }
 
 export function formatRelative(iso: string): string {
-  const when = new Date(iso).getTime();
+  const when = parseTimestamp(iso).getTime();
   if (Number.isNaN(when)) return iso;
 
   const seconds = Math.round((Date.now() - when) / 1000);
