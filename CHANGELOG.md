@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-24
+
 ### Added
 
 - **Run the API and the worker as separate containers.** One image, three modes:
@@ -210,7 +212,8 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.1
 [0.9.2]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.2
 [0.9.1]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.1
 [0.9.0]: https://github.com/zxibizz/muxarr/releases/tag/v0.9.0

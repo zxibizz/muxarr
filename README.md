@@ -55,7 +55,7 @@ compose project.
    ```yaml
    services:
      muxarr:
-       image: ghcr.io/zxibizz/muxarr:0.9.2
+       image: ghcr.io/zxibizz/muxarr:0.10.1
        container_name: muxarr
        restart: unless-stopped
        environment:
