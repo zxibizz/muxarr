@@ -23,7 +23,6 @@ export const ENV_VARS: Record<SettingsField, string> = {
   ai_max_entries: 'MUXARR_AI_MAX_ENTRIES',
   ai_name_tracks: 'MUXARR_AI_NAME_TRACKS',
   log_level: 'MUXARR_LOG_LEVEL',
-  auth_method: 'MUXARR_AUTH_METHOD',
   auth_required: 'MUXARR_AUTH_REQUIRED',
 };
 
@@ -83,7 +82,7 @@ export const SECTIONS = [
     ],
   },
   { id: 'logging', title: 'Logging', fields: ['log_level'] },
-  { id: 'security', title: 'Security', fields: ['auth_method', 'auth_required'] },
+  { id: 'security', title: 'Security', fields: ['auth_required'] },
 ] as const satisfies readonly Section[];
 
 export type SectionId = (typeof SECTIONS)[number]['id'];
@@ -107,10 +106,10 @@ export const AI_MODE_OPTIONS = [
 
 export const LOG_LEVELS = ['TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'];
 
-export const AUTH_METHOD_OPTIONS = [
-  { value: 'forms', label: 'Login page' },
-  { value: 'external', label: 'External: a reverse proxy signs users in' },
-];
+export const AUTH_METHOD_LABELS = {
+  forms: 'Login page',
+  external: 'External: a reverse proxy signs users in',
+} as const;
 
 export const AUTH_REQUIRED_OPTIONS = [
   { value: 'enabled', label: 'Always' },

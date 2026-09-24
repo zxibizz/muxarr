@@ -40,6 +40,7 @@ from src.application.use_cases.imports.await_job import AwaitJobUseCase
 from src.application.use_cases.imports.enqueue_import import EnqueueImportUseCase
 from src.application.use_cases.imports.handle_import import HandleImportUseCase
 from src.application.use_cases.imports.list_jobs import ListJobsUseCase
+from src.application.use_cases.imports.reconcile import ReconcileInterruptedJobsUseCase
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
 from src.application.use_cases.settings.probe_ai import ProbeAiProviderUseCase
 from src.application.use_cases.settings.read import GetSettingsUseCase
@@ -77,7 +78,13 @@ log = get_logger(LogComponent.CORE)
 # Dropped and rebuilt whenever the stored overrides change. Everything else --
 # the engine, the path guard, the repositories -- is environment-derived and so
 # cannot change without a restart.
-_SETTINGS_DERIVED = ("track_discovery", "handle_import", "run_import_job", "system_status")
+_SETTINGS_DERIVED = (
+    "track_discovery",
+    "handle_import",
+    "run_import_job",
+    "reconcile_jobs",
+    "system_status",
+)
 
 
 class AppContainer:
@@ -271,13 +278,23 @@ class AppContainer:
         )
 
     @cached_property
+    def reconcile_jobs(self) -> ReconcileInterruptedJobsUseCase:
+        return ReconcileInterruptedJobsUseCase(
+            jobs=self.jobs,
+            guard=self.guard,
+            placement=FilesystemPlacement(),
+            scratch_dir=self.settings.scratch_dir,
+        )
+
+    @cached_property
     def import_worker(self) -> ImportWorker:
         return ImportWorker(
             jobs=self.jobs,
             worker_state=self.worker_state,
             history=self.history,
-            # Resolved per use, not captured: both are rebuilt by sync_settings.
+            # Resolved per use, not captured: all three are rebuilt by sync_settings.
             run_job=lambda: self.run_import_job,
+            reconcile=lambda: self.reconcile_jobs,
             settings=lambda: self.settings,
             sync=self.sync_settings,
         )

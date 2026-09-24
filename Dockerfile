@@ -38,9 +38,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.14-slim-bookworm AS runtime
 
-# mkvtoolnix is the only hard runtime dependency; nginx fronts the SPA.
+# mkvtoolnix is the only hard runtime dependency; nginx fronts the SPA. tzdata
+# makes TZ work, as it does in the *arr images.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl nginx xz-utils \
+    && apt-get install -y --no-install-recommends ca-certificates curl nginx tzdata xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # ffmpeg only adds an ffprobe fallback for containers mkvmerge cannot read -- but

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.domain.auth import DEFAULT_LOCAL_NETWORKS
 from src.settings.config import (
     DEFAULT_AI_BASE_URL,
     DEFAULT_DB_URL,
@@ -176,6 +177,32 @@ class TestAuth:
 
         assert settings.auth_method == "external"
         assert settings.auth_required == "disabled_for_local_addresses"
+
+    def test_no_proxy_is_trusted_by_default(self) -> None:
+        settings = Settings.from_env(env())
+
+        assert settings.trusted_proxies == ()
+        assert settings.local_networks == DEFAULT_LOCAL_NETWORKS
+
+    def test_networks_accept_addresses_and_cidrs(self) -> None:
+        settings = Settings.from_env(
+            env(
+                MUXARR_TRUSTED_PROXIES=" 172.18.0.2 , 10.0.0.0/8,fd00::/8, 172.18.0.2",
+                MUXARR_LOCAL_NETWORKS="100.64.0.0/10,192.168.1.7/24",
+            )
+        )
+
+        assert [str(n) for n in settings.trusted_proxies] == [
+            "172.18.0.2/32",
+            "10.0.0.0/8",
+            "fd00::/8",
+        ]
+        assert [str(n) for n in settings.local_networks] == ["100.64.0.0/10", "192.168.1.0/24"]
+
+    @pytest.mark.parametrize("name", ["MUXARR_TRUSTED_PROXIES", "MUXARR_LOCAL_NETWORKS"])
+    def test_a_bad_network_is_rejected(self, name: str) -> None:
+        with pytest.raises(ConfigError, match=name):
+            Settings.from_env(env(**{name: "traefik"}))
 
 
 def test_selection_policy_is_derived_from_settings() -> None:

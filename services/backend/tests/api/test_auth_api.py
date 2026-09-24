@@ -6,6 +6,7 @@ import re
 from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from ipaddress import ip_network
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -318,6 +319,43 @@ class TestLocalAddresses:
             response = await client.patch("/v1/settings", json={"dedupe": "off"})
 
             assert response.status_code == 403
+
+    async def test_a_forged_forwarded_for_changes_nothing(self, relaxed: AppContainer) -> None:
+        async for client in _clients(relaxed, client=("203.0.113.9", 50000)):
+            forged = {"X-Forwarded-For": "127.0.0.1"}
+
+            assert (await client.get("/v1/system", headers=forged)).status_code == 401
+
+    @pytest.mark.parametrize(
+        ("forwarded", "expected"), [("203.0.113.9", 401), ("192.168.1.20", 200)]
+    )
+    async def test_behind_a_trusted_proxy_the_real_caller_counts(
+        self, settings: Settings, db: DBManager, forwarded: str, expected: int
+    ) -> None:
+        """Otherwise every request through a proxy on a Docker network looks local."""
+        trusted = replace(
+            settings,
+            auth_required="disabled_for_local_addresses",
+            trusted_proxies=(ip_network("172.18.0.2"),),
+        )
+        async for client in _clients(make_container(trusted, db), client=("172.18.0.2", 50000)):
+            headers = {"X-Forwarded-For": f"{forwarded}, 172.18.0.2"}
+
+            assert (await client.get("/v1/system", headers=headers)).status_code == expected
+
+    async def test_the_local_networks_can_be_redefined(
+        self, settings: Settings, db: DBManager
+    ) -> None:
+        tailnet = replace(
+            settings,
+            auth_required="disabled_for_local_addresses",
+            local_networks=(ip_network("100.64.0.0/10"),),
+        )
+        container = make_container(tailnet, db)
+        async for client in _clients(container, client=("100.101.102.103", 50000)):
+            assert (await client.get("/v1/system")).status_code == 200
+        async for client in _clients(container, client=("192.168.1.20", 50000)):
+            assert (await client.get("/v1/system")).status_code == 401
 
 
 class TestExternal:

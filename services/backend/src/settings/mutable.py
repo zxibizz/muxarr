@@ -15,7 +15,7 @@ import os
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 
-from src.domain.enums import AI_MODES, AUTH_METHODS, AUTH_REQUIRED, DEDUPE_MODES
+from src.domain.enums import AI_MODES, AUTH_REQUIRED, DEDUPE_MODES
 from src.settings.config import (
     MAX_OPERATION_LOG_ENTRIES,
     TRUTHY,
@@ -128,7 +128,8 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("ai_max_entries", "MUXARR_AI_MAX_ENTRIES", "ai", _as_int(1)),
     FieldSpec("ai_name_tracks", "MUXARR_AI_NAME_TRACKS", "ai", _as_bool),
     FieldSpec("log_level", "MUXARR_LOG_LEVEL", "logging", _LOG_LEVEL),
-    FieldSpec("auth_method", "MUXARR_AUTH_METHOD", "security", _as_choice(*AUTH_METHODS)),
+    # auth_method is absent on purpose: "external" switches the login off, so,
+    # as in Sonarr, only whoever controls the environment may choose it.
     FieldSpec("auth_required", "MUXARR_AUTH_REQUIRED", "security", _as_choice(*AUTH_REQUIRED)),
 )
 

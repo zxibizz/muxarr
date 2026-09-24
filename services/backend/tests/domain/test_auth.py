@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import ipaddress
+
 import pytest
 
-from src.domain.auth import credentials_problem, is_local_address, login_required
+from src.domain.auth import (
+    client_address,
+    credentials_problem,
+    is_local_address,
+    login_required,
+)
 from src.infrastructure.auth.hasher import Pbkdf2PasswordHasher
+
+PROXY = (ipaddress.ip_network("172.18.0.2/32"),)
+TAILNET = (ipaddress.ip_network("100.64.0.0/10"),)
 
 
 @pytest.mark.parametrize(
@@ -36,6 +46,44 @@ def test_forms_waives_the_login_only_for_local_callers_when_told_to() -> None:
     assert login_required("forms", "enabled", "127.0.0.1")
     assert not login_required("forms", "disabled_for_local_addresses", "127.0.0.1")
     assert login_required("forms", "disabled_for_local_addresses", "8.8.8.8")
+
+
+def test_custom_local_networks_replace_the_defaults() -> None:
+    relaxed = "disabled_for_local_addresses"
+
+    assert not login_required("forms", relaxed, "100.101.102.103", TAILNET)
+    assert login_required("forms", relaxed, "192.168.1.20", TAILNET)
+
+
+class TestClientAddress:
+    def test_an_untrusted_peer_is_the_client_whatever_it_claims(self) -> None:
+        assert client_address("203.0.113.9", "127.0.0.1", PROXY) == "203.0.113.9"
+
+    def test_nothing_is_believed_without_trusted_proxies(self) -> None:
+        assert client_address("172.18.0.2", "203.0.113.9", ()) == "172.18.0.2"
+
+    def test_a_trusted_proxy_names_the_client(self) -> None:
+        assert client_address("172.18.0.2", "203.0.113.9, 172.18.0.2", PROXY) == "203.0.113.9"
+
+    def test_a_prefix_written_by_the_client_is_ignored(self) -> None:
+        """The proxy appends what it saw; everything left of that is the client's."""
+        forwarded = "127.0.0.1, 203.0.113.9, 172.18.0.2"
+
+        assert client_address("172.18.0.2", forwarded, PROXY) == "203.0.113.9"
+
+    def test_a_chain_of_trusted_proxies_is_followed(self) -> None:
+        both = (*PROXY, ipaddress.ip_network("10.0.0.0/8"))
+
+        assert client_address("172.18.0.2", "198.51.100.7, 10.1.1.1", both) == "198.51.100.7"
+
+    def test_a_trusted_proxy_without_a_header_is_the_client(self) -> None:
+        assert client_address("172.18.0.2", None, PROXY) == "172.18.0.2"
+
+    def test_garbage_is_returned_and_so_never_local(self) -> None:
+        client = client_address("172.18.0.2", "not-an-ip", PROXY)
+
+        assert client == "not-an-ip"
+        assert not is_local_address(client)
 
 
 def test_credentials_problem() -> None:

@@ -16,7 +16,7 @@ from fastapi import Depends, HTTPException, Request, Response, status
 
 from src.application.use_cases.auth.sessions import IssuedSession
 from src.core.container import AppContainer
-from src.domain.auth import login_required
+from src.domain.auth import client_address, login_required
 
 SESSION_COOKIE = "muxarr_session"
 # Cross-site pages cannot set a custom header without a CORS preflight, which
@@ -79,8 +79,14 @@ async def identify(
             return Caller(via="session", username=resolved.session.username, session_token=token)
 
     settings = container.settings
-    client = request.client.host if request.client else None
-    if not login_required(settings.auth_method, settings.auth_required, client):
+    client = client_address(
+        request.client.host if request.client else None,
+        ",".join(request.headers.getlist("x-forwarded-for")) or None,
+        settings.trusted_proxies,
+    )
+    if not login_required(
+        settings.auth_method, settings.auth_required, client, settings.local_networks
+    ):
         return Caller(via="open")
     return None
 

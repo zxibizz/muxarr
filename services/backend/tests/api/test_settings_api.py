@@ -80,6 +80,15 @@ class TestWrite:
 
         assert response.status_code == 422
 
+    async def test_external_auth_cannot_be_chosen_here(self, client: AsyncClient) -> None:
+        """It switches the login off, so it takes MUXARR_AUTH_METHOD, as in Sonarr."""
+        response = await client.patch(
+            "/v1/settings", json={"auth_method": "external"}, headers=auth()
+        )
+
+        assert response.status_code == 422
+        assert (await get_settings(client))["auth_method"] == "forms"
+
     async def test_enabling_ai_without_a_model_is_refused(self, client: AsyncClient) -> None:
         response = await client.patch("/v1/settings", json={"ai_mode": "fallback"}, headers=auth())
 

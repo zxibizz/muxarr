@@ -10,9 +10,11 @@ MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 256
 MAX_USERNAME_LENGTH = 64
 
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
 # Spelled out: ``ip_address.is_private`` also covers the documentation ranges,
 # which are routable in practice and must not skip the login.
-_LOCAL_NETWORKS = tuple(
+DEFAULT_LOCAL_NETWORKS: tuple[IPNetwork, ...] = tuple(
     ipaddress.ip_network(cidr)
     for cidr in (
         "127.0.0.0/8",
@@ -40,8 +42,8 @@ def credentials_problem(username: str, password: str) -> str | None:
     return None
 
 
-def is_local_address(host: str | None) -> bool:
-    """Loopback, RFC 1918, ULA or link-local: an address that never crosses the internet."""
+def in_networks(host: str | None, networks: tuple[IPNetwork, ...]) -> bool:
+    """Whether ``host`` is an IP address inside one of ``networks``."""
     if not host:
         return False
     try:
@@ -50,11 +52,43 @@ def is_local_address(host: str | None) -> bool:
         return False
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
-    return any(address in network for network in _LOCAL_NETWORKS)
+    return any(address in network for network in networks)
 
 
-def login_required(method: AuthMethod, required: AuthRequired, client_host: str | None) -> bool:
+def is_local_address(
+    host: str | None, networks: tuple[IPNetwork, ...] = DEFAULT_LOCAL_NETWORKS
+) -> bool:
+    """Loopback, RFC 1918, ULA or link-local unless told otherwise."""
+    return in_networks(host, networks)
+
+
+def client_address(
+    peer: str | None, forwarded_for: str | None, trusted_proxies: tuple[IPNetwork, ...]
+) -> str | None:
+    """The caller: the peer itself, unless the peer is a trusted proxy that names one.
+
+    Each proxy appends the address it saw, so the chain is read from the right
+    and stops at the first hop no trusted proxy vouches for: anything to its
+    left could have been written by the client.
+    """
+    if not forwarded_for or not in_networks(peer, trusted_proxies):
+        return peer
+    hops = [hop.strip() for hop in forwarded_for.split(",") if hop.strip()]
+    for hop in reversed(hops):
+        if not in_networks(hop, trusted_proxies):
+            return hop
+    return hops[0] if hops else peer
+
+
+def login_required(
+    method: AuthMethod,
+    required: AuthRequired,
+    client_host: str | None,
+    local_networks: tuple[IPNetwork, ...] = DEFAULT_LOCAL_NETWORKS,
+) -> bool:
     """Whether a request without an API key must carry a session."""
     if method == "external":
         return False
-    return not (required == "disabled_for_local_addresses" and is_local_address(client_host))
+    return not (
+        required == "disabled_for_local_addresses" and is_local_address(client_host, local_networks)
+    )

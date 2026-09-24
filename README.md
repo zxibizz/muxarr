@@ -58,9 +58,11 @@ compose project.
        image: ghcr.io/zxibizz/muxarr:0.10.2
        container_name: muxarr
        restart: unless-stopped
+       stop_grace_period: 90s                 # let a running mux wind down
        environment:
          PUID: 1000                           # same as Radarr/Sonarr
          PGID: 1000
+         TZ: Etc/UTC
          MUXARR_READ_ROOTS: /downloads:/media # the container-side paths below
        volumes:
          - ./config:/config

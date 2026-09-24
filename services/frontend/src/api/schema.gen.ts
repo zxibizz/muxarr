@@ -753,8 +753,6 @@ export interface components {
             ai_name_tracks?: boolean | null;
             /** Ai Timeout Seconds */
             ai_timeout_seconds?: number | null;
-            /** Auth Method */
-            auth_method?: ("forms" | "external") | null;
             /** Auth Required */
             auth_required?: ("enabled" | "disabled_for_local_addresses") | null;
             /** Dedupe */

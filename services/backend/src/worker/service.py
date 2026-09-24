@@ -14,6 +14,7 @@ from contextlib import suppress
 
 from src.application.interfaces.history import HistoryRepository
 from src.application.interfaces.jobs import JobRecord, JobRepository, WorkerStateRepository
+from src.application.use_cases.imports.reconcile import ReconcileInterruptedJobsUseCase
 from src.application.use_cases.imports.run_job import RunImportJobUseCase
 from src.core.logging import get_logger
 from src.domain.enums import LogComponent
@@ -51,6 +52,7 @@ class ImportWorker:
         # Callables, not values: settings change under a running worker, and
         # the use case is rebuilt when they do.
         run_job: Callable[[], RunImportJobUseCase],
+        reconcile: Callable[[], ReconcileInterruptedJobsUseCase],
         settings: Callable[[], Settings],
         sync: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
@@ -58,6 +60,7 @@ class ImportWorker:
         self._worker_state = worker_state
         self._history = history
         self._run_job = run_job
+        self._reconcile = reconcile
         self._settings = settings
         self._sync = sync
         self._stop = asyncio.Event()
@@ -69,6 +72,9 @@ class ImportWorker:
         self._stop.set()
 
     async def run(self) -> None:
+        # Overrides first: a scratch dir set from the UI is where the staging
+        # files of an interrupted mux are.
+        await self._reload()
         await self.reconcile()
         running: set[asyncio.Task[None]] = set()
 
@@ -95,10 +101,10 @@ class ImportWorker:
         This process is the only consumer of the queue, so a job still marked
         running at startup died with the worker that claimed it. Failing it
         makes the shim fail the import, which is the safe answer when a mux may
-        have half-written the destination.
+        have half-written the destination. Its staging file is removed.
         """
         try:
-            stale = await self._jobs.fail_running("worker restarted before the job finished")
+            stale = await self._reconcile().execute()
         except Exception:
             log.exception("could not reconcile interrupted jobs")
             return

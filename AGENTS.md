@@ -48,8 +48,9 @@ alembic/                 under services/backend/
 9. **Route handlers stay thin**: schema -> use case -> record -> schema. They do
    not catch domain exceptions; add the mapping to `DOMAIN_ERROR_MAP` in
    `api/errors.py` instead.
-10. **A job left `running` is failed at worker startup**, never resumed. The
-    worker that claimed it died mid-mux, so the destination may be half-written;
+10. **A job left `running` is failed at worker startup**, never resumed, and
+    its staging file is removed. The worker that claimed it died mid-mux, so the
+    destination may be half-written;
     the shim sees `error` and fails the import, which is the safe answer.
     `pending` jobs are untouched -- the starting worker is about to run them.
 11. **Never bypass the path guard.** Every path from an HTTP client goes through

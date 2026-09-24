@@ -46,6 +46,7 @@ class SettingsView(WireModel):
     # str, not LogLevel: MUXARR_LOG_LEVEL is not validated, and reading it must not 500.
     log_level: str
 
+    # Reported, never patched: MUXARR_AUTH_METHOD is environment-only.
     auth_method: AuthMethod
     auth_required: AuthRequired
 
@@ -87,7 +88,6 @@ class SettingsPatch(BaseModel):
 
     log_level: LogLevel | None = None
 
-    auth_method: AuthMethod | None = None
     auth_required: AuthRequired | None = None
 
 

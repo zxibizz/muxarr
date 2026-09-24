@@ -21,11 +21,16 @@ services:
     #   dockerfile: Dockerfile
     container_name: muxarr
     restart: unless-stopped
+    # Docker's default of 10s SIGKILLs a mux before s6's own 30s+30s grace can
+    # wind it down.
+    stop_grace_period: 90s
     environment:
       # s6 starts as root and drops to these before running anything. Match the
       # uid/gid that owns your library -- the *arr containers' PUID/PGID.
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
+      # For the log timestamps; the UI shows your browser's time zone anyway.
+      TZ: ${TZ:-Etc/UTC}
       # Colon-separated. Must cover both download and library paths.
       MUXARR_READ_ROOTS: /downloads:/media
       # Anything below this line can also be managed from the Settings page.

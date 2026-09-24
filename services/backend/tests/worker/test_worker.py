@@ -16,12 +16,16 @@ import pytest
 from src.application.interfaces.history import NewOperation
 from src.application.interfaces.jobs import JobRecord
 from src.application.use_cases.imports.dto import ImportOutcome, ImportRequest, fingerprint
+from src.application.use_cases.imports.reconcile import ReconcileInterruptedJobsUseCase
 from src.db.session import DBManager
+from src.domain.paths import PathGuard
+from src.infrastructure.filesystem.placement import FilesystemPlacement, staging_path_for
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
 from src.settings.config import Settings
 from src.worker.service import IDLE_POLL_INTERVAL, ImportWorker
+from tests.conftest import touch
 
 REQUEST = ImportRequest(
     app="radarr",
@@ -64,13 +68,21 @@ def build(
     history_max_records: int = 200,
     settings: Callable[[], Settings] | None = None,
     sync: Callable[[], Awaitable[bool]] | None = None,
+    read_roots: tuple[Path, ...] = (Path("/downloads"),),
 ) -> ImportWorker:
-    fixed = Settings(read_roots=(Path("/downloads"),), history_max_records=history_max_records)
+    fixed = Settings(read_roots=read_roots, history_max_records=history_max_records)
+    reconcile = ReconcileInterruptedJobsUseCase(
+        jobs=jobs,
+        guard=PathGuard.from_roots(read_roots),
+        placement=FilesystemPlacement(),
+        scratch_dir=None,
+    )
     return ImportWorker(
         jobs=jobs,
         worker_state=worker_state,
         history=history,
         run_job=lambda: runner,  # type: ignore[arg-type,return-value]
+        reconcile=lambda: reconcile,
         settings=settings or (lambda: fixed),
         sync=sync,
     )
@@ -144,6 +156,38 @@ async def test_startup_fails_jobs_left_behind_by_a_dead_worker(
     assert found is not None
     assert found.state == "failed"
     assert "restarted" in (found.error or "")
+
+
+async def test_startup_removes_the_staging_file_of_an_interrupted_mux(
+    tmp_path: Path,
+    jobs: SqlAlchemyJobRepository,
+    worker_state: SqlAlchemyWorkerStateRepository,
+    history: SqlAlchemyHistoryRepository,
+) -> None:
+    """A SIGKILL skips staged_output's cleanup; gigabytes would sit there hidden."""
+    library = tmp_path / "library"
+    interrupted = ImportRequest(
+        app="radarr",
+        source_path=tmp_path / "downloads" / "a.mp4",
+        destination_path=library / "Movie" / "Movie (2024).mp4",
+    )
+    queued = ImportRequest(
+        app="radarr",
+        source_path=tmp_path / "downloads" / "b.mkv",
+        destination_path=library / "Other" / "Other (2024).mkv",
+    )
+    await jobs.create_or_get("job-1", fingerprint({"n": 1}), interrupted)
+    await jobs.claim_next()
+    await jobs.create_or_get("job-2", fingerprint({"n": 2}), queued)
+    # The output is always .mkv, whatever the destination's extension.
+    leftover = touch(staging_path_for(library / "Movie" / "Movie (2024).mkv"), b"partial")
+    untouched = touch(staging_path_for(library / "Other" / "Other (2024).mkv"), b"live")
+
+    worker = build(jobs, worker_state, history, RecordingRunner(jobs), read_roots=(tmp_path,))
+    await worker.reconcile()
+
+    assert not leftover.exists()
+    assert untouched.exists()
 
 
 async def test_history_is_trimmed_to_the_cap_while_idle(

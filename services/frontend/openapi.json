@@ -1065,21 +1065,6 @@
             ],
             "title": "Ai Timeout Seconds"
           },
-          "auth_method": {
-            "anyOf": [
-              {
-                "enum": [
-                  "forms",
-                  "external"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auth Method"
-          },
           "auth_required": {
             "anyOf": [
               {

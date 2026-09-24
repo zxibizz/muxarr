@@ -11,6 +11,7 @@ Two rules hold this together:
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import shutil
 from collections.abc import Iterator
@@ -25,6 +26,10 @@ from src.domain.errors import InsufficientSpaceError, PlacementError
 log = get_logger(LogComponent.INFRA_PLACEMENT)
 
 STAGING_SUFFIX = ".part"
+
+# Mirrors staging_path_for. The pid+token run holds no "-", so the first one
+# after it is the separator and a name that itself contains "-" stays exact.
+_STAGING_NAME = re.compile(r"\.muxarr-\d+[0-9a-f]{8}-(?P<name>.+)" + re.escape(STAGING_SUFFIX))
 
 
 def ensure_free_space(
@@ -138,6 +143,37 @@ def _unlink_quietly(path: Path) -> None:
         log.warning("could not remove staging file", path=path, error=str(exc))
 
 
+def discard_staging(destination: Path, policy: PlacementPolicy | None = None) -> list[Path]:
+    """Remove what a killed mux staged for ``destination``, returning what went.
+
+    ``staged_output`` cleans up on every exit Python sees; this is for the one it
+    cannot, a SIGKILL. Both the scratch dir and the destination's own directory
+    are swept, because a cross-device finalise stages a second copy there.
+    """
+    policy = policy or PlacementPolicy()
+    directories = {destination.parent}
+    if policy.scratch_dir is not None:
+        directories.add(policy.scratch_dir)
+
+    removed: list[Path] = []
+    for directory in directories:
+        try:
+            entries = list(directory.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            match = _STAGING_NAME.fullmatch(entry.name)
+            if match is None or match["name"] != destination.name or not entry.is_file():
+                continue
+            try:
+                entry.unlink()
+            except OSError as exc:
+                log.warning("could not remove staging file", path=entry, error=str(exc))
+                continue
+            removed.append(entry)
+    return removed
+
+
 class FilesystemPlacement:
     """Adapter object for the container; delegates to the module functions."""
 
@@ -160,3 +196,8 @@ class FilesystemPlacement:
         self, reference: Path, target: Path, policy: PlacementPolicy | None = None
     ) -> None:
         copy_attributes(reference, target, policy)
+
+    def discard_staging(
+        self, destination: Path, policy: PlacementPolicy | None = None
+    ) -> list[Path]:
+        return discard_staging(destination, policy)

@@ -21,7 +21,7 @@ import {
   useChangeCredentials,
   useRegenerateApiKey,
 } from '../../../api/queries';
-import { AUTH_METHOD_OPTIONS, AUTH_REQUIRED_OPTIONS } from '../fields';
+import { AUTH_METHOD_LABELS, AUTH_REQUIRED_OPTIONS } from '../fields';
 import { SettingRow, SettingsSection } from '../SettingsSection';
 import type { SettingsFormApi } from '../useSettingsForm';
 
@@ -206,20 +206,43 @@ function LoginSection() {
 }
 
 export function SecuritySection({ field, bind }: SettingsFormApi) {
+  const status = useAuthStatus();
+  const method = status.data?.method;
+
   return (
     <Stack gap="lg">
       <SettingsSection title="Authentication">
         <SettingRow
-          binding={field('auth_method')}
+          binding={{
+            id: 'setting-auth_method',
+            envVar: 'MUXARR_AUTH_METHOD',
+            locked: method === 'external',
+          }}
           label="Method"
-          description="External trusts a proxy in front of Muxarr, and leaves the UI and API open to anything that reaches this port directly."
+          description={
+            <>
+              Set <Code fz="xs">MUXARR_AUTH_METHOD=external</Code> to let a reverse proxy sign users
+              in. It is environment-only, as in the *arr apps: it leaves the UI and API open to
+              anything that reaches this port directly.
+            </>
+          }
         >
-          <Select data={AUTH_METHOD_OPTIONS} allowDeselect={false} {...bind('auth_method')} />
+          <TextInput
+            id="setting-auth_method"
+            value={method ? AUTH_METHOD_LABELS[method] : ''}
+            readOnly
+          />
         </SettingRow>
         <SettingRow
           binding={field('auth_required')}
           label="Required"
-          description="Local addresses include the Docker networks, and anything forwarded by a reverse proxy on one."
+          description={
+            <>
+              Local means the Docker networks too, unless <Code fz="xs">MUXARR_LOCAL_NETWORKS</Code>{' '}
+              says otherwise. Behind a reverse proxy, list it in{' '}
+              <Code fz="xs">MUXARR_TRUSTED_PROXIES</Code>, or every request looks local.
+            </>
+          }
         >
           <Select data={AUTH_REQUIRED_OPTIONS} allowDeselect={false} {...bind('auth_required')} />
         </SettingRow>

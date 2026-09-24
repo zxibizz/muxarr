@@ -12,6 +12,31 @@ within the same major version.
 
 ## [Unreleased]
 
+### Added
+
+- **`MUXARR_TRUSTED_PROXIES`**: reverse proxies whose `X-Forwarded-For` is
+  believed, so `disabled_for_local_addresses` judges the real caller rather
+  than a proxy on a Docker network, which made every request look local.
+- **`MUXARR_LOCAL_NETWORKS`**: the networks `disabled_for_local_addresses` lets
+  in, replacing the default list, for example to add a Tailscale tailnet.
+
+### Changed
+
+- **`MUXARR_AUTH_METHOD` is environment-only.** `external` switches the login
+  off, so, as in Sonarr, only whoever controls the environment may choose it.
+  The Settings page still shows the method. An `external` saved from the UI by an
+  earlier version no longer applies: set the variable to keep it.
+- `TZ` now sets the time zone of the log timestamps (the image ships `tzdata`).
+
+### Fixed
+
+- **A stopped container no longer leaves a staging file behind.** A mux killed
+  mid-write left a hidden `.muxarr-*.part` the size of the movie in the library
+  folder. The worker now removes it when it fails the interrupted job at
+  startup.
+- The compose examples set `stop_grace_period: 90s`. Docker's default of 10s
+  killed a running mux before the container's own grace period applied.
+
 ## [0.10.2] - 2026-09-24
 
 ### Changed

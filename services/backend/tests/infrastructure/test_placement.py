@@ -9,6 +9,7 @@ from src.application.interfaces.placement import PlacementPolicy
 from src.domain.errors import InsufficientSpaceError, PlacementError
 from src.infrastructure.filesystem.placement import (
     copy_attributes,
+    discard_staging,
     ensure_free_space,
     finalise,
     same_filesystem,
@@ -162,3 +163,41 @@ def test_copy_attributes_survives_a_failed_chown(tmp_path: Path) -> None:
     copy_attributes(reference, target, PlacementPolicy(preserve_ownership=True))
 
     assert target.is_file()
+
+
+def test_discard_staging_removes_what_a_killed_mux_left(tmp_path: Path) -> None:
+    destination = tmp_path / "library" / "Movie [1080p].mkv"
+    leftover = touch(staging_path_for(destination), b"partial")
+
+    assert discard_staging(destination) == [leftover]
+    assert not leftover.exists()
+
+
+def test_discard_staging_leaves_everything_else(tmp_path: Path) -> None:
+    """Only this destination's staging files: never a neighbour's, never media."""
+    library = tmp_path / "library"
+    destination = library / "a.mkv"
+    kept = [
+        touch(library / "a.mkv", b"previous import"),
+        touch(staging_path_for(library / "b-a.mkv"), b"a neighbour's mux"),
+        touch(library / ".muxarr-notes-a.mkv.part", b"not ours"),
+        touch(library / "a.mkv.part", b"someone else's"),
+    ]
+
+    assert discard_staging(destination) == []
+    assert all(path.exists() for path in kept)
+
+
+def test_discard_staging_sweeps_the_scratch_dir_too(tmp_path: Path) -> None:
+    destination = tmp_path / "library" / "out.mkv"
+    destination.parent.mkdir()
+    scratch = tmp_path / "scratch"
+    leftover = touch(staging_path_for(destination, scratch), b"partial")
+
+    removed = discard_staging(destination, PlacementPolicy(scratch_dir=scratch))
+
+    assert removed == [leftover]
+
+
+def test_discard_staging_tolerates_a_missing_directory(tmp_path: Path) -> None:
+    assert discard_staging(tmp_path / "gone" / "out.mkv") == []

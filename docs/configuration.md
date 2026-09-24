@@ -17,8 +17,10 @@ variable out to manage that setting from the UI instead.
 | --- | --- | --- | --- |
 | `MUXARR_READ_ROOTS` | *required* | | Colon-separated paths Muxarr may read |
 | `MUXARR_API_KEY` | *generated* | | Pins the API key; unset, one is generated on first start and shown in Settings → Security — see [Authentication](#authentication) |
-| `MUXARR_AUTH_METHOD` | `forms` | ✓ | `forms` (login page) or `external` (a reverse proxy signs users in) |
+| `MUXARR_AUTH_METHOD` | `forms` | | `forms` (login page) or `external` (a reverse proxy signs users in) — see [Authentication](#authentication) |
 | `MUXARR_AUTH_REQUIRED` | `enabled` | ✓ | `enabled` or `disabled_for_local_addresses` |
+| `MUXARR_LOCAL_NETWORKS` | loopback, RFC 1918, ULA, link-local | | Comma-separated addresses and CIDRs that `disabled_for_local_addresses` lets in. Replaces the default list |
+| `MUXARR_TRUSTED_PROXIES` | *unset* | | Comma-separated addresses and CIDRs of reverse proxies whose `X-Forwarded-For` is believed — see [Behind a reverse proxy](#behind-a-reverse-proxy) |
 | `MUXARR_USERNAME` / `MUXARR_PASSWORD` | *unset* | | Set together to pin the UI login; rewritten into the database on every start |
 | `MUXARR_HOST` / `MUXARR_PORT` | `127.0.0.1` / `8710` | | Bind address for `src.cli serve`. Ignored in the container image, where uvicorn binds `127.0.0.1:8000` and nginx serves `:8710` |
 | `MUXARR_MAX_CONCURRENT` | `1` | ✓ | Simultaneous remuxes, in the worker |
@@ -48,13 +50,15 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_AI_MAX_ENTRIES` | `200` | ✓ | Skip the call entirely above this many sidecars |
 | `MUXARR_AI_NAME_TRACKS` | `false` | ✓ | Let the provider write the track names — see [Track names](#track-names) |
 | `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
+| `TZ` | `UTC` | | Time zone for log timestamps, e.g. `Europe/Berlin`; the UI always shows your browser's |
 | `MUXARR_MODE` | `all` | | Container image only: `all`, `web` or `worker` — see [Container modes](#container-modes) |
 
-Read roots, the database URL, the bind address, the API key, the login and the
-scratch directory stay environment-only on purpose: they decide what Muxarr is
-allowed to touch and how it is reached, which is not something an HTTP request
-should be able to move. (The API key can still be *regenerated* from the UI
-when the environment does not pin it.)
+Read roots, the database URL, the bind address, the API key, the login, the
+auth method, the local and proxy networks and the scratch directory stay
+environment-only on purpose: they decide what Muxarr is allowed to touch and
+who is let in, which is not something an HTTP request should be able to move.
+(The API key can still be *regenerated* from the UI when the environment does
+not pin it.)
 
 The AI key is write-only over HTTP. The UI can set or clear it and the daemon
 will say whether one is stored, but it is never sent back to the browser.
@@ -83,12 +87,32 @@ then remove them again if you would rather manage it from the UI.
 **Method** `external` skips the login page entirely, for an authenticating
 reverse proxy (Authelia, Authentik, oauth2-proxy, …) in front of Muxarr. It
 opens the whole UI and API to anything that reaches port 8710 *without* going
-through that proxy, including every container on the same Docker network.
+through that proxy, including every container on the same Docker network. As in
+Sonarr, it can only be chosen with `MUXARR_AUTH_METHOD=external`: the Settings
+page shows the method but cannot switch the login off.
 
 **Required** `disabled_for_local_addresses` skips the login for callers on
-loopback, RFC 1918, ULA and link-local addresses. Docker networks are among
-them, and so is a reverse proxy on one: behind a proxy, *every* request looks
-local. Only use it when Muxarr is reached directly.
+loopback, RFC 1918, ULA and link-local addresses. Set `MUXARR_LOCAL_NETWORKS`
+to choose the networks yourself, for example `100.64.0.0/10` for a Tailscale
+tailnet; the list replaces the default rather than adding to it. Docker
+networks are local by default, and so is a reverse proxy on one — see below.
+
+### Behind a reverse proxy
+
+Muxarr judges a caller by the address it connects from. Behind Traefik, SWAG,
+Caddy or nginx that is the proxy's, usually a Docker address, so with
+`disabled_for_local_addresses` *every* request would look local, the ones from
+the internet included. List the proxy in `MUXARR_TRUSTED_PROXIES`:
+
+```yaml
+MUXARR_TRUSTED_PROXIES: 172.18.0.2   # or the proxy network's subnet, 172.18.0.0/16
+```
+
+Muxarr then believes that proxy's `X-Forwarded-For` and judges the caller it
+names instead. The header is read from the right and only through trusted hops,
+so what a client writes into it itself is never taken. A proxy that is not
+listed is judged as the caller, as before. The login page and the API key work
+the same either way; this only matters for `disabled_for_local_addresses`.
 
 Writes from the browser must carry an `X-Requested-With` header, which the UI
 always sends and a cross-site form cannot; the API key is exempt.

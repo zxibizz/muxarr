@@ -6,13 +6,14 @@ compose file without a config file mount.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
 
-from src.domain.auth import credentials_problem
+from src.domain.auth import DEFAULT_LOCAL_NETWORKS, IPNetwork, credentials_problem
 from src.domain.enums import (
     AI_MODES,
     AUTH_METHODS,
@@ -62,6 +63,10 @@ class Settings:
     api_key: str | None = field(default=None, repr=False)
     auth_method: AuthMethod = "forms"
     auth_required: AuthRequired = "enabled"
+    # Proxies whose X-Forwarded-For names the real caller; nobody else's is believed.
+    trusted_proxies: tuple[IPNetwork, ...] = ()
+    # Callers that "disabled_for_local_addresses" lets in without a login.
+    local_networks: tuple[IPNetwork, ...] = DEFAULT_LOCAL_NETWORKS
     # Set together, these pin the UI login and overwrite the stored user on start.
     username: str | None = None
     password: str | None = field(default=None, repr=False)
@@ -167,6 +172,13 @@ class Settings:
                 source.get("MUXARR_AUTH_REQUIRED") or "enabled",
                 AUTH_REQUIRED,
             ),
+            trusted_proxies=parse_networks(
+                "MUXARR_TRUSTED_PROXIES", source.get("MUXARR_TRUSTED_PROXIES", "")
+            ),
+            local_networks=parse_networks(
+                "MUXARR_LOCAL_NETWORKS", source.get("MUXARR_LOCAL_NETWORKS", "")
+            )
+            or DEFAULT_LOCAL_NETWORKS,
             username=username,
             password=password,
             host=source.get("MUXARR_HOST", DEFAULT_HOST),
@@ -249,6 +261,24 @@ def parse_languages(env: str, raw: str) -> tuple[str, ...]:
         if code not in codes:
             codes.append(code)
     return tuple(codes)
+
+
+def parse_networks(env: str, raw: str) -> tuple[IPNetwork, ...]:
+    """Comma-separated addresses and CIDR networks; a bare address is a network of one."""
+    networks: list[IPNetwork] = []
+    for part in raw.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        try:
+            network = ipaddress.ip_network(token, strict=False)
+        except ValueError as exc:
+            raise ConfigError(
+                f"{env} holds {token!r}, which is not an IP address or network"
+            ) from exc
+        if network not in networks:
+            networks.append(network)
+    return tuple(networks)
 
 
 def parse_choice(env: str, raw: str, choices: tuple[_Choice, ...]) -> _Choice:

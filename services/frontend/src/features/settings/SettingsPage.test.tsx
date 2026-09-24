@@ -237,4 +237,13 @@ describe('the security section', () => {
     expect(await screen.findByLabelText(/^username/i)).toBeDisabled();
     expect(screen.getByRole('button', { name: /^change$/i })).toBeDisabled();
   });
+
+  it('shows the auth method but leaves choosing it to the environment', async () => {
+    stubFetch({ auth: anAuthStatus({ method: 'external' }) });
+    await loaded('/settings?section=security');
+
+    const method = await screen.findByDisplayValue(/reverse proxy signs users in/i);
+    expect(method).toHaveAttribute('readonly');
+    expect(screen.getByText(/^Pinned by/)).toBeInTheDocument();
+  });
 });

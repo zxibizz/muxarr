@@ -30,6 +30,12 @@ Then:
    containers pick up the new ones with no action — as long as the shims
    directory is not mounted over.
 
+Stopping the container gives a running mux 30 seconds to finish. One that
+needs longer is killed and its import fails in Radarr/Sonarr; the half-written
+staging file is removed on the next start. Keep
+`stop_grace_period: 90s` on the service, as the examples do: without it Docker
+kills everything after 10 seconds, before that window has even run out.
+
 Downgrading across a migration is not supported: bring the old database back
 from your backup instead.
 

@@ -52,6 +52,10 @@ class TestApply:
         """A removed setting must not stop the daemon from starting."""
         assert apply_overrides(BASE, {"gone_in_a_later_release": "x"}) == BASE
 
+    def test_a_stored_external_auth_method_no_longer_applies(self) -> None:
+        """Saved by a version that allowed it; only the environment may switch login off."""
+        assert apply_overrides(BASE, {"auth_method": "external"}).auth_method == "forms"
+
     def test_a_locked_field_is_not_applied(self) -> None:
         applied = apply_overrides(BASE, {"dedupe": "off"}, locked=frozenset({"dedupe"}))
 

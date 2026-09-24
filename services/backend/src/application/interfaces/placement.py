@@ -38,3 +38,9 @@ class Placement(Protocol):
     def copy_attributes(
         self, reference: Path, target: Path, policy: PlacementPolicy | None = None
     ) -> None: ...
+
+    def discard_staging(
+        self, destination: Path, policy: PlacementPolicy | None = None
+    ) -> list[Path]:
+        """Remove staging files a killed mux left for ``destination``; return them."""
+        ...
