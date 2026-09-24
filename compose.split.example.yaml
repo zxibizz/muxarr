@@ -32,7 +32,7 @@ x-muxarr-env: &muxarr-env
 x-muxarr: &muxarr
   # Pin a version rather than latest, so a restart never changes the version
   # underneath you. Both containers must run the same one.
-  image: ghcr.io/zxibizz/muxarr:0.10.2
+  image: ghcr.io/zxibizz/muxarr:0.10.3
   # build:
   #   context: .
   #   dockerfile: Dockerfile
