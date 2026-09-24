@@ -31,6 +31,9 @@ PYPROJECT = Path("services/backend/pyproject.toml")
 INIT = Path("services/backend/src/__init__.py")
 PACKAGE_JSON = Path("services/frontend/package.json")
 PACKAGE_LOCK = Path("services/frontend/package-lock.json")
+# Both embed the version too; left stale, test_openapi and `uv sync --locked` fail.
+OPENAPI = Path("services/frontend/openapi.json")
+UV_LOCK = Path("services/backend/uv.lock")
 CHANGELOG = Path("CHANGELOG.md")
 # Mirrors check_version.IMAGE_TAG_FILES.
 IMAGE_TAG_FILES = (
@@ -161,10 +164,25 @@ def main(argv: list[str]) -> int:
     _sub_once(INIT, r'^__version__ = "[^"]+"', f'__version__ = "{version}"')
     _sub_once(PACKAGE_JSON, r'^(  "version": ")[^"]+(")', rf"\g<1>{version}\g<2>")
     bump_lock(version)
+    _sub_once(OPENAPI, r'^(    "version": ")[^"]+(")$', rf"\g<1>{version}\g<2>")
+    _sub_once(
+        UV_LOCK,
+        r'^(name = "muxarr-backend"\nversion = ")[^"]+(")',
+        rf"\g<1>{version}\g<2>",
+    )
     bump_image_tags(version)
     open_changelog_section(version, dt.date.today().isoformat())
 
-    for path in (PYPROJECT, INIT, PACKAGE_JSON, PACKAGE_LOCK, *IMAGE_TAG_FILES, CHANGELOG):
+    for path in (
+        PYPROJECT,
+        INIT,
+        PACKAGE_JSON,
+        PACKAGE_LOCK,
+        OPENAPI,
+        UV_LOCK,
+        *IMAGE_TAG_FILES,
+        CHANGELOG,
+    ):
         print(f"  updated {path}")
 
     # The guard CI runs, against the tag this bump is for.
