@@ -15,7 +15,7 @@ services:
   muxarr:
     # Pin a version rather than latest, so a restart never changes the version
     # underneath you. Swap for the build block below to run from a checkout.
-    image: ghcr.io/zxibizz/muxarr:0.10.1
+    image: ghcr.io/zxibizz/muxarr:0.10.2
     # build:
     #   context: .
     #   dockerfile: Dockerfile

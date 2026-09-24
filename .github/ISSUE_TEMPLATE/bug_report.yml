@@ -68,7 +68,7 @@ body:
         How Muxarr is deployed, the relevant `MUXARR_*` variables (not the API key),
         and the `mkvmerge --version` from inside the container.
       placeholder: |
-        Deployment: docker compose, ghcr.io/zxibizz/muxarr:0.10.1
+        Deployment: docker compose, ghcr.io/zxibizz/muxarr:0.10.2
         Host: Ubuntu 24.04, x86_64
         Storage: local ext4 / NFS / mergerfs / ...
         MUXARR_READ_ROOTS=/downloads:/media

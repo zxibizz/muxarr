@@ -1,7 +1,7 @@
 [project]
 name = "muxarr-backend"
 # Mirrored in src/__init__.py and services/frontend/package.json; CI asserts they agree.
-version = "0.10.1"
+version = "0.10.2"
 description = "Embed external audio and subtitle tracks into video containers during Radarr/Sonarr import"
 readme = "../../README.md"
 requires-python = ">=3.11"
