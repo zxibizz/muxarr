@@ -229,7 +229,7 @@ class AppContainer:
     @cached_property
     def track_discovery(self) -> TrackDiscovery:
         settings = self.settings
-        heuristic = FilesystemTrackDiscovery()
+        heuristic = FilesystemTrackDiscovery(prober=FallbackMediaProber())
         if not settings.ai_enabled:
             return heuristic
         return AiAssistedTrackDiscovery(
@@ -244,6 +244,8 @@ class AppContainer:
             timeout=settings.ai_timeout_seconds,
             max_tracks=settings.max_external_tracks,
             name_tracks=settings.ai_name_tracks,
+            prober=FallbackMediaProber(),
+            sub_charset=settings.sub_charset,
         )
 
     @cached_property

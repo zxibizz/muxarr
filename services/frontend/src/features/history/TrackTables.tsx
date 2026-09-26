@@ -78,7 +78,7 @@ export function EmbeddedTracks({ tracks }: { tracks: AddedTrack[] }) {
                   </Tooltip>
                 ) : (
                   <Text size="xs" c="dimmed">
-                    by filename
+                    {track.source === 'tags' ? 'by file tags' : 'by filename'}
                   </Text>
                 )}
               </Table.Td>

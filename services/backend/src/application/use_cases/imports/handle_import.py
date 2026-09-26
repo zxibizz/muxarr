@@ -429,6 +429,8 @@ def _summarise(track: ExternalTrack) -> str:
 def _origin(track: ExternalTrack) -> str:
     if track.source == "ai":
         return "identified by the AI provider"
+    if track.source == "tags":
+        return "identified from the file's own tags"
     return "identified from its filename"
 
 

@@ -27,8 +27,10 @@ class StubProber:
         self._error = error
         self._empty = set(empty)
         self._infos = dict(infos or {})
+        self.probed: list[Path] = []
 
     def probe(self, path: Path) -> MediaInfo:
+        self.probed.append(path)
         if self._error is not None:
             raise self._error
         if path in self._empty:

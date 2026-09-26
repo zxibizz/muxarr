@@ -13,13 +13,21 @@ The source folder is only ever read. Nothing here opens a file for writing.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
+from src.application.interfaces.prober import MediaProber
 from src.core.logging import get_logger
 from src.domain import language
-from src.domain.codecs import AUDIO_EXTENSIONS, SUBTITLE_EXTENSIONS, VIDEO_EXTENSIONS
-from src.domain.enums import LogComponent, TrackKind
-from src.domain.media import ExternalTrack
+from src.domain.codecs import (
+    AUDIO_EXTENSIONS,
+    SUBTITLE_EXTENSIONS,
+    TAGGED_SIDECAR_SUFFIXES,
+    VIDEO_EXTENSIONS,
+)
+from src.domain.enums import UNDETERMINED, LogComponent, TrackKind
+from src.domain.errors import MuxarrError
+from src.domain.media import ExternalTrack, Track
 from src.domain.naming import EpisodeRef, belongs_to
 
 log = get_logger(LogComponent.INFRA_DISCOVERY)
@@ -54,6 +62,7 @@ def discover(
     video_path: Path,
     *,
     episode: EpisodeRef | None = None,
+    prober: MediaProber | None = None,
 ) -> list[ExternalTrack]:
     """Collect sidecar tracks that belong to ``video_path``."""
     root = video_path.parent
@@ -72,16 +81,17 @@ def discover(
         if not belongs_to(path, episode=episode, sibling_video_count=sibling_video_count):
             log.bind(file=path.name).debug("ignoring a file that belongs to another episode")
             continue
-        track = _to_external_track(path, video_stem=video_path.stem, context=context)
+        track = _to_external_track(path, video_stem=video_path.stem, context=context, prober=prober)
         if track is None:
             log.bind(file=path.name).debug("ignoring a file that is not an embeddable track")
             continue
+        origin = "its own tags" if track.source == "tags" else "filenames"
         log.bind(
             file=track.path.name,
             language=track.language,
             title=track.name,
             folders="/".join(context),
-        ).debug(f"filenames suggest {track.kind} in {track.language}")
+        ).debug(f"{origin} suggest {track.kind} in {track.language}")
         tracks.append(track)
     return tracks
 
@@ -160,6 +170,7 @@ def _to_external_track(
     *,
     video_stem: str,
     context: tuple[str, ...] = (),
+    prober: MediaProber | None = None,
 ) -> ExternalTrack | None:
     classified = classify(path)
     if classified is None:
@@ -167,7 +178,7 @@ def _to_external_track(
     kind, companion = classified
 
     attrs = language.infer(path, video_stem=video_stem, context=context)
-    return ExternalTrack(
+    track = ExternalTrack(
         path=path,
         kind=kind,
         language=attrs.language,
@@ -177,12 +188,53 @@ def _to_external_track(
         variant=attrs.variant,
         companion=companion,
     )
+    if attrs.language != UNDETERMINED or prober is None:
+        return track
+
+    tagged = embedded_track(path, kind, prober)
+    code = language.normalise_language(tagged.language) if tagged else None
+    if tagged is None or code is None or code == UNDETERMINED:
+        return track
+
+    forced = attrs.forced or tagged.forced
+    hearing_impaired = attrs.hearing_impaired or tagged.hearing_impaired
+    log.bind(file=path.name, language=code).debug(f"the file's own tags say {code}")
+    return replace(
+        track,
+        language=code,
+        name=language.build_title(
+            code,
+            forced=forced,
+            hearing_impaired=hearing_impaired,
+            signs=attrs.signs,
+            variant=attrs.variant,
+        ),
+        forced=forced,
+        hearing_impaired=hearing_impaired,
+        source="tags",
+    )
+
+
+def embedded_track(path: Path, kind: TrackKind, prober: MediaProber) -> Track | None:
+    """The track a tag-carrying sidecar declares, or ``None`` if it declares nothing."""
+    if path.suffix.lower() not in TAGGED_SIDECAR_SUFFIXES:
+        return None
+    try:
+        info = prober.probe(path)
+    except MuxarrError as exc:
+        log.bind(file=path.name, error=str(exc)).debug("could not read the sidecar's own tags")
+        return None
+    candidates = info.of_kind(kind) or info.tracks
+    return candidates[0] if candidates else None
 
 
 class FilesystemTrackDiscovery:
     """Adapter object for the container; delegates to :func:`discover`."""
 
+    def __init__(self, *, prober: MediaProber | None = None) -> None:
+        self._prober = prober
+
     def discover(
         self, video_path: Path, *, episode: EpisodeRef | None = None
     ) -> list[ExternalTrack]:
-        return discover(video_path, episode=episode)
+        return discover(video_path, episode=episode, prober=self._prober)

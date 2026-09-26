@@ -218,15 +218,23 @@ environment:
 
 ### What is sent
 
-One request per import, containing only **names**:
+One request per import, containing:
 
 - the video's filename
 - the filenames of other videos in the same folder
 - the candidate sidecar paths, *relative to the release folder*, with byte sizes
 - the season/episode numbers, when Sonarr supplied them
+- for `.mka`, `.mks`, `.m4a` and `.idx` sidecars, the language, track name and
+  forced/SDH flags the file declares in its own header
+- for `.srt`, `.ass`, `.ssa` and `.vtt` subtitles, up to 300 characters of
+  dialogue from the middle of the file, with timing and markup stripped. This
+  is what identifies a subtitle whose name says nothing about its language.
 
-Never the contents of any file, never an absolute path — so nothing about your
-library layout above the release folder is disclosed either.
+At most 40 sidecars per request get the last two, this episode's first. Audio
+and video content is never sent, and neither is an absolute path, so nothing
+about your library layout above the release folder is disclosed. Point
+`MUXARR_AI_BASE_URL` at a local provider if even subtitle text should stay on
+your machine.
 
 ### What it is allowed to decide
 

@@ -775,7 +775,7 @@ export interface components {
              * @default heuristic
              * @enum {string}
              */
-            source: "heuristic" | "ai";
+            source: "heuristic" | "tags" | "ai";
             /** Track */
             track: string;
         };
@@ -999,7 +999,7 @@ export interface components {
              * @default heuristic
              * @enum {string}
              */
-            source: "heuristic" | "ai";
+            source: "heuristic" | "tags" | "ai";
             /** Variant */
             variant: string | null;
         };

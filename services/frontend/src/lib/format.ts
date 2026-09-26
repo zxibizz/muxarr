@@ -110,7 +110,9 @@ export function explainTrack(track: AddedTrack): string {
   parts.push(
     track.source === 'ai'
       ? '— identified by the AI provider'
-      : '— identified from its filename',
+      : track.source === 'tags'
+        ? "— identified from the file's own tags"
+        : '— identified from its filename',
   );
   if (track.file) parts.push(`from ${track.file}`);
   return parts.join(' ');

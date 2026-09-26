@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { aTrack } from '../test/helpers';
 import {
   displayName,
+  explainTrack,
   formatBytes,
   formatClock,
   formatContextValue,
@@ -127,5 +129,15 @@ describe('shortenPath', () => {
     expect(shortenPath('/media/Show/Season 01/Show - S01E01.mkv')).toBe(
       '…/Season 01/Show - S01E01.mkv',
     );
+  });
+});
+
+describe('explainTrack', () => {
+  it.each([
+    ['heuristic', 'identified from its filename'],
+    ['tags', "identified from the file's own tags"],
+    ['ai', 'identified by the AI provider'],
+  ] as const)('names where a %s track came from', (source, expected) => {
+    expect(explainTrack(aTrack({ source }))).toContain(expected);
   });
 });

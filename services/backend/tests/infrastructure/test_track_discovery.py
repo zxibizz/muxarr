@@ -5,9 +5,12 @@ from pathlib import Path
 
 import pytest
 
+from src.domain.errors import ProbeError
+from src.domain.media import MediaInfo, Track
 from src.domain.naming import EpisodeRef, parse_episode_marker
 from src.infrastructure.filesystem.track_discovery import discover
 from tests.conftest import touch
+from tests.stubs import StubProber
 
 
 def snapshot(root: Path) -> dict[str, tuple[str, int]]:
@@ -151,3 +154,55 @@ def test_discovery_does_not_modify_the_source_folder(download_dir: Path) -> None
     after = snapshot(download_dir)
 
     assert before == after
+
+
+def declaring(path: Path, kind: str, language: str, **flags: bool) -> StubProber:
+    track = Track(index=1, kind=kind, codec_id="A_AC3", language=language, **flags)  # type: ignore[arg-type]
+    return StubProber(infos={path: MediaInfo(path=path, container="Matroska", tracks=(track,))})
+
+
+class TestEmbeddedTags:
+    def test_an_untagged_name_takes_the_files_own_language(self, download_dir: Path) -> None:
+        video = touch(download_dir / "Some.Movie.2024.mkv")
+        audio = touch(download_dir / "Some.Movie.2024.mka")
+
+        [track] = discover(video, prober=declaring(audio, "audio", "rus", forced=True))
+
+        assert (track.language, track.name, track.source) == ("rus", "Russian (Forced)", "tags")
+        assert track.forced is True
+
+    def test_a_language_in_the_name_beats_the_tag(self, download_dir: Path) -> None:
+        video = touch(download_dir / "Some.Movie.2024.mkv")
+        audio = touch(download_dir / "Some.Movie.2024.eng.mka")
+        prober = declaring(audio, "audio", "rus")
+
+        [track] = discover(video, prober=prober)
+
+        assert (track.language, track.source) == ("eng", "heuristic")
+        assert prober.probed == []
+
+    def test_an_und_tag_changes_nothing(self, download_dir: Path) -> None:
+        video = touch(download_dir / "Some.Movie.2024.mkv")
+        audio = touch(download_dir / "track.mka")
+
+        [track] = discover(video, prober=declaring(audio, "audio", "und"))
+
+        assert (track.language, track.source) == ("und", "heuristic")
+
+    def test_an_unreadable_file_stays_und(self, download_dir: Path) -> None:
+        video = touch(download_dir / "Some.Movie.2024.mkv")
+        touch(download_dir / "track.mka")
+
+        [track] = discover(video, prober=StubProber(ProbeError("broken")))
+
+        assert track.language == "und"
+
+    def test_formats_without_tags_are_never_probed(self, download_dir: Path) -> None:
+        video = touch(download_dir / "Some.Movie.2024.mkv")
+        touch(download_dir / "Some.Movie.2024.srt", "1\n")
+        touch(download_dir / "Some.Movie.2024.ac3")
+        prober = StubProber()
+
+        discover(video, prober=prober)
+
+        assert prober.probed == []

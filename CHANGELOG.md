@@ -12,6 +12,21 @@ within the same major version.
 
 ## [Unreleased]
 
+### Added
+
+- **AI mode reads the sidecars, not just their names.** Each candidate now
+  carries the language, name and flags it declares in its own header, and a
+  text subtitle carries up to 300 characters of its dialogue, so an `.srt`
+  named only after the release is still recognised as Russian. See
+  [What is sent](docs/configuration.md#what-is-sent).
+
+### Fixed
+
+- **A sidecar's own language tag is no longer overwritten with `und`.** When
+  the filename names no language, an `.mka`, `.mks`, `.m4a` or VobSub `.idx`
+  that declares one keeps it, with or without AI mode. The history marks such
+  tracks "by file tags".
+
 ## [0.10.3] - 2026-09-24
 
 ### Added

@@ -78,6 +78,16 @@ async def test_round_trip(history: Store) -> None:
     assert found.muxed is True
 
 
+async def test_every_track_source_survives_the_round_trip(history: Store) -> None:
+    tracks = [a_track(file=f"{s}.srt", source=s) for s in ("heuristic", "tags", "ai")]
+    operation_id = await add(history, added_tracks=tracks)
+
+    found = await history.get(operation_id)
+
+    assert found is not None
+    assert found.added_tracks == tracks
+
+
 async def test_tracks_stored_before_they_were_structured_still_read_back(
     db: DBManager, history: Store
 ) -> None:

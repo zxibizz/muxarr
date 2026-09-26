@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from src.application.interfaces.ai import ChatCompleter
+from src.application.interfaces.prober import MediaProber
 from src.application.interfaces.track_source import TrackDiscovery
 from src.core.logging import get_logger
 from src.domain.enums import UNDETERMINED, AiMode, LogComponent
@@ -60,6 +61,8 @@ class AiAssistedTrackDiscovery:
         timeout: float = 30.0,
         max_tracks: int = 24,
         name_tracks: bool = False,
+        prober: MediaProber | None = None,
+        sub_charset: str | None = None,
     ) -> None:
         self._heuristic = heuristic
         self._completer = completer
@@ -68,6 +71,8 @@ class AiAssistedTrackDiscovery:
         self._timeout = timeout
         self._max_tracks = max_tracks
         self._name_tracks = name_tracks
+        self._prober = prober
+        self._sub_charset = sub_charset
 
     def discover(
         self, video_path: Path, *, episode: EpisodeRef | None = None
@@ -121,7 +126,13 @@ class AiAssistedTrackDiscovery:
     def _consult(
         self, video_path: Path, *, episode: EpisodeRef | None
     ) -> list[ExternalTrack] | None:
-        built = prompt_builder.build(video_path, episode=episode, max_entries=self._max_entries)
+        built = prompt_builder.build(
+            video_path,
+            episode=episode,
+            max_entries=self._max_entries,
+            prober=self._prober,
+            charset=self._sub_charset,
+        )
         if built is None:
             note.bind(max_entries=self._max_entries).info(
                 "nothing to ask about: no candidate files, or too many to send"
@@ -139,17 +150,25 @@ class AiAssistedTrackDiscovery:
             )
             return None
 
-        tracks = materialise(reply, index=built.index, max_tracks=self._max_tracks)
+        tracks = materialise(
+            reply, index=built.index, max_tracks=self._max_tracks, tagged=built.tagged
+        )
         return tracks or None
 
 
-def materialise(reply: str, *, index: Mapping[str, Path], max_tracks: int) -> list[ExternalTrack]:
+def materialise(
+    reply: str,
+    *,
+    index: Mapping[str, Path],
+    max_tracks: int,
+    tagged: Mapping[str, str] | None = None,
+) -> list[ExternalTrack]:
     """Validate a model reply into tracks, dropping anything that does not check out."""
     tracks: list[ExternalTrack] = []
     seen: set[Path] = set()
 
     for item in _parse(reply):
-        track = _to_track(item, index=index)
+        track = _to_track(item, index=index, tagged=tagged or {})
         if track is None or track.path in seen:
             continue
         seen.add(track.path)
@@ -178,7 +197,9 @@ def _parse(reply: str) -> list[Any]:
     return data
 
 
-def _to_track(item: Any, *, index: Mapping[str, Path]) -> ExternalTrack | None:
+def _to_track(
+    item: Any, *, index: Mapping[str, Path], tagged: Mapping[str, str]
+) -> ExternalTrack | None:
     if not isinstance(item, dict):
         return None
 
@@ -188,7 +209,8 @@ def _to_track(item: Any, *, index: Mapping[str, Path]) -> ExternalTrack | None:
 
     # The lookup is the whole path guard: "..", absolute paths, symlink escapes and
     # outright hallucinations all fail to be keys.
-    path = index.get(raw_file.strip().replace("\\", "/"))
+    key = raw_file.strip().replace("\\", "/")
+    path = index.get(key)
     if path is None:
         log.warning("ai proposed a file that is not a candidate", file=raw_file[:MAX_LABEL_CHARS])
         return None
@@ -199,6 +221,9 @@ def _to_track(item: Any, *, index: Mapping[str, Path]) -> ExternalTrack | None:
     kind, companion = classified
 
     language = _language(item.get("language"))
+    # A model shrugging must not overwrite what the file itself declares.
+    if language == UNDETERMINED:
+        language = tagged.get(key, UNDETERMINED)
     forced = item.get("forced") is True
     hearing_impaired = item.get("hearing_impaired") is True
     variant = _label(item.get("variant"))

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import get_args
 
-from src.domain.enums import UNDETERMINED, RejectCode, TrackKind, TrackSource
+from src.domain.enums import TRACK_SOURCES, UNDETERMINED, RejectCode, TrackKind, TrackSource
 
 
 class LogStage(StrEnum):
@@ -41,6 +41,13 @@ class LogStage(StrEnum):
 
 _STAGES = frozenset(stage.value for stage in LogStage)
 _REJECT_CODES: frozenset[str] = frozenset(get_args(RejectCode))
+
+
+def _source(raw: object) -> TrackSource:
+    for source in TRACK_SOURCES:
+        if raw == source:
+            return source
+    return "heuristic"
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +135,7 @@ class TrackDetail:
             hearing_impaired=bool(payload.get("hearing_impaired", False)),
             variant=_optional_str(payload.get("variant")),
             file=str(payload.get("file", "")),
-            source="ai" if source == "ai" else "heuristic",
+            source=_source(source),
         )
 
     @classmethod
@@ -178,7 +185,7 @@ class RejectedTrack:
             reason=str(payload.get("reason", "")),
             kind=kind if kind in ("video", "audio", "subtitles") else "subtitles",
             language=str(payload.get("language", UNDETERMINED)),
-            source="ai" if source == "ai" else "heuristic",
+            source=_source(source),
             code=code if code in _REJECT_CODES else None,
         )
 

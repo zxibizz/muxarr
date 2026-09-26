@@ -15,12 +15,13 @@ from typing import Any
 import pytest
 
 from src.domain.errors import AiError
-from src.domain.media import ExternalTrack
+from src.domain.media import ExternalTrack, MediaInfo, Track
 from src.domain.naming import EpisodeRef
 from src.infrastructure.ai.discovery import AiAssistedTrackDiscovery, materialise
-from src.infrastructure.ai.prompt import build
+from src.infrastructure.ai.prompt import MAX_DESCRIBED, build
 from src.infrastructure.filesystem.track_discovery import FilesystemTrackDiscovery
 from tests.conftest import touch
+from tests.stubs import StubProber
 
 
 class StubCompleter:
@@ -476,6 +477,81 @@ class TestPrompt:
 
         assert built is not None
         assert all(not f.endswith(".mkv") for f in built.index)
+
+    def test_describes_a_sidecar_by_its_own_tags(self, video: Path, release: Path) -> None:
+        audio = release / "Zvuk 1" / "Some.Show.S02E05.track.mka"
+        declared = Track(index=1, kind="audio", codec_id="A_AC3", language="rus", name="Kubik")
+        prober = StubProber(
+            infos={audio: MediaInfo(path=audio, container="Matroska", tracks=(declared,))}
+        )
+
+        built = build(video, prober=prober)
+
+        assert built is not None
+        entry = _candidate(built.user, "Zvuk 1/Some.Show.S02E05.track.mka")
+        assert entry["tags"] == {"language": "rus", "title": "Kubik"}
+        assert built.tagged == {"Zvuk 1/Some.Show.S02E05.track.mka": "rus"}
+
+    def test_sends_an_excerpt_of_a_text_subtitle(self, tmp_path: Path) -> None:
+        root = tmp_path / "Cold"
+        video_path = touch(root / "09. Cold.avi", b"video")
+        cue = "1\n00:00:01,000 --> 00:00:02,000\nПривет, как дела?\n"  # noqa: RUF001
+        touch(root / "09. Cold.srt", cue)
+
+        built = build(video_path)
+
+        assert built is not None
+        assert _candidate(built.user, "09. Cold.srt")["excerpt"] == "Привет, как дела?"
+
+    def test_only_so_many_candidates_are_described(self, tmp_path: Path) -> None:
+        root = tmp_path / "Pack"
+        video_path = touch(root / "Pack.S01E01.mkv", b"video")
+        touch(root / "Pack.S01E02.mkv", b"video")
+        cue = "1\n00:00:01,000 --> 00:00:02,000\nHello there\n"
+        for n in range(MAX_DESCRIBED + 5):
+            touch(root / "Subs" / f"Pack.S01E02.{n:02}.srt", cue)
+        touch(root / "Subs" / "Pack.S01E01.zz.srt", cue)
+
+        built = build(video_path, episode=EpisodeRef(season=1, episodes=(1,)))
+
+        assert built is not None
+        candidates = json.loads(built.user)["candidates"]
+        assert sum(1 for c in candidates if "excerpt" in c) == MAX_DESCRIBED
+        assert "excerpt" in _candidate(built.user, "Subs/Pack.S01E01.zz.srt")
+
+
+def _candidate(user: str, file: str) -> dict[str, Any]:
+    return next(c for c in json.loads(user)["candidates"] if c["file"] == file)
+
+
+class TestDeclaredLanguage:
+    def test_a_model_shrug_keeps_the_declared_language(self, release: Path) -> None:
+        built = build(release / "Some.Show.S02E05.1080p.WEB-DL.mkv")
+        assert built is not None
+        reply = tracks_reply({"file": "Zvuk 1/Some.Show.S02E05.track.mka", "language": "und"})
+
+        [track] = materialise(
+            reply,
+            index=built.index,
+            max_tracks=24,
+            tagged={"Zvuk 1/Some.Show.S02E05.track.mka": "rus"},
+        )
+
+        assert (track.language, track.name) == ("rus", "Russian")
+
+    def test_the_model_may_still_overrule_a_tag(self, release: Path) -> None:
+        built = build(release / "Some.Show.S02E05.1080p.WEB-DL.mkv")
+        assert built is not None
+        reply = tracks_reply({"file": "Zvuk 1/Some.Show.S02E05.track.mka", "language": "eng"})
+
+        [track] = materialise(
+            reply,
+            index=built.index,
+            max_tracks=24,
+            tagged={"Zvuk 1/Some.Show.S02E05.track.mka": "rus"},
+        )
+
+        assert track.language == "eng"
 
 
 def test_ai_discovery_does_not_modify_the_source_folder(release: Path, video: Path) -> None:

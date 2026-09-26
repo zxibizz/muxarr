@@ -1070,6 +1070,7 @@
             "default": "heuristic",
             "enum": [
               "heuristic",
+              "tags",
               "ai"
             ],
             "title": "Source",
@@ -1778,6 +1779,7 @@
             "default": "heuristic",
             "enum": [
               "heuristic",
+              "tags",
               "ai"
             ],
             "title": "Source",

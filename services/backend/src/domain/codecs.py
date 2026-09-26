@@ -35,6 +35,11 @@ SUBTITLE_EXTENSIONS: dict[str, str] = {
 # Image-based subtitles cannot be converted to text and are rejected by MP4.
 IMAGE_SUBTITLE_FAMILIES = frozenset({"vobsub", "pgs"})
 
+# Sidecar formats that can declare their own language (VobSub's .idx has an `id:` line).
+TAGGED_SIDECAR_SUFFIXES = frozenset({".idx", ".m4a", ".mka", ".mks"})
+
+TEXT_SUBTITLE_SUFFIXES = frozenset({".ass", ".srt", ".ssa", ".vtt"})
+
 # Used to recognise (and skip) other video files while scanning a download folder.
 VIDEO_EXTENSIONS = frozenset(
     {

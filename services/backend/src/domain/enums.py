@@ -39,7 +39,8 @@ CONTAINER_MODES: tuple[ContainerMode, ...] = get_args(ContainerMode)
 
 # Where a candidate track came from; surfaced in the history so a human can tell
 # an inferred match from a filename-derived one.
-TrackSource = Literal["heuristic", "ai"]
+TrackSource = Literal["heuristic", "tags", "ai"]
+TRACK_SOURCES: tuple[TrackSource, ...] = get_args(TrackSource)
 
 # The three verdicts Radarr/Sonarr understand on an import script's stdout.
 MoveStatus = Literal["DeferMove", "MoveComplete", "RenameRequested"]

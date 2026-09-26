@@ -30,7 +30,7 @@ from src.infrastructure.filesystem.placement import (
 from src.infrastructure.filesystem.track_discovery import discover
 from src.infrastructure.mkvtoolnix.muxer import run_mux
 from src.infrastructure.mkvtoolnix.probe import mkvmerge_version, supports_modern_flag_syntax
-from src.infrastructure.probing import probe
+from src.infrastructure.probing import FallbackMediaProber, probe
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -229,7 +229,7 @@ def _cmd_mux(args: argparse.Namespace) -> int:
 
 def _prepare(args: argparse.Namespace) -> tuple[MediaInfo, selection.Selection]:
     info = probe(args.video)
-    candidates = discover(args.video, episode=_episode_ref(args))
+    candidates = discover(args.video, episode=_episode_ref(args), prober=FallbackMediaProber())
     return info, selection.select(info, candidates)
 
 
