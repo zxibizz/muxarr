@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-09-27
+
 ### Added
 
 - **AI mode reads the sidecars, not just their names.** Each candidate now
@@ -293,7 +295,8 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.4...HEAD
+[0.10.4]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.4
 [0.10.3]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.3
 [0.10.2]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.2
 [0.10.1]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.1
