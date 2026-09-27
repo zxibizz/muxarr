@@ -229,8 +229,13 @@ One request per import, containing:
 - for `.srt`, `.ass`, `.ssa` and `.vtt` subtitles, up to 300 characters of
   dialogue from the middle of the file, with timing and markup stripped. This
   is what identifies a subtitle whose name says nothing about its language.
+  A file that is not UTF-8 is decoded with `MUXARR_SUB_CHARSET` when set,
+  otherwise with a guessed code page, and the model is told it was a guess.
 
-At most 40 sidecars per request get the last two, this episode's first. Audio
+At most 40 sidecars per request get the last two, this episode's first. The
+others are there on purpose: when an episode's own file says nothing
+conclusive, the model may take the language that the other episodes' files,
+named the same way, agree on. Audio
 and video content is never sent, and neither is an absolute path, so nothing
 about your library layout above the release folder is disclosed. Point
 `MUXARR_AI_BASE_URL` at a local provider if even subtitle text should stay on

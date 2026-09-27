@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from charset_normalizer import CharsetMatches
+
+from src.infrastructure.ai import excerpt as excerpt_module
 from src.infrastructure.ai.excerpt import MAX_EXCERPT_CHARS, MAX_READ_BYTES, excerpt
 from tests.conftest import touch
 
@@ -21,7 +25,7 @@ def test_srt_keeps_only_what_a_viewer_reads(tmp_path: Path) -> None:
 
     assert sample is not None
     assert sample.text == "Привет, как дела? / Всё хорошо."
-    assert sample.reliable
+    assert sample.decoding == "exact"
 
 
 def test_webvtt_skips_the_header_notes_and_cue_ids(tmp_path: Path) -> None:
@@ -65,16 +69,39 @@ def test_a_legacy_encoding_decodes_with_the_configured_charset(tmp_path: Path) -
 
     assert sample is not None
     assert sample.text.startswith("Привет")
-    assert sample.reliable
+    assert sample.decoding == "exact"
 
 
-def test_an_unknown_encoding_is_flagged_rather_than_dropped(tmp_path: Path) -> None:
+def test_an_unlabelled_legacy_code_page_is_guessed(tmp_path: Path) -> None:
+    path = touch(tmp_path / "a.srt", SRT.encode("cp1251"))
+
+    sample = excerpt(path)
+
+    assert sample is not None
+    assert sample.text == "Привет, как дела? / Всё хорошо."
+    assert sample.decoding == "guessed"
+
+
+def test_a_wrong_configured_charset_falls_back_to_a_guess(tmp_path: Path) -> None:
     path = touch(tmp_path / "a.srt", SRT.encode("cp1251"))
 
     sample = excerpt(path, charset="no-such-charset")
 
     assert sample is not None
-    assert not sample.reliable
+    assert sample.text.startswith("Привет")
+    assert sample.decoding == "guessed"
+
+
+def test_an_undetectable_encoding_is_flagged_rather_than_dropped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(excerpt_module, "from_bytes", lambda raw: CharsetMatches())
+    path = touch(tmp_path / "a.srt", SRT.encode("cp1251"))
+
+    sample = excerpt(path)
+
+    assert sample is not None
+    assert sample.decoding == "unknown"
 
 
 def test_the_sample_comes_from_the_middle_and_is_capped(tmp_path: Path) -> None:
@@ -97,7 +124,7 @@ def test_a_multibyte_character_cut_by_the_read_limit_is_not_an_error(tmp_path: P
     sample = excerpt(touch(tmp_path / "a.srt", body))
 
     assert sample is not None
-    assert sample.reliable
+    assert sample.decoding == "exact"
 
 
 def test_image_and_audio_formats_have_no_excerpt(tmp_path: Path) -> None:

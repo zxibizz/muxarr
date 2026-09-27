@@ -503,6 +503,19 @@ class TestPrompt:
         assert built is not None
         assert _candidate(built.user, "09. Cold.srt")["excerpt"] == "Привет, как дела?"
 
+    def test_a_windows_1251_subtitle_is_sent_as_cyrillic(self, tmp_path: Path) -> None:
+        root = tmp_path / "Cold"
+        video_path = touch(root / "09. Cold.avi", b"video")
+        cue = "1\n00:00:01,000 --> 00:00:02,000\nПривет, как дела?\n"  # noqa: RUF001
+        touch(root / "09. Cold.srt", cue.encode("cp1251"))
+
+        built = build(video_path)
+
+        assert built is not None
+        entry = _candidate(built.user, "09. Cold.srt")
+        assert entry["excerpt"] == "Привет, как дела?"
+        assert entry["excerpt_encoding"] == "guessed"
+
     def test_only_so_many_candidates_are_described(self, tmp_path: Path) -> None:
         root = tmp_path / "Pack"
         video_path = touch(root / "Pack.S01E01.mkv", b"video")

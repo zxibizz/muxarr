@@ -9,6 +9,9 @@ import codecs
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+from charset_normalizer import from_bytes
 
 from src.domain.codecs import TEXT_SUBTITLE_SUFFIXES
 
@@ -25,11 +28,15 @@ _BOMS = (
 )
 
 
+# exact: a BOM, UTF-8 or the configured charset. guessed: a statistical guess at the
+# code page. unknown: nothing fitted and Latin-1 was the last resort, so likely mojibake.
+Decoding = Literal["exact", "guessed", "unknown"]
+
+
 @dataclass(frozen=True, slots=True)
 class Excerpt:
     text: str
-    # False when no encoding fitted and Latin-1 was the last resort, so it may be mojibake.
-    reliable: bool = True
+    decoding: Decoding = "exact"
 
 
 def excerpt(path: Path, *, charset: str | None = None) -> Excerpt | None:
@@ -42,26 +49,31 @@ def excerpt(path: Path, *, charset: str | None = None) -> Excerpt | None:
     except OSError:
         return None
 
-    text, reliable = _decode(raw, charset)
+    text, decoding = _decode(raw, charset)
     lines = _ass_dialogue(text) if suffix in (".ass", ".ssa") else _cue_dialogue(text)
     sample = _from_the_middle(lines)
-    return Excerpt(sample, reliable) if sample else None
+    return Excerpt(sample, decoding) if sample else None
 
 
-def _decode(raw: bytes, charset: str | None) -> tuple[str, bool]:
+def _decode(raw: bytes, charset: str | None) -> tuple[str, Decoding]:
     for bom, encoding in _BOMS:
         if raw.startswith(bom):
-            return raw.decode(encoding, errors="replace"), True
+            return raw.decode(encoding, errors="replace"), "exact"
 
     for encoding in ("utf-8", charset or ""):
         if not encoding:
             continue
         try:
             # Incremental, so a multi-byte character cut off by the read limit is not an error.
-            return codecs.getincrementaldecoder(encoding)().decode(raw, final=False), True
+            return codecs.getincrementaldecoder(encoding)().decode(raw, final=False), "exact"
         except (LookupError, UnicodeDecodeError):
             continue
-    return raw.decode("latin-1"), False
+
+    # Models cannot reliably read Cyrillic through Latin-1 mojibake: left to it, the
+    # same Windows-1251 file comes back "rus" on one episode and "und" on the next.
+    if (best := from_bytes(raw).best()) is not None:
+        return str(best), "guessed"
+    return raw.decode("latin-1"), "unknown"
 
 
 def _cue_dialogue(text: str) -> list[str]:

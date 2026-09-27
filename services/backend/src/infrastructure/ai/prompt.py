@@ -71,11 +71,20 @@ episodes, a sidecar belongs to the video whose season/episode marker it shares.
 complete or correct a path. Omit anything you are unsure about.
 - An "excerpt" settles the language: it is the language that text is written \
 in, whatever the filenames say. A Russian release title does not make English \
-subtitles Russian. When "excerpt_encoding" is "unknown" the text may be \
-mis-decoded (Windows-1251 Cyrillic shows up as accented Latin letters such as \
+subtitles Russian. When "excerpt_encoding" is "guessed", the file's code \
+page was guessed: if the excerpt reads as natural text it settles the language \
+as usual, but if it is gibberish the guess was wrong and the language is \
+"und". When "excerpt_encoding" is "unknown" the text may be mis-decoded \
+(Windows-1251 Cyrillic shows up as accented Latin letters such as \
 "Ïðèâåò"); name the language only if the pattern is unmistakable.
 - "tags.language" is what the file declares; use it unless an excerpt \
 contradicts it.
+- The other episodes' sidecars are listed too, and are evidence for this \
+one's. When this video's own file has no excerpt or tags, or they are \
+inconclusive, but files of the other episodes that match its name pattern \
+exactly apart from the episode marker agree on one language, use that language. \
+If those siblings disagree, or none has usable evidence, treat this file as \
+having none.
 - Otherwise prefer "und" to a guess. An unknown language is a correct answer; \
 a wrong one gets written permanently into the user's library.
 - "variant" only distinguishes two dubs of the SAME language, usually a studio or \
@@ -157,8 +166,8 @@ def build(
                 tagged[relative] = code
         if kind == "subtitles" and (sample := excerpt(path, charset=charset)) is not None:
             entry["excerpt"] = sample.text
-            if not sample.reliable:
-                entry["excerpt_encoding"] = "unknown"
+            if sample.decoding != "exact":
+                entry["excerpt_encoding"] = sample.decoding
 
     payload: dict[str, object] = {
         "video": video_path.name,

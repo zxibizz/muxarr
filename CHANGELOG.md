@@ -22,6 +22,12 @@ within the same major version.
 
 ### Fixed
 
+- **AI mode no longer flips between `rus` and `und` on Windows-1251
+  subtitles.** Without `MUXARR_SUB_CHARSET`, a non-UTF-8 subtitle's excerpt
+  was sent as Latin-1 mojibake, and the model's reading of it varied from one
+  episode to the next. Muxarr now guesses the code page itself and sends real
+  text. When an episode's own subtitle is still inconclusive, the model now
+  takes the language that the other episodes' identically named sidecars agree on.
 - **A sidecar's own language tag is no longer overwritten with `und`.** When
   the filename names no language, an `.mka`, `.mks`, `.m4a` or VobSub `.idx`
   that declares one keeps it, with or without AI mode. The history marks such

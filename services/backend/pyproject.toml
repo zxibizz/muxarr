@@ -29,6 +29,8 @@ dependencies = [
     # Postgres: asyncpg serves the app, psycopg the (synchronous) migrations.
     "asyncpg>=0.30",
     "psycopg[binary]>=3.2",
+    # Subtitles in a legacy code page (Windows-1251 above all) carry no charset label.
+    "charset-normalizer>=3.3",
     "fastapi>=0.110",
     # Only used when AI mode is enabled, and by the API tests' ASGI transport.
     "httpx>=0.27",
