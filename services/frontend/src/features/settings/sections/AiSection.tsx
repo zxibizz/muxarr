@@ -1,6 +1,17 @@
-import { Box, Button, Group, NumberInput, PasswordInput, Select, Switch, TextInput } from '@mantine/core';
+import {
+  Badge,
+  Box,
+  Button,
+  Group,
+  NumberInput,
+  PasswordInput,
+  Select,
+  Switch,
+  Textarea,
+  TextInput,
+} from '@mantine/core';
 import { AiTestButton } from '../AiTestButton';
-import { AI_MODE_OPTIONS } from '../fields';
+import { AI_MODE_OPTIONS, promptOverride } from '../fields';
 import { SettingRow, SettingsSection } from '../SettingsSection';
 import type { SettingsFormApi } from '../useSettingsForm';
 
@@ -9,10 +20,22 @@ interface Props extends SettingsFormApi {
   onApiKeyChange: (value: string) => void;
   keyStored: boolean;
   onClearKey: () => void;
+  builtInPrompt: string;
 }
 
-export function AiSection({ form, field, bind, apiKey, onApiKeyChange, keyStored, onClearKey }: Props) {
+export function AiSection({
+  form,
+  field,
+  bind,
+  apiKey,
+  onApiKeyChange,
+  keyStored,
+  onClearKey,
+  builtInPrompt,
+}: Props) {
   const keyBinding = field('ai_api_key');
+  const promptBinding = field('ai_system_prompt');
+  const customPrompt = promptOverride(form.values.ai_system_prompt, builtInPrompt) !== null;
 
   return (
     <SettingsSection
@@ -74,6 +97,34 @@ export function AiSection({ form, field, bind, apiKey, onApiKeyChange, keyStored
         inline
       >
         <Switch {...bind('ai_name_tracks', { type: 'checkbox' })} />
+      </SettingRow>
+      <SettingRow
+        binding={promptBinding}
+        label="System prompt"
+        description="The instructions sent with every request. Keep the JSON reply shape intact: a reply Muxarr cannot parse is discarded and the filename result is used. A custom prompt no longer receives improvements from new releases."
+        stacked
+      >
+        <Group justify="space-between" mb="xs">
+          <Badge variant="outline" color={customPrompt ? 'yellow' : 'gray'}>
+            {customPrompt ? 'Custom' : 'Built-in'}
+          </Badge>
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            disabled={!customPrompt || promptBinding.locked}
+            onClick={() => form.setFieldValue('ai_system_prompt', builtInPrompt)}
+          >
+            Restore built-in
+          </Button>
+        </Group>
+        <Textarea
+          autosize
+          minRows={8}
+          maxRows={24}
+          spellCheck={false}
+          styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)', fontSize: 12 } }}
+          {...bind('ai_system_prompt')}
+        />
       </SettingRow>
       <Box py="md">
         <AiTestButton values={form.values} apiKey={apiKey} keyStored={keyStored} />

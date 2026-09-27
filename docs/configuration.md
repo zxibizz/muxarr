@@ -51,6 +51,7 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_AI_TIMEOUT` | `30` | ✓ | Seconds before the request is abandoned |
 | `MUXARR_AI_MAX_ENTRIES` | `200` | ✓ | Skip the call entirely above this many sidecars |
 | `MUXARR_AI_NAME_TRACKS` | `false` | ✓ | Let the provider write the track names — see [Track names](#track-names) |
+| `MUXARR_AI_SYSTEM_PROMPT` | *built-in* | ✓ | Replace the instructions sent to the provider — see [System prompt](#system-prompt) |
 | `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
 | `TZ` | `UTC` | | Time zone for log timestamps, e.g. `Europe/Berlin`; the UI always shows your browser's |
 | `MUXARR_MODE` | `all` | | Container image only: `all`, `web` or `worker` — see [Container modes](#container-modes) |
@@ -283,3 +284,29 @@ relabel a track, never swap one.
 
 It does nothing in `off` mode, and nothing in `verify` mode, which stays a
 shadow mode that writes no decision of its own.
+
+### System prompt
+
+The instructions sent with every request can be replaced under **Settings → AI
+track discovery**, which starts from the built-in prompt so it can be edited
+rather than rewritten. Up to 20,000 characters.
+
+A custom prompt is yours to maintain: it no longer picks up improvements to the
+built-in one, so **Restore built-in** after an upgrade whose notes mention the
+prompt. Saving the built-in text unchanged, or an empty box, keeps following
+the built-in prompt.
+
+Keep the JSON reply shape the built-in prompt describes. Nothing you write
+loosens [what the model is allowed to decide](#what-it-is-allowed-to-decide),
+but a reply Muxarr cannot parse is discarded and that import falls back to the
+filename result. The operation's activity log records `custom_prompt=true` on
+every import that used yours; `verify` mode is a safe way to try one out.
+
+Pinned from compose, it takes a block scalar:
+
+```yaml
+environment:
+  MUXARR_AI_SYSTEM_PROMPT: |
+    You match external audio and subtitle files to one video file.
+    ...
+```

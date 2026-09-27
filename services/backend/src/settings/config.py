@@ -48,6 +48,9 @@ DEFAULT_AI_BASE_URL = "https://api.openai.com/v1"
 # anything that would make the history table awkward to read back.
 MAX_OPERATION_LOG_ENTRIES = 5000
 
+# Sent on every AI call; the built-in prompt is about 3,500 characters.
+MAX_AI_SYSTEM_PROMPT_CHARS = 20_000
+
 TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 _Choice = TypeVar("_Choice", bound=str)
@@ -121,6 +124,8 @@ class Settings:
     # Let the provider write the track names even on releases the filenames already
     # settled, which costs a request per import that would otherwise be free.
     ai_name_tracks: bool = False
+    # Replaces the built-in system prompt; None uses the built-in one.
+    ai_system_prompt: str | None = None
     extra: Mapping[str, str] = field(default_factory=dict)
 
     @property
@@ -229,6 +234,9 @@ class Settings:
             ai_timeout_seconds=_parse_float(source, "MUXARR_AI_TIMEOUT", 30.0),
             ai_max_entries=max(1, _parse_int(source, "MUXARR_AI_MAX_ENTRIES", 200)),
             ai_name_tracks=_parse_bool(source, "MUXARR_AI_NAME_TRACKS"),
+            ai_system_prompt=parse_system_prompt(
+                "MUXARR_AI_SYSTEM_PROMPT", source.get("MUXARR_AI_SYSTEM_PROMPT", "")
+            ),
         )
 
 
@@ -282,6 +290,15 @@ def parse_languages(env: str, raw: str) -> tuple[str, ...]:
 def parse_tags(raw: str) -> tuple[str, ...]:
     """Comma-separated *arr tag labels, lower-cased as *arr stores them."""
     return tuple(dict.fromkeys(t.strip().lower() for t in raw.split(",") if t.strip()))
+
+
+def parse_system_prompt(env: str, raw: str) -> str | None:
+    prompt = raw.strip()
+    if len(prompt) > MAX_AI_SYSTEM_PROMPT_CHARS:
+        raise ConfigError(
+            f"{env} must be at most {MAX_AI_SYSTEM_PROMPT_CHARS} characters, got {len(prompt)}"
+        )
+    return prompt or None
 
 
 def parse_networks(env: str, raw: str) -> tuple[IPNetwork, ...]:

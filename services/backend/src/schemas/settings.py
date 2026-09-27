@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from src.domain.enums import AiMode, AuthMethod, AuthRequired, DedupeMode
 from src.schemas.base import WireModel
-from src.settings.config import MAX_OPERATION_LOG_ENTRIES
+from src.settings.config import MAX_AI_SYSTEM_PROMPT_CHARS, MAX_OPERATION_LOG_ENTRIES
 
 LogLevel = Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
 
@@ -44,6 +44,9 @@ class SettingsView(WireModel):
     ai_max_entries: int
     ai_name_tracks: bool
     ai_api_key_set: bool
+    # Null means the built-in prompt, which is sent alongside so the UI can show and restore it.
+    ai_system_prompt: str | None
+    ai_default_system_prompt: str
 
     # str, not LogLevel: MUXARR_LOG_LEVEL is not validated, and reading it must not 500.
     log_level: str
@@ -90,6 +93,8 @@ class SettingsPatch(BaseModel):
     ai_timeout_seconds: float | None = Field(default=None, ge=1)
     ai_max_entries: int | None = Field(default=None, ge=1)
     ai_name_tracks: bool | None = None
+    # Null or "" goes back to the built-in prompt.
+    ai_system_prompt: str | None = Field(default=None, max_length=MAX_AI_SYSTEM_PROMPT_CHARS)
 
     log_level: LogLevel | None = None
 

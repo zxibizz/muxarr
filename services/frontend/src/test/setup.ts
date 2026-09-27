@@ -27,6 +27,12 @@ class ResizeObserverStub {
 window.ResizeObserver = ResizeObserverStub;
 window.scrollTo = vi.fn();
 
+// Nor the Font Loading API, which Textarea's autosize listens to.
+Object.defineProperty(document, 'fonts', {
+  configurable: true,
+  value: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
+});
+
 afterEach(() => {
   cleanup();
   // The notification store is module-global and would leak into the next test.

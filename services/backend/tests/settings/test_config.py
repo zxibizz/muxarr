@@ -301,3 +301,11 @@ class TestAiMode:
 
     def test_entry_cap_is_at_least_one(self) -> None:
         assert Settings.from_env(env(MUXARR_AI_MAX_ENTRIES="0")).ai_max_entries == 1
+
+    def test_the_built_in_system_prompt_is_the_default(self) -> None:
+        assert Settings.from_env(env()).ai_system_prompt is None
+
+    def test_a_system_prompt_can_be_pinned(self) -> None:
+        settings = Settings.from_env(env(MUXARR_AI_SYSTEM_PROMPT="  Rule one.\nRule two.\n"))
+
+        assert settings.ai_system_prompt == "Rule one.\nRule two."

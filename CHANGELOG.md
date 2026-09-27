@@ -19,6 +19,10 @@ within the same major version.
   text subtitle carries up to 300 characters of its dialogue, so an `.srt`
   named only after the release is still recognised as Russian. See
   [What is sent](docs/configuration.md#what-is-sent).
+- **The AI system prompt is editable** under Settings → AI track discovery, or
+  pinned with `MUXARR_AI_SYSTEM_PROMPT`. The editor starts from the built-in
+  prompt and can restore it. See
+  [System prompt](docs/configuration.md#system-prompt).
 
 ### Fixed
 

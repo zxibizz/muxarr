@@ -34,17 +34,19 @@ interface RowProps {
   description?: ReactNode;
   /** A toggle needs no column of its own. */
   inline?: boolean;
+  /** A control too wide for the right-hand column goes underneath instead. */
+  stacked?: boolean;
   children: ReactNode;
 }
 
 /** Label and explanation on the left, the control on the right. */
-export function SettingRow({ binding, label, description, inline, children }: RowProps) {
+export function SettingRow({ binding, label, description, inline, stacked, children }: RowProps) {
   return (
     <Flex
-      direction={inline ? 'row' : { base: 'column', sm: 'row' }}
-      gap={{ base: 'xs', sm: 'xl' }}
+      direction={inline ? 'row' : stacked ? 'column' : { base: 'column', sm: 'row' }}
+      gap={{ base: 'xs', sm: stacked ? 'sm' : 'xl' }}
       justify="space-between"
-      align={{ base: 'stretch', sm: 'center' }}
+      align={stacked ? 'stretch' : { base: 'stretch', sm: 'center' }}
       py="md"
     >
       <Stack gap={2} style={{ flex: 1 }}>
@@ -63,7 +65,10 @@ export function SettingRow({ binding, label, description, inline, children }: Ro
           </Text>
         )}
       </Stack>
-      <Box w={inline ? 'auto' : { base: '100%', sm: 300 }} style={{ flexShrink: 0 }}>
+      <Box
+        w={inline ? 'auto' : stacked ? '100%' : { base: '100%', sm: 300 }}
+        style={{ flexShrink: 0 }}
+      >
         {children}
       </Box>
     </Flex>

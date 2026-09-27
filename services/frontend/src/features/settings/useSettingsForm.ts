@@ -4,7 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { useCallback, useState } from 'react';
 import { useUpdateSettings } from '../../api/queries';
 import type { EditableSettings, ServiceSettings, SettingsField, SettingsPatch } from '../../api/types';
-import { API_KEY_ENV, ENV_VARS, FIELDS, SECTIONS, editableFrom } from './fields';
+import { API_KEY_ENV, ENV_VARS, FIELDS, SECTIONS, editableFrom, promptOverride } from './fields';
 import type { LockableField, SectionId } from './fields';
 
 type InputProps = ReturnType<UseFormReturnType<EditableSettings>['getInputProps']>;
@@ -61,6 +61,12 @@ export function useSettingsForm(settings: ServiceSettings) {
     const patch: SettingsPatch = {};
     for (const name of FIELDS) {
       if (!locked(name)) Object.assign(patch, { [name]: values[name] });
+    }
+    if (!locked('ai_system_prompt')) {
+      patch.ai_system_prompt = promptOverride(
+        values.ai_system_prompt,
+        settings.ai_default_system_prompt,
+      );
     }
     // Left blank means "leave the stored key alone", not "clear it".
     if (apiKey.trim() && !locked('ai_api_key')) patch.ai_api_key = apiKey.trim();

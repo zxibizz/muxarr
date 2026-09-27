@@ -63,6 +63,7 @@ class AiAssistedTrackDiscovery:
         name_tracks: bool = False,
         prober: MediaProber | None = None,
         sub_charset: str | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         self._heuristic = heuristic
         self._completer = completer
@@ -73,6 +74,7 @@ class AiAssistedTrackDiscovery:
         self._name_tracks = name_tracks
         self._prober = prober
         self._sub_charset = sub_charset
+        self._system_prompt = system_prompt
 
     def discover(
         self, video_path: Path, *, episode: EpisodeRef | None = None
@@ -85,9 +87,11 @@ class AiAssistedTrackDiscovery:
                 )
             return found
 
-        note.bind(mode=self._mode, heuristic_tracks=len(found)).info(
-            "asking the AI provider to identify the sidecar files"
-        )
+        note.bind(
+            mode=self._mode,
+            heuristic_tracks=len(found),
+            custom_prompt=self._system_prompt is not None,
+        ).info("asking the AI provider to identify the sidecar files")
         proposed = self._consult(video_path, episode=episode)
         if proposed is None:
             note.bind(tracks=len(found)).info("keeping the filename result")
@@ -132,6 +136,7 @@ class AiAssistedTrackDiscovery:
             max_entries=self._max_entries,
             prober=self._prober,
             charset=self._sub_charset,
+            system_prompt=self._system_prompt,
         )
         if built is None:
             note.bind(max_entries=self._max_entries).info(

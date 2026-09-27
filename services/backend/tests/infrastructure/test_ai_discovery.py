@@ -18,7 +18,7 @@ from src.domain.errors import AiError
 from src.domain.media import ExternalTrack, MediaInfo, Track
 from src.domain.naming import EpisodeRef
 from src.infrastructure.ai.discovery import AiAssistedTrackDiscovery, materialise
-from src.infrastructure.ai.prompt import MAX_DESCRIBED, build
+from src.infrastructure.ai.prompt import MAX_DESCRIBED, SYSTEM_PROMPT, build
 from src.infrastructure.filesystem.track_discovery import FilesystemTrackDiscovery
 from tests.conftest import touch
 from tests.stubs import StubProber
@@ -64,6 +64,7 @@ def make(
     max_entries: int = 200,
     max_tracks: int = 24,
     name_tracks: bool = False,
+    system_prompt: str | None = None,
 ) -> AiAssistedTrackDiscovery:
     return AiAssistedTrackDiscovery(
         heuristic=FilesystemTrackDiscovery(),
@@ -72,7 +73,24 @@ def make(
         max_entries=max_entries,
         max_tracks=max_tracks,
         name_tracks=name_tracks,
+        system_prompt=system_prompt,
     )
+
+
+class TestSystemPrompt:
+    def test_the_built_in_prompt_is_the_default(self, video: Path) -> None:
+        completer = StubCompleter()
+
+        make(completer, mode="always").discover(video)
+
+        assert completer.calls[0]["system"] == SYSTEM_PROMPT
+
+    def test_a_configured_prompt_replaces_it(self, video: Path) -> None:
+        completer = StubCompleter()
+
+        make(completer, mode="always", system_prompt="Be brief.").discover(video)
+
+        assert completer.calls[0]["system"] == "Be brief."
 
 
 class TestModeGating:

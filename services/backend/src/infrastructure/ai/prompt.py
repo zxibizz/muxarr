@@ -124,6 +124,7 @@ def build(
     max_entries: int = 200,
     prober: MediaProber | None = None,
     charset: str | None = None,
+    system_prompt: str | None = None,
 ) -> DiscoveryPrompt | None:
     """Describe the folder around ``video_path``, or ``None`` if not worth asking."""
     root = video_path.parent
@@ -178,7 +179,7 @@ def build(
         payload["episode"] = {"season": episode.season, "episodes": list(episode.episodes)}
 
     return DiscoveryPrompt(
-        system=SYSTEM_PROMPT,
+        system=system_prompt or SYSTEM_PROMPT,
         user=json.dumps(payload, ensure_ascii=False, indent=1),
         index=index,
         tagged=tagged,

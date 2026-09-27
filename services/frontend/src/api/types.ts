@@ -39,7 +39,10 @@ export type AuthMethod = ServiceSettings['auth_method'];
 export type AuthRequired = ServiceSettings['auth_required'];
 
 /** The settings the UI owns. Anything else is environment-only by design. */
-export type EditableSettings = Omit<ServiceSettings, 'ai_api_key_set' | 'locked' | 'auth_method'>;
+export type EditableSettings = Omit<
+  ServiceSettings,
+  'ai_api_key_set' | 'ai_default_system_prompt' | 'locked' | 'auth_method'
+>;
 export type SettingsField = keyof EditableSettings;
 
 export interface HistoryFilters {

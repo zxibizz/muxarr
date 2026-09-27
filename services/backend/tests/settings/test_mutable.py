@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.settings.config import ConfigError, Settings
+from src.settings.config import MAX_AI_SYSTEM_PROMPT_CHARS, ConfigError, Settings
 from src.settings.mutable import (
     FIELDS,
     SettingsLockedError,
@@ -40,6 +40,14 @@ class TestApply:
     def test_an_empty_string_clears_an_optional_field(self) -> None:
         assert apply_overrides(BASE, {"sub_charset": ""}).sub_charset is None
 
+    def test_a_blank_system_prompt_means_the_built_in_one(self) -> None:
+        assert apply_overrides(BASE, {"ai_system_prompt": "  \n"}).ai_system_prompt is None
+
+    def test_a_system_prompt_keeps_its_line_breaks(self) -> None:
+        applied = apply_overrides(BASE, {"ai_system_prompt": "\nRule one.\nRule two.\n"})
+
+        assert applied.ai_system_prompt == "Rule one.\nRule two."
+
     def test_a_language_list_round_trips_through_its_string_form(self) -> None:
         applied = apply_overrides(
             BASE, {"keep_audio_languages": to_raw(["eng", "ru"]), "keep_subtitle_languages": ""}
@@ -71,6 +79,7 @@ class TestApply:
             ("log_level", "CHATTY"),
             ("ai_mode", "maybe"),
             ("keep_audio_languages", "eng,elvish"),
+            ("ai_system_prompt", "x" * (MAX_AI_SYSTEM_PROMPT_CHARS + 1)),
         ],
     )
     def test_an_unusable_value_is_rejected(self, name: str, raw: str) -> None:

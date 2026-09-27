@@ -829,6 +829,8 @@ export interface components {
             ai_model?: string | null;
             /** Ai Name Tracks */
             ai_name_tracks?: boolean | null;
+            /** Ai System Prompt */
+            ai_system_prompt?: string | null;
             /** Ai Timeout Seconds */
             ai_timeout_seconds?: number | null;
             /** Auth Required */
@@ -874,6 +876,8 @@ export interface components {
             ai_api_key_set: boolean;
             /** Ai Base Url */
             ai_base_url: string;
+            /** Ai Default System Prompt */
+            ai_default_system_prompt: string;
             /** Ai Max Entries */
             ai_max_entries: number;
             /**
@@ -885,6 +889,8 @@ export interface components {
             ai_model: string;
             /** Ai Name Tracks */
             ai_name_tracks: boolean;
+            /** Ai System Prompt */
+            ai_system_prompt: string | null;
             /** Ai Timeout Seconds */
             ai_timeout_seconds: number;
             /**

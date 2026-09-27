@@ -69,6 +69,7 @@ function SettingsForm({ settings, section, onSectionChange }: FormProps) {
               onApiKeyChange={editor.setApiKey}
               keyStored={settings.ai_api_key_set}
               onClearKey={() => void editor.clearKey()}
+              builtInPrompt={settings.ai_default_system_prompt}
             />
           </Tabs.Panel>
           <Tabs.Panel value="logging" pt="lg">

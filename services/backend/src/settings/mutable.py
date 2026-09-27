@@ -22,6 +22,7 @@ from src.settings.config import (
     ConfigError,
     Settings,
     parse_languages,
+    parse_system_prompt,
     parse_tags,
 )
 
@@ -135,6 +136,7 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("ai_timeout_seconds", "MUXARR_AI_TIMEOUT", "ai", _as_float(1.0)),
     FieldSpec("ai_max_entries", "MUXARR_AI_MAX_ENTRIES", "ai", _as_int(1)),
     FieldSpec("ai_name_tracks", "MUXARR_AI_NAME_TRACKS", "ai", _as_bool),
+    FieldSpec("ai_system_prompt", "MUXARR_AI_SYSTEM_PROMPT", "ai", parse_system_prompt),
     FieldSpec("log_level", "MUXARR_LOG_LEVEL", "logging", _LOG_LEVEL),
     # auth_method is absent on purpose: "external" switches the login off, so,
     # as in Sonarr, only whoever controls the environment may choose it.

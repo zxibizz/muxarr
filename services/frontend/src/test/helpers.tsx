@@ -75,6 +75,8 @@ export function someSettings(overrides: Partial<ServiceSettings> = {}): ServiceS
     ai_max_entries: 200,
     ai_name_tracks: false,
     ai_api_key_set: false,
+    ai_system_prompt: null,
+    ai_default_system_prompt: 'You match external audio and subtitle files.',
     log_level: 'INFO',
     auth_method: 'forms',
     auth_required: 'enabled',

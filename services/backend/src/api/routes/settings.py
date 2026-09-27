@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from src.api.dependencies.auth import authorise, get_container
 from src.application.use_cases.settings.probe_ai import AiProbe
 from src.core.container import AppContainer
+from src.infrastructure.ai.prompt import SYSTEM_PROMPT
 from src.schemas.settings import AiTestRequest, AiTestResult, SettingsPatch, SettingsView
 from src.settings.mutable import to_raw
 
@@ -83,6 +84,8 @@ def _view(container: AppContainer) -> SettingsView:
         ai_max_entries=settings.ai_max_entries,
         ai_name_tracks=settings.ai_name_tracks,
         ai_api_key_set=bool(settings.ai_api_key),
+        ai_system_prompt=settings.ai_system_prompt,
+        ai_default_system_prompt=SYSTEM_PROMPT.strip(),
         log_level=settings.log_level,
         auth_method=settings.auth_method,
         auth_required=settings.auth_required,

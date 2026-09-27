@@ -202,6 +202,50 @@ describe('the AI provider test', () => {
   });
 });
 
+describe('the system prompt', () => {
+  const builtIn = someSettings().ai_default_system_prompt;
+
+  async function promptField() {
+    await loaded();
+    await openSection(/^ai track discovery/i);
+    return screen.getByLabelText(/^system prompt/i);
+  }
+
+  it('starts from the built-in prompt and keeps tracking it when untouched', async () => {
+    const fetchStub = stubFetch();
+    expect(await promptField()).toHaveValue(builtIn);
+    expect(screen.getByText('Built-in')).toBeInTheDocument();
+
+    await openSection(/^track selection/i);
+    await editMaxTracks('3');
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await screen.findByText('Settings saved');
+    expect(patchBody(fetchStub)).toMatchObject({ ai_system_prompt: null });
+  });
+
+  it('saves an edited prompt', async () => {
+    const fetchStub = stubFetch();
+    await userEvent.type(await promptField(), ' Be brief.');
+
+    expect(screen.getByText('Custom')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await screen.findByText('Settings saved');
+    expect(patchBody(fetchStub)).toMatchObject({ ai_system_prompt: `${builtIn} Be brief.` });
+  });
+
+  it('restores the built-in prompt over a custom one', async () => {
+    stubFetch({ settings: someSettings({ ai_system_prompt: 'Be brief.' }) });
+    expect(await promptField()).toHaveValue('Be brief.');
+
+    await userEvent.click(screen.getByRole('button', { name: /restore built-in/i }));
+
+    expect(screen.getByLabelText(/^system prompt/i)).toHaveValue(builtIn);
+    expect(screen.getByText('Built-in')).toBeInTheDocument();
+  });
+});
+
 describe('the security section', () => {
   it('shows the API key and regenerates it only once confirmed', async () => {
     const fetchStub = stubFetch();

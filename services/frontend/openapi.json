@@ -1229,6 +1229,18 @@
             ],
             "title": "Ai Name Tracks"
           },
+          "ai_system_prompt": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai System Prompt"
+          },
           "ai_timeout_seconds": {
             "anyOf": [
               {
@@ -1491,6 +1503,10 @@
             "title": "Ai Base Url",
             "type": "string"
           },
+          "ai_default_system_prompt": {
+            "title": "Ai Default System Prompt",
+            "type": "string"
+          },
           "ai_max_entries": {
             "title": "Ai Max Entries",
             "type": "integer"
@@ -1512,6 +1528,17 @@
           "ai_name_tracks": {
             "title": "Ai Name Tracks",
             "type": "boolean"
+          },
+          "ai_system_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai System Prompt"
           },
           "ai_timeout_seconds": {
             "title": "Ai Timeout Seconds",
@@ -1657,6 +1684,8 @@
           "ai_max_entries",
           "ai_name_tracks",
           "ai_api_key_set",
+          "ai_system_prompt",
+          "ai_default_system_prompt",
           "log_level",
           "auth_method",
           "auth_required",

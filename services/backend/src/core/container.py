@@ -246,6 +246,7 @@ class AppContainer:
             name_tracks=settings.ai_name_tracks,
             prober=FallbackMediaProber(),
             sub_charset=settings.sub_charset,
+            system_prompt=settings.ai_system_prompt,
         )
 
     @cached_property

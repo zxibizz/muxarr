@@ -24,6 +24,7 @@ export const ENV_VARS: Record<SettingsField, string> = {
   ai_timeout_seconds: 'MUXARR_AI_TIMEOUT',
   ai_max_entries: 'MUXARR_AI_MAX_ENTRIES',
   ai_name_tracks: 'MUXARR_AI_NAME_TRACKS',
+  ai_system_prompt: 'MUXARR_AI_SYSTEM_PROMPT',
   log_level: 'MUXARR_LOG_LEVEL',
   auth_required: 'MUXARR_AUTH_REQUIRED',
 };
@@ -83,6 +84,7 @@ export const SECTIONS = [
       'ai_timeout_seconds',
       'ai_max_entries',
       'ai_name_tracks',
+      'ai_system_prompt',
     ],
   },
   { id: 'logging', title: 'Logging', fields: ['log_level'] },
@@ -127,5 +129,13 @@ export function editableFrom(settings: ServiceSettings): EditableSettings {
   }
   // Absent on the wire as null, but a controlled input needs a string.
   editable.sub_charset = editable.sub_charset ?? '';
+  // The built-in prompt is shown in full, so it can be edited rather than written from scratch.
+  editable.ai_system_prompt = editable.ai_system_prompt ?? settings.ai_default_system_prompt;
   return editable;
+}
+
+/** Null when the prompt is blank or the built-in one, so later releases' fixes still reach it. */
+export function promptOverride(value: string | null, builtIn: string): string | null {
+  const prompt = value?.trim() ?? '';
+  return prompt && prompt !== builtIn.trim() ? prompt : null;
 }

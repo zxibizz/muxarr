@@ -16,11 +16,12 @@ from src.api.app import create_app
 from src.core.container import AppContainer
 from src.db.session import DBManager
 from src.infrastructure.ai.openai_compat import OpenAICompatibleCompleterFactory
+from src.infrastructure.ai.prompt import SYSTEM_PROMPT
 from src.infrastructure.history.repository import SqlAlchemyHistoryRepository
 from src.infrastructure.jobs.repository import SqlAlchemyJobRepository
 from src.infrastructure.jobs.worker_state import SqlAlchemyWorkerStateRepository
 from src.infrastructure.settings.repository import SqlAlchemySettingsRepository
-from src.settings.config import Settings
+from src.settings.config import MAX_AI_SYSTEM_PROMPT_CHARS, Settings
 from tests.api.conftest import API_KEY, _client_for, auth
 
 
@@ -118,6 +119,40 @@ class TestWrite:
         await client.patch("/v1/settings", json={"keep_audio_languages": None}, headers=auth())
 
         assert (await get_settings(client))["keep_audio_languages"] == []
+
+
+class TestSystemPrompt:
+    async def test_the_built_in_prompt_is_reported_alongside(self, client: AsyncClient) -> None:
+        body = await get_settings(client)
+
+        assert body["ai_system_prompt"] is None
+        assert body["ai_default_system_prompt"] == SYSTEM_PROMPT.strip()
+
+    async def test_an_override_reaches_the_running_container(
+        self, client: AsyncClient, container: AppContainer
+    ) -> None:
+        response = await client.patch(
+            "/v1/settings", json={"ai_system_prompt": "Be brief."}, headers=auth()
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["ai_system_prompt"] == "Be brief."
+        assert container.settings.ai_system_prompt == "Be brief."
+
+    async def test_null_restores_the_built_in_prompt(self, client: AsyncClient) -> None:
+        await client.patch("/v1/settings", json={"ai_system_prompt": "Be brief."}, headers=auth())
+        await client.patch("/v1/settings", json={"ai_system_prompt": None}, headers=auth())
+
+        assert (await get_settings(client))["ai_system_prompt"] is None
+
+    async def test_an_oversized_prompt_is_refused(self, client: AsyncClient) -> None:
+        response = await client.patch(
+            "/v1/settings",
+            json={"ai_system_prompt": "x" * (MAX_AI_SYSTEM_PROMPT_CHARS + 1)},
+            headers=auth(),
+        )
+
+        assert response.status_code == 422
 
 
 class TestSecrets:
