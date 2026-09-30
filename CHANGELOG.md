@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-09-30
+
 ### Fixed
 
 - **A single-file torrent no longer picks up other downloads' sidecars.** With
@@ -305,7 +307,8 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.5...HEAD
+[0.10.5]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.5
 [0.10.4]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.4
 [0.10.3]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.3
 [0.10.2]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.2

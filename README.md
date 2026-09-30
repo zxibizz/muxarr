@@ -55,7 +55,7 @@ compose project.
    ```yaml
    services:
      muxarr:
-       image: ghcr.io/zxibizz/muxarr:0.10.4
+       image: ghcr.io/zxibizz/muxarr:0.10.5
        container_name: muxarr
        restart: unless-stopped
        stop_grace_period: 90s                 # let a running mux wind down
