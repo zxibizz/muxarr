@@ -171,6 +171,19 @@ class TestDeferPaths:
         assert outcome.move_status == "DeferMove"
         assert "no external tracks" in outcome.reason
 
+    def test_a_single_file_download_takes_nothing_from_its_neighbours(
+        self, layout: dict[str, Path], settings: Settings, muxer: StubMuxer
+    ) -> None:
+        loose = touch(layout["downloads"] / "Loose.Movie.2024.1080p.WEB-DL.mkv", b"video")
+        touch(layout["release"] / "Some.Movie.2024.1080p-GRP.rus.srt", "1\n")
+
+        outcome = use_case(settings, muxer=muxer).execute(request_for(layout, source_path=loose))
+
+        assert outcome.move_status == "DeferMove"
+        assert "no external tracks" in outcome.reason
+        assert outcome.extra_files == ()
+        assert muxer.plans == []
+
     def test_all_candidates_rejected(self, layout: dict[str, Path], settings: Settings) -> None:
         touch(layout["release"] / "Some.Movie.2024.1080p-GRP.eng.srt", b"")
 

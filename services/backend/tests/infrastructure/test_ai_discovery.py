@@ -484,6 +484,16 @@ class TestPrompt:
         assert payload["video"] == "Pack.S01E01.mkv"
         assert payload["other_videos_in_folder"] == ["Pack.S01E02.mkv"]
 
+    def test_a_shared_download_folder_is_not_described(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video_path = touch(downloads / "Loose.Movie.2024.mkv", b"video")
+        touch(downloads / "Loose.Movie.2024.eng.srt", "x")
+        touch(downloads / "Other.Movie.2023.mkv", b"video")
+        touch(downloads / "Other.Show.S01" / "Other.Show.S01E01.mkv", b"video")
+        touch(downloads / "Other.Show.S01" / "Subs" / "Other.Show.S01E01.srt", "x")
+
+        assert build(video_path) is None
+
     def test_passes_the_episode_marker_through(self, video: Path) -> None:
         built = build(video, episode=EpisodeRef(season=2, episodes=(5,)))
 

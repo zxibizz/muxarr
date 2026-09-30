@@ -238,7 +238,9 @@ others are there on purpose: when an episode's own file says nothing
 conclusive, the model may take the language that the other episodes' files,
 named the same way, agree on. Audio
 and video content is never sent, and neither is an absolute path, so nothing
-about your library layout above the release folder is disclosed. Point
+about your library layout above the release folder is disclosed. A video with
+no folder of its own, as a single-file torrent has, sends nothing: it has no
+sidecars. Point
 `MUXARR_AI_BASE_URL` at a local provider if even subtitle text should stay on
 your machine.
 

@@ -12,6 +12,16 @@ within the same major version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A single-file torrent no longer picks up other downloads' sidecars.** With
+  no folder of its own, the video sits in the download directory itself, and
+  Muxarr scanned that as its release folder: subtitles and audio from every
+  download beside it could be embedded, handed back to \*arr as extra files,
+  or listed to the AI provider. A folder that also holds another release's
+  video is now recognised as the download directory of a single-file torrent,
+  which has no sidecars, and nothing in it is considered.
+
 ## [0.10.4] - 2026-09-27
 
 ### Added

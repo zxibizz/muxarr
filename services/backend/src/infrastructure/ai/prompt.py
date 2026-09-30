@@ -4,7 +4,7 @@ What leaves the machine: filenames relative to the release folder, their sizes,
 the target video's own filename, the language/name/flags a sidecar declares in its
 own header, and a few hundred characters of a text subtitle's dialogue. Never an
 absolute path, and so never anything about the library layout above the release
-folder.
+folder. A video with no folder of its own sends nothing, since it has no sidecars.
 
 The candidate list doubles as an allow-list. Whatever the model replies with is
 looked up in :attr:`DiscoveryPrompt.index`, so it can only ever select and label
@@ -19,7 +19,6 @@ from pathlib import Path
 
 from src.application.interfaces.prober import MediaProber
 from src.core.logging import get_logger
-from src.domain.codecs import VIDEO_EXTENSIONS
 from src.domain.enums import UNDETERMINED, LogComponent, TrackKind
 from src.domain.language import normalise_language
 from src.domain.media import Track
@@ -27,9 +26,8 @@ from src.domain.naming import EpisodeRef, belongs_to
 from src.infrastructure.ai.excerpt import excerpt
 from src.infrastructure.filesystem.track_discovery import (
     classify,
-    count_videos,
     embedded_track,
-    index_candidates,
+    release_folder,
 )
 
 log = get_logger(LogComponent.INFRA_AI)
@@ -127,20 +125,20 @@ def build(
     system_prompt: str | None = None,
 ) -> DiscoveryPrompt | None:
     """Describe the folder around ``video_path``, or ``None`` if not worth asking."""
-    root = video_path.parent
-    if not root.is_dir():
+    folder = release_folder(video_path)
+    if folder is None:
         return None
 
     index: dict[str, Path] = {}
     kinds: dict[str, TrackKind] = {}
     candidates: list[dict[str, object]] = []
-    for path, _context in sorted(index_candidates(root)):
+    for path, _context in folder.candidates:
         if path == video_path:
             continue
         classified = classify(path)
         if classified is None:
             continue
-        relative = path.relative_to(root).as_posix()
+        relative = path.relative_to(folder.root).as_posix()
         index[relative] = path
         kinds[relative] = classified[0]
         candidates.append({"file": relative, "bytes": _size_of(path)})
@@ -156,7 +154,7 @@ def build(
         return None
 
     tagged: dict[str, str] = {}
-    for entry in _worth_describing(candidates, index, episode=episode, root=root):
+    for entry in _worth_describing(candidates, index, episode=episode, videos=len(folder.videos)):
         relative = str(entry["file"])
         path, kind = index[relative], kinds[relative]
         declared = embedded_track(path, kind, prober) if prober is not None else None
@@ -170,9 +168,10 @@ def build(
             if sample.decoding != "exact":
                 entry["excerpt_encoding"] = sample.decoding
 
+    siblings = sorted(p.name for p in folder.videos if p != video_path)
     payload: dict[str, object] = {
         "video": video_path.name,
-        "other_videos_in_folder": _sibling_videos(root, video_path),
+        "other_videos_in_folder": siblings[:MAX_SIBLING_VIDEOS],
         "candidates": candidates,
     }
     if episode is not None:
@@ -191,10 +190,9 @@ def _worth_describing(
     index: dict[str, Path],
     *,
     episode: EpisodeRef | None,
-    root: Path,
+    videos: int,
 ) -> list[dict[str, object]]:
     """The first :data:`MAX_DESCRIBED` candidates, this episode's own files first."""
-    videos = count_videos(root)
     ranked = sorted(
         candidates,
         key=lambda entry: (
@@ -215,19 +213,6 @@ def _tags(track: Track) -> dict[str, object]:
     if track.hearing_impaired:
         tags["hearing_impaired"] = True
     return tags
-
-
-def _sibling_videos(root: Path, video_path: Path) -> list[str]:
-    try:
-        entries = sorted(root.iterdir())
-    except OSError:
-        return []
-    names = [
-        p.name
-        for p in entries
-        if p.is_file() and p != video_path and p.suffix.lower() in VIDEO_EXTENSIONS
-    ]
-    return names[:MAX_SIBLING_VIDEOS]
 
 
 def _size_of(path: Path) -> int | None:

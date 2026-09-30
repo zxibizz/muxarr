@@ -5,10 +5,11 @@ from pathlib import Path
 
 import pytest
 
+from src.core.logging import capture_log
 from src.domain.errors import ProbeError
 from src.domain.media import MediaInfo, Track
-from src.domain.naming import EpisodeRef, parse_episode_marker
-from src.infrastructure.filesystem.track_discovery import discover
+from src.domain.naming import EpisodeRef, parse_episode_marker, same_release
+from src.infrastructure.filesystem.track_discovery import discover, release_folder
 from tests.conftest import touch
 from tests.stubs import StubProber
 
@@ -121,6 +122,107 @@ class TestSeasonPacks:
         touch(pack / "Show.S01E02.eng.srt")
 
         assert discover(video, episode=EpisodeRef(season=2, episodes=(2,))) == []
+
+
+class TestSharedDownloadFolder:
+    """A single-file torrent has no folder of its own; it sits beside other downloads."""
+
+    @pytest.fixture
+    def downloads(self, tmp_path: Path) -> Path:
+        root = tmp_path / "downloads"
+        other = root / "Other.Movie.2023.1080p-GRP"
+        touch(other / "Other.Movie.2023.1080p-GRP.mkv")
+        touch(other / "Other.Movie.2023.1080p-GRP.eng.srt", "1\n")
+        touch(other / "Subs" / "2_English.srt", "1\n")
+        touch(other / "RUS Sound" / "Other.Movie.2023.1080p-GRP.mka")
+        return root
+
+    def test_other_downloads_are_not_its_sidecars(self, downloads: Path) -> None:
+        video = touch(downloads / "Some.Movie.2024.1080p.WEB-DL.mkv")
+
+        assert discover(video) == []
+
+    def test_not_even_files_named_after_it(self, downloads: Path) -> None:
+        video = touch(downloads / "Some.Movie.2024.1080p.WEB-DL.mkv")
+        touch(downloads / "Some.Movie.2024.1080p.WEB-DL.rus.srt", "1\n")
+
+        assert discover(video) == []
+
+    def test_another_shows_episode_marker_is_not_enough(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video = touch(downloads / "Show.S01E05.1080p.WEB-DL.mkv")
+        touch(downloads / "Other.Show.S01E05.1080p" / "Other.Show.S01E05.1080p.mkv")
+        touch(downloads / "Other.Show.S01E05.1080p" / "Other.Show.S01E05.1080p.eng.srt", "1\n")
+
+        assert discover(video, episode=EpisodeRef(season=1, episodes=(5,))) == []
+
+    def test_a_loose_neighbour_gives_it_away_too(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video = touch(downloads / "Some.Movie.2024.mkv")
+        touch(downloads / "Other.Movie.2023.mkv")
+        touch(downloads / "Other.Movie.2023.eng.srt", "1\n")
+        touch(downloads / "Artist - Album (2020) [FLAC]" / "01 - Track.flac")
+
+        assert discover(video) == []
+
+    def test_the_story_says_why(self, downloads: Path) -> None:
+        video = touch(downloads / "Some.Movie.2024.1080p.WEB-DL.mkv")
+
+        with capture_log(100) as entries:
+            discover(video)
+
+        [entry] = [e for e in entries if e.stage == "discovery"]
+        assert "shares its folder with other downloads" in entry.message
+        assert entry.context["other_download"] == (
+            "Other.Movie.2023.1080p-GRP/Other.Movie.2023.1080p-GRP.mkv"
+        )
+
+    def test_a_sample_does_not_make_a_release_folder_shared(self, download_dir: Path) -> None:
+        video = touch(download_dir / "Some.Movie.2024.mkv")
+        touch(download_dir / "grp-some.movie.2024-sample.mkv")
+        touch(download_dir / "Subs" / "2_English.srt")
+
+        assert [t.path.name for t in discover(video)] == ["2_English.srt"]
+
+    def test_extras_named_after_the_show_do_not_either(self, tmp_path: Path) -> None:
+        pack = tmp_path / "[Group] Show [BD 1080p]"
+        video = touch(pack / "[Group] Show - 01 [BD 1080p].mkv")
+        touch(pack / "[Group] Show - 02 [BD 1080p].mkv")
+        touch(pack / "[Group] Show - OVA [BD 1080p].mkv")
+        touch(pack / "NC" / "[Group] Show - NCOP1 [BD 1080p].mkv")
+
+        folder = release_folder(video)
+
+        assert folder is not None
+        assert folder.stranger is None
+        assert len(folder.videos) == 3
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("Show.S01E01.1080p.WEB-DL-GRP", "Show.S01E02.1080p.WEB-DL-GRP"),
+        ("[Group] Show - 01 [1080p]", "[Group] Show - OVA [1080p]"),
+        ("Some.Movie.2024.CD1", "Some.Movie.2024.CD2"),
+        ("Some.Movie.2024.1080p", "some.movie.2024.sample"),
+    ],
+)
+def test_same_release(a: str, b: str) -> None:
+    assert same_release(a, b)
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("Some.Movie.2024.1080p", "Other.Movie.2023.1080p"),
+        ("The.Bear.S03E01", "The.Boys.S04E01"),
+        ("[SubsPlease] Show A - 05 (1080p)", "[SubsPlease] Show B - 03 (1080p)"),
+        ("1917.2019.1080p", "300.2006.1080p"),
+        ("Show.S01E05.1080p", "Some.Movie.2024.1080p"),
+    ],
+)
+def test_different_releases(a: str, b: str) -> None:
+    assert not same_release(a, b)
 
 
 @pytest.mark.parametrize(

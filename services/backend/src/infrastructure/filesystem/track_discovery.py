@@ -8,12 +8,17 @@ deny-list of folders that hold unrelated media.
 The guard against pulling in another release's tracks is the episode marker: in a
 folder holding several videos, a sidecar must carry a matching ``SxxEyy``.
 
+All of that assumes the video has a folder of its own. A single-file torrent does
+not: it lands in the download directory itself, next to every other download, and
+being a single file it has no sidecars. A folder that turns out to hold another
+release's video is treated as exactly that, and nothing is taken from it.
+
 The source folder is only ever read. Nothing here opens a file for writing.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from src.application.interfaces.prober import MediaProber
@@ -27,8 +32,9 @@ from src.domain.codecs import (
 )
 from src.domain.enums import UNDETERMINED, LogComponent, TrackKind
 from src.domain.errors import MuxarrError
+from src.domain.journal import LogStage
 from src.domain.media import ExternalTrack, Track
-from src.domain.naming import EpisodeRef, belongs_to
+from src.domain.naming import EpisodeRef, belongs_to, same_release
 
 log = get_logger(LogComponent.INFRA_DISCOVERY)
 
@@ -58,6 +64,46 @@ EXCLUDED_DIR_NAMES = frozenset(
 MAX_SCAN_DEPTH = 2
 
 
+@dataclass(frozen=True, slots=True)
+class ReleaseFolder:
+    """The folder a video's sidecars are looked for in, and what counts in it."""
+
+    root: Path
+    # Every file that may be one of the video's sidecars, with its folder names.
+    candidates: tuple[tuple[Path, tuple[str, ...]], ...]
+    # The videos directly in root that are part of the same release, itself included.
+    videos: tuple[Path, ...]
+    # Another download's video, when root is a download directory rather than a
+    # folder of the video's own.
+    stranger: Path | None = None
+
+
+def release_folder(video_path: Path) -> ReleaseFolder | None:
+    """Where ``video_path``'s sidecars can be, or ``None`` if its folder is gone.
+
+    Beside another release's video, the video is a single-file download: nothing
+    around it is its own.
+    """
+    root = video_path.parent
+    if not root.is_dir():
+        return None
+
+    indexed = sorted(index_candidates(root))
+    stranger = next(
+        (
+            path
+            for path, _context in indexed
+            if _is_video(path) and not same_release(video_path.stem, path.stem)
+        ),
+        None,
+    )
+    if stranger is not None:
+        return ReleaseFolder(root, (), (video_path,), stranger)
+
+    videos = tuple(path for path, context in indexed if not context and _is_video(path))
+    return ReleaseFolder(root, tuple(indexed), videos)
+
+
 def discover(
     video_path: Path,
     *,
@@ -65,20 +111,28 @@ def discover(
     prober: MediaProber | None = None,
 ) -> list[ExternalTrack]:
     """Collect sidecar tracks that belong to ``video_path``."""
-    root = video_path.parent
-    if not root.is_dir():
+    folder = release_folder(video_path)
+    if folder is None:
         return []
 
-    sibling_video_count = count_videos(root)
-    log.bind(folder=root, videos=sibling_video_count, episode=episode).debug(
+    if folder.stranger is not None:
+        log.bind(
+            stage=LogStage.DISCOVERY.value,
+            folder=folder.root,
+            other_download=folder.stranger.relative_to(folder.root).as_posix(),
+        ).info(
+            "the source shares its folder with other downloads, so it is a single-file "
+            "download with no sidecars"
+        )
+    log.bind(folder=folder.root, videos=len(folder.videos), episode=episode).debug(
         "scanning the release folder for sidecars"
     )
 
     tracks: list[ExternalTrack] = []
-    for path, context in sorted(index_candidates(root)):
+    for path, context in folder.candidates:
         if path == video_path:
             continue
-        if not belongs_to(path, episode=episode, sibling_video_count=sibling_video_count):
+        if not belongs_to(path, episode=episode, sibling_video_count=len(folder.videos)):
             log.bind(file=path.name).debug("ignoring a file that belongs to another episode")
             continue
         track = _to_external_track(path, video_stem=video_path.stem, context=context, prober=prober)
@@ -137,8 +191,8 @@ def _dirs_in(directory: Path) -> list[Path]:
         return []
 
 
-def count_videos(root: Path) -> int:
-    return sum(1 for p in _files_in(root) if p.suffix.lower() in VIDEO_EXTENSIONS)
+def _is_video(path: Path) -> bool:
+    return path.suffix.lower() in VIDEO_EXTENSIONS
 
 
 def classify(path: Path) -> tuple[TrackKind, Path | None] | None:

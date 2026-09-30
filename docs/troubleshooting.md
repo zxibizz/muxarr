@@ -64,6 +64,11 @@ or the track cap (`MUXARR_MAX_TRACKS`). If the reason is that nothing was found
 at all, the layout may be one the filename rules cannot read; try
 [AI mode](configuration.md#ai-mode).
 
+If **What happened** says the source *shares its folder with other downloads*,
+the video had no release folder of its own, so it was taken for a single-file
+torrent with no sidecars. That also happens to a release folder holding another
+release's video; move that video out and import again.
+
 **AI mode is enabled but nothing changes.**
 In `fallback` mode the model is only consulted when the filename rules came up
 short, which is the point. Grep the logs for `infra.ai` to see whether it was
