@@ -22,7 +22,7 @@ FROM ghcr.io/astral-sh/uv:0.11 AS uv
 # Must be the exact image the runtime stage uses: the venv is bound to the
 # interpreter that built it, and a python-only bump once shipped a venv whose
 # site-packages the new interpreter never looked at.
-FROM python:3.14-slim-bookworm AS backend
+FROM python:3.15-slim-bookworm AS backend
 
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 
-FROM python:3.14-slim-bookworm AS runtime
+FROM python:3.15-slim-bookworm AS runtime
 
 # mkvtoolnix is the only hard runtime dependency; nginx fronts the SPA. tzdata
 # makes TZ work, as it does in the *arr images.
