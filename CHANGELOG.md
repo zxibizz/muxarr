@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.10.6] - 2026-11-08
+
 ### Fixed
 
 - **A malformed AI reply no longer costs the import its tracks.** In `always`
@@ -318,7 +320,8 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.5...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.6...HEAD
+[0.10.6]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.6
 [0.10.5]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.5
 [0.10.4]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.4
 [0.10.3]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.3
