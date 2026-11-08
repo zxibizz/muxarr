@@ -132,7 +132,12 @@ def discover(
     for path, context in folder.candidates:
         if path == video_path:
             continue
-        if not belongs_to(path, episode=episode, sibling_video_count=len(folder.videos)):
+        if not belongs_to(
+            path,
+            episode=episode,
+            sibling_video_count=len(folder.videos),
+            video_stem=video_path.stem,
+        ):
             log.bind(file=path.name).debug("ignoring a file that belongs to another episode")
             continue
         track = _to_external_track(path, video_stem=video_path.stem, context=context, prober=prober)

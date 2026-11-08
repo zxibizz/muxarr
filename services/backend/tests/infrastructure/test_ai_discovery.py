@@ -501,6 +501,7 @@ class TestReplyValidation:
             pytest.param(lambda body: body + "}", id="stray-brace"),
             pytest.param(lambda body: body[:-1], id="unclosed-object"),
             pytest.param(lambda body: body.replace("}]", "},]"), id="trailing-comma"),
+            pytest.param(lambda body: body.replace("}, {", "}, "), id="dropped-open-brace"),
         ],
     )
     def test_a_malformed_reply_still_yields_its_tracks(self, release: Path, wrap: Any) -> None:

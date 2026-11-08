@@ -46,14 +46,21 @@ def belongs_to(
     *,
     episode: EpisodeRef | None,
     sibling_video_count: int,
+    video_stem: str | None = None,
 ) -> bool:
     """Decide whether a sidecar is for this import.
 
-    A sidecar carrying no episode marker is only accepted when the folder holds a
-    single video; in a season pack it is ambiguous and gets dropped rather than
-    attached to an arbitrary episode.
+    A sidecar named after the video itself (``<video>.mka``, ``<video>.rus.ass``)
+    is its own whatever the folder holds: that is how absolute-numbered anime packs,
+    which carry no ``SxxEyy``, pair their tracks. Otherwise a sidecar carrying no
+    episode marker is only accepted when the folder holds a single video; in a
+    season pack it is ambiguous and gets dropped rather than attached to an
+    arbitrary episode.
     """
     if episode is None:
+        return True
+
+    if video_stem and _named_after(path.name, video_stem):
         return True
 
     marker = parse_episode_marker(path.name)
@@ -61,6 +68,14 @@ def belongs_to(
         return sibling_video_count <= 1
 
     return marker.season == episode.season and bool(set(marker.episodes) & set(episode.episodes))
+
+
+def _named_after(name: str, video_stem: str) -> bool:
+    # The stem must end at a word boundary, or "Show 1" would claim "Show 10.mka".
+    if not name.lower().startswith(video_stem.lower()):
+        return False
+    rest = name[len(video_stem) :]
+    return not rest or not rest[0].isalnum()
 
 
 def same_release(a: str, b: str) -> bool:

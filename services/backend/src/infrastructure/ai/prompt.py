@@ -154,7 +154,13 @@ def build(
         return None
 
     tagged: dict[str, str] = {}
-    for entry in _worth_describing(candidates, index, episode=episode, videos=len(folder.videos)):
+    for entry in _worth_describing(
+        candidates,
+        index,
+        episode=episode,
+        videos=len(folder.videos),
+        video_stem=video_path.stem,
+    ):
         relative = str(entry["file"])
         path, kind = index[relative], kinds[relative]
         declared = embedded_track(path, kind, prober) if prober is not None else None
@@ -191,12 +197,18 @@ def _worth_describing(
     *,
     episode: EpisodeRef | None,
     videos: int,
+    video_stem: str,
 ) -> list[dict[str, object]]:
     """The first :data:`MAX_DESCRIBED` candidates, this episode's own files first."""
     ranked = sorted(
         candidates,
         key=lambda entry: (
-            not belongs_to(index[str(entry["file"])], episode=episode, sibling_video_count=videos)
+            not belongs_to(
+                index[str(entry["file"])],
+                episode=episode,
+                sibling_video_count=videos,
+                video_stem=video_stem,
+            )
         ),
     )
     return ranked[:MAX_DESCRIBED]

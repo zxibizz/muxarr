@@ -115,6 +115,31 @@ class TestSeasonPacks:
 
         assert [t.path.name for t in found] == ["English.srt"]
 
+    def test_absolute_numbered_sidecars_named_after_the_video(self, tmp_path: Path) -> None:
+        # Anime packs carry no SxxEyy; each dub folder repeats the video's own name.
+        pack = tmp_path / "Mirai Nikki [480p]"
+        name = "[Unknown] Mirai Nikki {:02d} [BDrip 854x480 x264 Vorbis]"
+        for number in (1, 5, 10, 15):
+            touch(pack / f"{name.format(number)}.mkv")
+            touch(pack / "RUS Sound[metalrus]" / f"{name.format(number)}.mka")
+            touch(pack / "RUS Subs" / f"{name.format(number)}.ass")
+        video = pack / f"{name.format(1)}.mkv"
+
+        found = discover(video, episode=EpisodeRef(season=1, episodes=(1,)))
+
+        assert sorted(t.path.relative_to(pack).as_posix() for t in found) == [
+            f"RUS Sound[metalrus]/{name.format(1)}.mka",
+            f"RUS Subs/{name.format(1)}.ass",
+        ]
+
+    def test_a_longer_episode_number_is_not_named_after_the_video(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Show"
+        video = touch(pack / "Show 1.mkv")
+        touch(pack / "Show 10.mkv")
+        touch(pack / "Show 10.mka")
+
+        assert discover(video, episode=EpisodeRef(season=1, episodes=(1,))) == []
+
     def test_wrong_season_is_rejected(self, tmp_path: Path) -> None:
         pack = tmp_path / "Show"
         video = touch(pack / "Show.S02E02.mkv")

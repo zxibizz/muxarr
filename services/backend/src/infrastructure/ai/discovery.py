@@ -47,6 +47,10 @@ MAX_LABEL_CHARS = 120
 _FENCE = re.compile(r"^```(?:json)?|```$", re.MULTILINE)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _TRAILING_COMMA = re.compile(r",\s*([}\]])")
+# A closing brace followed straight by a key: the model dropped the next object's
+# opening brace, as in ``{"file": "a"}, "file": "b"}``. Valid JSON can produce the
+# same text after a nested object, which is why it is only a fallback repair.
+_MISSING_OPEN_BRACE = re.compile(r'\}(\s*,\s*)(?="(?:[^"\\]|\\.)*"\s*:)')
 
 # Enough of an unparseable reply, from each end, to tell a truncation from trailing
 # prose or a repeated object without storing the whole reply in the history entry.
@@ -249,10 +253,18 @@ def _salvage(text: str) -> Any:
     """Recover the track list from a reply that is not JSON as a whole.
 
     JSON mode does not stop every model from wrapping the object in prose, emitting
-    it twice, or leaving a trailing comma. Recovery is safe because nothing in the
+    it twice, leaving a trailing comma, or dropping the opening brace of every track
+    after the first -- and a retry of the same prompt tends to repeat that last one
+    token for token. Recovery is safe because nothing in the
     result is trusted anyway: each proposal is still checked against the index.
     """
-    for candidate in (text, _TRAILING_COMMA.sub(r"\1", text)):
+    without_trailing_commas = _TRAILING_COMMA.sub(r"\1", text)
+    candidates = (
+        text,
+        without_trailing_commas,
+        _MISSING_OPEN_BRACE.sub(r"}\1{", without_trailing_commas),
+    )
+    for candidate in candidates:
         decoded = _first_track_list(candidate)
         if decoded is not None:
             return decoded
