@@ -27,15 +27,17 @@ from tests.stubs import StubProber
 class StubCompleter:
     """Records what it was asked, replies with whatever it was primed with."""
 
-    def __init__(self, reply: str | Exception = '{"tracks": []}') -> None:
-        self._reply = reply
+    def __init__(self, *replies: str | Exception) -> None:
+        # One reply per call; the last one repeats once they run out.
+        self._replies = list(replies) or ['{"tracks": []}']
         self.calls: list[dict[str, Any]] = []
 
     def complete(self, *, system: str, user: str, timeout: float) -> str:
         self.calls.append({"system": system, "user": user, "timeout": timeout})
-        if isinstance(self._reply, Exception):
-            raise self._reply
-        return self._reply
+        reply = self._replies[min(len(self.calls), len(self._replies)) - 1]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
 
 def tracks_reply(*items: dict[str, Any]) -> str:
@@ -279,6 +281,43 @@ class TestDegradation:
         assert len(found) == 2
         assert all(t.source == "heuristic" for t in found)
 
+    def test_an_unusable_reply_is_asked_again(self, video: Path) -> None:
+        good = tracks_reply({"file": "Nadpisi/Some.Show.S02E05.ass", "language": "rus"})
+        completer = StubCompleter('{"tracks": [{"file": "Nadpisi/Some', good)
+
+        found = make(completer, mode="always").discover(video)
+
+        assert len(completer.calls) == 2
+        assert [(t.path.name, t.source) for t in found] == [("Some.Show.S02E05.ass", "ai")]
+
+    @pytest.mark.parametrize("broken", ["not json", '{"other": []}'])
+    def test_a_second_unusable_reply_keeps_the_heuristic_result(
+        self, video: Path, broken: str
+    ) -> None:
+        completer = StubCompleter(broken)
+
+        found = make(completer, mode="always").discover(video)
+
+        assert len(completer.calls) == 2
+        assert len(found) == 2
+        assert all(t.source == "heuristic" for t in found)
+
+    @pytest.mark.parametrize(
+        "reply",
+        [
+            pytest.param('{"tracks": []}', id="empty-answer"),
+            pytest.param(AiError("connection refused"), id="unreachable"),
+        ],
+    )
+    def test_an_answer_or_an_outage_is_not_retried(
+        self, video: Path, reply: str | Exception
+    ) -> None:
+        completer = StubCompleter(reply)
+
+        make(completer, mode="always").discover(video)
+
+        assert len(completer.calls) == 1
+
     def test_too_many_candidates_skips_the_call_entirely(self, tmp_path: Path) -> None:
         root = tmp_path / "Huge.Pack"
         video_path = touch(root / "Huge.Pack.S01E01.mkv", b"video")
@@ -455,8 +494,48 @@ class TestReplyValidation:
         assert len(materialise(reply, index=self.index(release), max_tracks=24)) == 1
 
     @pytest.mark.parametrize(
+        "wrap",
+        [
+            pytest.param(lambda body: f"Here are the tracks:\n{body}\nEnjoy!", id="prose"),
+            pytest.param(lambda body: body + "\n" + body, id="emitted-twice"),
+            pytest.param(lambda body: body + "}", id="stray-brace"),
+            pytest.param(lambda body: body[:-1], id="unclosed-object"),
+            pytest.param(lambda body: body.replace("}]", "},]"), id="trailing-comma"),
+        ],
+    )
+    def test_a_malformed_reply_still_yields_its_tracks(self, release: Path, wrap: Any) -> None:
+        body = tracks_reply(
+            {"file": "Nadpisi/Some.Show.S02E05.ass", "language": "rus"},
+            {"file": "Zvuk 1/Some.Show.S02E05.track.mka", "language": "rus"},
+        )
+        reply = wrap(body)
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(reply)
+
+        tracks = materialise(reply, index=self.index(release), max_tracks=24)
+
+        assert [t.path.name for t in tracks] == [
+            "Some.Show.S02E05.ass",
+            "Some.Show.S02E05.track.mka",
+        ]
+
+    def test_a_salvaged_reply_is_still_checked_against_the_index(self, release: Path) -> None:
+        reply = "Sure: " + tracks_reply({"file": "../../etc/passwd.srt", "language": "rus"})
+
+        assert materialise(reply, index=self.index(release), max_tracks=24) == []
+
+    @pytest.mark.parametrize(
         "reply",
-        ["not json", "", "null", '{"tracks": "everything"}', '{"other": []}', "[1, 2, 3]"],
+        [
+            "not json",
+            "",
+            "null",
+            '{"tracks": "everything"}',
+            '{"other": []}',
+            "[1, 2, 3]",
+            '{"tracks": [{"file": "Nadpisi/Some.Show.S02E05.ass", "lang',
+            'I found {"file": "Nadpisi/Some.Show.S02E05.ass"} for you',
+        ],
     )
     def test_unusable_replies_yield_no_tracks(self, release: Path, reply: str) -> None:
         assert materialise(reply, index=self.index(release), max_tracks=24) == []

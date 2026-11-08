@@ -46,6 +46,16 @@ MAX_LABEL_CHARS = 120
 
 _FENCE = re.compile(r"^```(?:json)?|```$", re.MULTILINE)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_TRAILING_COMMA = re.compile(r",\s*([}\]])")
+
+# Enough of an unparseable reply, from each end, to tell a truncation from trailing
+# prose or a repeated object without storing the whole reply in the history entry.
+REPLY_PREVIEW_CHARS = 300
+
+# The same prompt that produced a broken reply nearly always produces a good one on
+# the next ask, so one retry; more would only stretch an import the provider is
+# genuinely failing.
+MAX_REPLY_ATTEMPTS = 2
 
 
 class AiAssistedTrackDiscovery:
@@ -145,18 +155,28 @@ class AiAssistedTrackDiscovery:
             return None
 
         note.bind(candidates=len(built.index)).debug("sending the candidate file list")
-        try:
-            reply = self._completer.complete(
-                system=built.system, user=built.user, timeout=self._timeout
-            )
-        except Exception as exc:
-            note.bind(video=video_path.name, error=str(exc)).warning(
-                "the AI provider could not be reached"
-            )
-            return None
+        items: list[Any] | None = None
+        for attempt in range(1, MAX_REPLY_ATTEMPTS + 1):
+            try:
+                reply = self._completer.complete(
+                    system=built.system, user=built.user, timeout=self._timeout
+                )
+            except Exception as exc:
+                note.bind(video=video_path.name, error=str(exc)).warning(
+                    "the AI provider could not be reached"
+                )
+                return None
 
-        tracks = materialise(
-            reply, index=built.index, max_tracks=self._max_tracks, tagged=built.tagged
+            items = _parse(reply)
+            if items is not None:
+                break
+            if attempt < MAX_REPLY_ATTEMPTS:
+                note.bind(attempt=attempt).info("the AI reply was unusable, asking again")
+
+        if items is None:
+            return None
+        tracks = _to_tracks(
+            items, index=built.index, max_tracks=self._max_tracks, tagged=built.tagged
         )
         return tracks or None
 
@@ -169,10 +189,20 @@ def materialise(
     tagged: Mapping[str, str] | None = None,
 ) -> list[ExternalTrack]:
     """Validate a model reply into tracks, dropping anything that does not check out."""
+    return _to_tracks(_parse(reply) or [], index=index, max_tracks=max_tracks, tagged=tagged)
+
+
+def _to_tracks(
+    items: Sequence[Any],
+    *,
+    index: Mapping[str, Path],
+    max_tracks: int,
+    tagged: Mapping[str, str] | None,
+) -> list[ExternalTrack]:
     tracks: list[ExternalTrack] = []
     seen: set[Path] = set()
 
-    for item in _parse(reply):
+    for item in items:
         track = _to_track(item, index=index, tagged=tagged or {})
         if track is None or track.path in seen:
             continue
@@ -185,21 +215,62 @@ def materialise(
     return tracks
 
 
-def _parse(reply: str) -> list[Any]:
+def _parse(reply: str) -> list[Any] | None:
+    """The reply's proposals, or ``None`` when it is not a track list at all.
+
+    An empty list is an answer ("nothing belongs to this video") and is not retried;
+    ``None`` is a malformed reply, which usually comes out right on a second ask.
+    """
     # Models fence their JSON even when told not to.
     text = _FENCE.sub("", reply.strip()).strip()
     try:
         data = json.loads(text)
-    except ValueError:
-        log.warning("ai reply was not valid JSON", preview=text[:200])
-        return []
+    except ValueError as exc:
+        data = _salvage(text)
+        if data is None:
+            log.bind(
+                error=str(exc),
+                length=len(text),
+                head=text[:REPLY_PREVIEW_CHARS],
+                tail=text[-REPLY_PREVIEW_CHARS:],
+            ).warning("ai reply was not valid JSON")
+            return None
+        log.bind(error=str(exc)).info("ai reply was malformed JSON, recovered its track list")
 
     if isinstance(data, dict):
         data = data.get("tracks")
     if not isinstance(data, list):
         log.warning("ai reply carried no track list")
-        return []
+        return None
     return data
+
+
+def _salvage(text: str) -> Any:
+    """Recover the track list from a reply that is not JSON as a whole.
+
+    JSON mode does not stop every model from wrapping the object in prose, emitting
+    it twice, or leaving a trailing comma. Recovery is safe because nothing in the
+    result is trusted anyway: each proposal is still checked against the index.
+    """
+    for candidate in (text, _TRAILING_COMMA.sub(r"\1", text)):
+        decoded = _first_track_list(candidate)
+        if decoded is not None:
+            return decoded
+    return None
+
+
+def _first_track_list(text: str) -> Any:
+    decoder = json.JSONDecoder()
+    for start, char in enumerate(text):
+        if char not in "{[":
+            continue
+        try:
+            data, _end = decoder.raw_decode(text, start)
+        except ValueError:
+            continue
+        if isinstance(data, list) or (isinstance(data, dict) and "tracks" in data):
+            return data
+    return None
 
 
 def _to_track(
