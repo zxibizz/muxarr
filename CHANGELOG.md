@@ -12,6 +12,17 @@ within the same major version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A malformed AI reply no longer costs the import its tracks.** In `always`
+  mode an occasional reply that was not valid JSON dropped every sidecar the
+  model had found, and the episode was imported bare. Muxarr now recovers the
+  track list from a reply wrapped in prose, emitted twice, missing its closing
+  brace or carrying a trailing comma, and asks the provider once more when a
+  reply is unusable outright. An answer of "nothing belongs here" and an
+  unreachable provider are not retried. The warning for a reply that still
+  cannot be parsed now records the parser's error and both ends of the reply.
+
 ## [0.10.5] - 2026-09-30
 
 ### Fixed
