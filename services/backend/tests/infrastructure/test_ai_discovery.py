@@ -14,11 +14,12 @@ from typing import Any
 
 import pytest
 
+from src.application.interfaces.ai import RejectedReply, ReplySchema
 from src.domain.errors import AiError
 from src.domain.media import ExternalTrack, MediaInfo, Track
 from src.domain.naming import EpisodeRef
 from src.infrastructure.ai.discovery import AiAssistedTrackDiscovery, materialise
-from src.infrastructure.ai.prompt import MAX_DESCRIBED, SYSTEM_PROMPT, build
+from src.infrastructure.ai.prompt import MAX_DESCRIBED, SYSTEM_PROMPT, TRACKS_SCHEMA, build
 from src.infrastructure.filesystem.track_discovery import FilesystemTrackDiscovery
 from tests.conftest import touch
 from tests.stubs import StubProber
@@ -32,8 +33,24 @@ class StubCompleter:
         self._replies = list(replies) or ['{"tracks": []}']
         self.calls: list[dict[str, Any]] = []
 
-    def complete(self, *, system: str, user: str, timeout: float) -> str:
-        self.calls.append({"system": system, "user": user, "timeout": timeout})
+    def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        timeout: float,
+        schema: ReplySchema | None = None,
+        rejected: RejectedReply | None = None,
+    ) -> str:
+        self.calls.append(
+            {
+                "system": system,
+                "user": user,
+                "timeout": timeout,
+                "schema": schema,
+                "rejected": rejected,
+            }
+        )
         reply = self._replies[min(len(self.calls), len(self._replies)) - 1]
         if isinstance(reply, Exception):
             raise reply
@@ -289,6 +306,31 @@ class TestDegradation:
 
         assert len(completer.calls) == 2
         assert [(t.path.name, t.source) for t in found] == [("Some.Show.S02E05.ass", "ai")]
+
+    def test_every_ask_carries_the_reply_schema(self, video: Path) -> None:
+        completer = StubCompleter("not json")
+
+        make(completer, mode="always").discover(video)
+
+        assert [call["schema"] for call in completer.calls] == [TRACKS_SCHEMA, TRACKS_SCHEMA]
+
+    def test_the_retry_shows_the_model_its_broken_reply(self, video: Path) -> None:
+        broken = '{"tracks": [{"file": "Nadpisi/Some'
+        completer = StubCompleter(broken, '{"tracks": []}')
+
+        make(completer, mode="always").discover(video)
+
+        first, second = completer.calls
+        assert first["rejected"] is None
+        assert second["rejected"].reply == broken
+        assert "not valid JSON" in second["rejected"].problem
+
+    def test_a_reply_without_a_track_list_is_named_as_such(self, video: Path) -> None:
+        completer = StubCompleter('{"other": []}', '{"tracks": []}')
+
+        make(completer, mode="always").discover(video)
+
+        assert '"tracks"' in completer.calls[1]["rejected"].problem
 
     @pytest.mark.parametrize("broken", ["not json", '{"other": []}'])
     def test_a_second_unusable_reply_keeps_the_heuristic_result(

@@ -17,6 +17,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from src.application.interfaces.ai import ReplySchema
 from src.application.interfaces.prober import MediaProber
 from src.core.logging import get_logger
 from src.domain.enums import UNDETERMINED, LogComponent, TrackKind
@@ -103,6 +104,47 @@ descriptions such as "[door slams]" is one.
 - A language folder name applies to every file inside it.
 - Return an empty list when nothing belongs to this video.
 """
+
+
+# The reply shape the prompt describes, for providers that enforce a schema while
+# the model writes. Strict mode wants every property required and nothing extra,
+# so the nullable fields say so in their type instead of being optional. A custom
+# system prompt still gets this schema: the parser reads no other shape.
+TRACKS_SCHEMA = ReplySchema(
+    name="sidecar_tracks",
+    schema={
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["tracks"],
+        "properties": {
+            "tracks": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "file",
+                        "kind",
+                        "language",
+                        "title",
+                        "forced",
+                        "hearing_impaired",
+                        "variant",
+                    ],
+                    "properties": {
+                        "file": {"type": "string"},
+                        "kind": {"type": "string", "enum": ["audio", "subtitles"]},
+                        "language": {"type": "string"},
+                        "title": {"type": ["string", "null"]},
+                        "forced": {"type": "boolean"},
+                        "hearing_impaired": {"type": "boolean"},
+                        "variant": {"type": ["string", "null"]},
+                    },
+                },
+            }
+        },
+    },
+)
 
 
 @dataclass(frozen=True, slots=True)

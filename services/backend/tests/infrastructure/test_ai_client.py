@@ -6,8 +6,11 @@ from typing import Any
 import httpx
 import pytest
 
+from src.application.interfaces.ai import RejectedReply, ReplySchema
 from src.domain.errors import AiError
 from src.infrastructure.ai.openai_compat import MAX_REPLY_CHARS, OpenAICompatibleChatCompleter
+
+SCHEMA = ReplySchema(name="answer", schema={"type": "object", "properties": {}})
 
 
 def reply(content: str, **extra: Any) -> dict[str, Any]:
@@ -143,6 +146,79 @@ class TestResponseFormat:
             ask(completer(handler))
 
         assert calls == 2
+
+
+class TestSchema:
+    def test_a_schema_is_sent_as_a_strict_json_schema(self) -> None:
+        seen: list[dict[str, Any]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(json.loads(request.content))
+            return httpx.Response(200, json=reply("{}"))
+
+        completer(handler).complete(system="s", user="u", timeout=5.0, schema=SCHEMA)
+
+        assert seen[0]["response_format"] == {
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "strict": True, "schema": dict(SCHEMA.schema)},
+        }
+
+    def test_a_rejected_schema_steps_down_to_json_mode_then_to_nothing(self) -> None:
+        seen: list[dict[str, Any]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            seen.append(body)
+            if "response_format" in body:
+                return httpx.Response(400, json={"error": "unsupported parameter"})
+            return httpx.Response(200, json=reply('{"tracks": []}'))
+
+        result = completer(handler).complete(system="s", user="u", timeout=5.0, schema=SCHEMA)
+
+        assert result == '{"tracks": []}'
+        assert [body.get("response_format", {}).get("type") for body in seen] == [
+            "json_schema",
+            "json_object",
+            None,
+        ]
+
+    @pytest.mark.parametrize("status", [400, 422])
+    def test_json_mode_is_kept_when_only_the_schema_is_refused(self, status: int) -> None:
+        seen: list[dict[str, Any]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            seen.append(body)
+            if body.get("response_format", {}).get("type") == "json_schema":
+                return httpx.Response(status, json={"error": "json_schema unsupported"})
+            return httpx.Response(200, json=reply("{}"))
+
+        completer(handler).complete(system="s", user="u", timeout=5.0, schema=SCHEMA)
+
+        assert len(seen) == 2
+        assert seen[1]["response_format"] == {"type": "json_object"}
+
+
+class TestCorrection:
+    def test_a_rejected_reply_goes_back_as_the_assistant_turn(self) -> None:
+        seen: list[dict[str, Any]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(json.loads(request.content))
+            return httpx.Response(200, json=reply("{}"))
+
+        completer(handler).complete(
+            system="s",
+            user="u",
+            timeout=5.0,
+            rejected=RejectedReply(reply='{"tracks": [', problem="it is not valid JSON"),
+        )
+
+        messages = seen[0]["messages"]
+        assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+        assert messages[2]["content"] == '{"tracks": ['
+        assert "it is not valid JSON" in messages[3]["content"]
+        assert seen[0]["temperature"] == 0
 
 
 class TestFailures:

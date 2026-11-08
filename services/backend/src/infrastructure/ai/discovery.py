@@ -19,11 +19,11 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from src.application.interfaces.ai import ChatCompleter
+from src.application.interfaces.ai import ChatCompleter, RejectedReply
 from src.application.interfaces.prober import MediaProber
 from src.application.interfaces.track_source import TrackDiscovery
 from src.core.logging import get_logger
@@ -56,9 +56,9 @@ _MISSING_OPEN_BRACE = re.compile(r'\}(\s*,\s*)(?="(?:[^"\\]|\\.)*"\s*:)')
 # prose or a repeated object without storing the whole reply in the history entry.
 REPLY_PREVIEW_CHARS = 300
 
-# The same prompt that produced a broken reply nearly always produces a good one on
-# the next ask, so one retry; more would only stretch an import the provider is
-# genuinely failing.
+# The retry shows the model its broken reply and what was wrong with it; asking the
+# same question again at temperature 0 only gets the same reply back. One retry;
+# more would only stretch an import the provider is genuinely failing.
 MAX_REPLY_ATTEMPTS = 2
 
 
@@ -160,10 +160,15 @@ class AiAssistedTrackDiscovery:
 
         note.bind(candidates=len(built.index)).debug("sending the candidate file list")
         items: list[Any] | None = None
+        rejected: RejectedReply | None = None
         for attempt in range(1, MAX_REPLY_ATTEMPTS + 1):
             try:
                 reply = self._completer.complete(
-                    system=built.system, user=built.user, timeout=self._timeout
+                    system=built.system,
+                    user=built.user,
+                    timeout=self._timeout,
+                    schema=prompt_builder.TRACKS_SCHEMA,
+                    rejected=rejected,
                 )
             except Exception as exc:
                 note.bind(video=video_path.name, error=str(exc)).warning(
@@ -171,11 +176,15 @@ class AiAssistedTrackDiscovery:
                 )
                 return None
 
-            items = _parse(reply)
-            if items is not None:
+            parsed = _read(reply)
+            if isinstance(parsed, list):
+                items = parsed
                 break
+            rejected = RejectedReply(reply=reply, problem=parsed.problem)
             if attempt < MAX_REPLY_ATTEMPTS:
-                note.bind(attempt=attempt).info("the AI reply was unusable, asking again")
+                note.bind(attempt=attempt, problem=parsed.problem).info(
+                    "the AI reply was unusable, asking it to correct the reply"
+                )
 
         if items is None:
             return None
@@ -219,11 +228,24 @@ def _to_tracks(
     return tracks
 
 
+@dataclass(frozen=True, slots=True)
+class _Unusable:
+    """Why a reply is not a track list, worded to be sent back to the model."""
+
+    problem: str
+
+
 def _parse(reply: str) -> list[Any] | None:
-    """The reply's proposals, or ``None`` when it is not a track list at all.
+    """The reply's proposals, or ``None`` when it is not a track list at all."""
+    parsed = _read(reply)
+    return parsed if isinstance(parsed, list) else None
+
+
+def _read(reply: str) -> list[Any] | _Unusable:
+    """The reply's proposals, or why there are none to be had.
 
     An empty list is an answer ("nothing belongs to this video") and is not retried;
-    ``None`` is a malformed reply, which usually comes out right on a second ask.
+    :class:`_Unusable` is a malformed reply, which is worth one correction.
     """
     # Models fence their JSON even when told not to.
     text = _FENCE.sub("", reply.strip()).strip()
@@ -238,14 +260,14 @@ def _parse(reply: str) -> list[Any] | None:
                 head=text[:REPLY_PREVIEW_CHARS],
                 tail=text[-REPLY_PREVIEW_CHARS:],
             ).warning("ai reply was not valid JSON")
-            return None
+            return _Unusable(f"it is not valid JSON ({exc})")
         log.bind(error=str(exc)).info("ai reply was malformed JSON, recovered its track list")
 
     if isinstance(data, dict):
         data = data.get("tracks")
     if not isinstance(data, list):
         log.warning("ai reply carried no track list")
-        return None
+        return _Unusable('it has no "tracks" list')
     return data
 
 

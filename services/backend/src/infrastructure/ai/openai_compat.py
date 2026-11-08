@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 
+from src.application.interfaces.ai import RejectedReply, ReplySchema
 from src.core.logging import get_logger
 from src.domain.enums import LogComponent
 from src.domain.errors import AiError
@@ -32,8 +33,19 @@ MAX_REPLY_CHARS = 64 * 1024
 MAX_ERROR_CHARS = 200
 
 
+_FORMAT_REJECTIONS = frozenset({httpx.codes.BAD_REQUEST, httpx.codes.UNPROCESSABLE_ENTITY})
+
+
 class _ResponseFormatError(Exception):
-    """The provider rejected ``response_format``; worth one retry without it."""
+    """The provider rejected ``response_format``; worth a retry with a weaker one."""
+
+
+# Said after a reply the caller could not use. The reply itself goes back as the
+# assistant's turn, so the model corrects that answer rather than starting over.
+CORRECTION = (
+    "That reply could not be used: {problem}. Send the complete answer again, as valid "
+    "JSON in exactly the required shape, and nothing else."
+)
 
 
 class OpenAICompatibleChatCompleter:
@@ -52,25 +64,27 @@ class OpenAICompatibleChatCompleter:
         self._api_key = api_key
         self._transport = transport
 
-    def complete(self, *, system: str, user: str, timeout: float) -> str:
-        payload: dict[str, Any] = {
-            "model": self._model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            # The task is extraction, not writing; sampling only invents tracks.
-            "temperature": 0,
-            "response_format": {"type": "json_object"},
-        }
+    def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        timeout: float,
+        schema: ReplySchema | None = None,
+        rejected: RejectedReply | None = None,
+    ) -> str:
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        if rejected is not None:
+            messages += [
+                {"role": "assistant", "content": rejected.reply},
+                {"role": "user", "content": CORRECTION.format(problem=rejected.problem)},
+            ]
 
         started = time.monotonic()
-        try:
-            data = self._post(payload, timeout=timeout)
-        except _ResponseFormatError:
-            log.debug("provider rejected response_format, retrying without it", model=self._model)
-            payload.pop("response_format")
-            data = self._post(payload, timeout=timeout)
+        data = self._post_strictest(messages, schema=schema, timeout=timeout)
 
         content = _content(data)
         usage = data.get("usage")
@@ -82,6 +96,51 @@ class OpenAICompatibleChatCompleter:
             completion_tokens=usage.get("completion_tokens") if isinstance(usage, dict) else None,
         )
         return content
+
+    def _post_strictest(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        schema: ReplySchema | None,
+        timeout: float,
+    ) -> dict[str, Any]:
+        """Post with the strictest ``response_format`` the provider will take.
+
+        A schema is enforced while the model writes, so the reply cannot come out
+        malformed; plain JSON mode only asks for JSON, and small models still drop a
+        brace in a long list. Not every OpenAI-compatible server knows either, so
+        each rejection steps down one rung, ending with no format at all.
+        """
+        formats: list[dict[str, Any]] = []
+        if schema is not None:
+            formats.append(
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": schema.name,
+                        "strict": True,
+                        "schema": dict(schema.schema),
+                    },
+                }
+            )
+        formats.append({"type": "json_object"})
+
+        payload: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            # The task is extraction, not writing; sampling only invents tracks.
+            "temperature": 0,
+        }
+        for response_format in formats:
+            try:
+                return self._post({**payload, "response_format": response_format}, timeout=timeout)
+            except _ResponseFormatError:
+                log.debug(
+                    "provider rejected response_format, retrying with a weaker one",
+                    model=self._model,
+                    response_format=response_format["type"],
+                )
+        return self._post(payload, timeout=timeout)
 
     def _post(self, payload: dict[str, Any], *, timeout: float) -> dict[str, Any]:
         headers = {"Content-Type": "application/json"}
@@ -100,7 +159,8 @@ class OpenAICompatibleChatCompleter:
         except httpx.HTTPError as exc:
             raise AiError(f"could not reach {self._url}: {exc}") from exc
 
-        if response.status_code == httpx.codes.BAD_REQUEST and "response_format" in payload:
+        # Validating servers (vLLM, some proxies) refuse an unknown format with 422.
+        if response.status_code in _FORMAT_REJECTIONS and "response_format" in payload:
             raise _ResponseFormatError
         if response.status_code != httpx.codes.OK:
             raise AiError(

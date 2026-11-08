@@ -256,9 +256,13 @@ The reply is treated as untrusted input:
 
 If the provider is slow, unreachable, or answers with nonsense, Muxarr logs a
 warning and uses the filename result. An import is never failed because an API
-call was. A reply that is not quite JSON (wrapped in prose, emitted twice, a
-trailing comma) has its track list recovered; one that cannot be used at all is
-asked for once more before Muxarr gives up on it.
+call was. Muxarr asks for the reply as a strict JSON schema, which providers that
+support structured output (OpenAI, Gemini, most proxies) enforce while the model
+writes; a provider that refuses the schema is asked for plain JSON mode, and one
+that refuses that too gets no format at all. A reply that is still not quite JSON
+(wrapped in prose, emitted twice, a trailing comma, a dropped brace) has its track
+list recovered; one that cannot be used at all is sent back to the model with what
+was wrong with it, once, before Muxarr gives up on it.
 
 Tracks the model chose are marked in the history, and the operation detail spells
 out which file each one came from and that the provider identified it — so an AI

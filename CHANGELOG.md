@@ -12,6 +12,21 @@ within the same major version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Absolute-numbered season packs get their sidecars from the filenames.**
+  Anime packs named `Show 05 [...]` rather than `S01E05` had every sidecar
+  rejected as belonging to another episode, even one carrying the video's exact
+  name, so the import depended on the AI provider alone. A sidecar named after
+  the video is now always its own.
+- **A malformed AI reply is far less likely, and the retry can now fix one.**
+  The reply is requested as a strict JSON schema, so a provider with structured
+  output cannot return broken JSON; providers without it fall back to JSON mode
+  as before. A reply that still cannot be used is sent back to the model with the
+  problem, rather than the same question being asked again at temperature 0,
+  which returned the same broken reply. Replies that drop the opening brace of
+  every track after the first are also recovered.
+
 ## [0.10.6] - 2026-11-08
 
 ### Fixed
