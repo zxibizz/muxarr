@@ -4,7 +4,7 @@ Pin a version tag rather than `latest`, so a restart never changes the version
 underneath you:
 
 ```yaml
-image: ghcr.io/zxibizz/muxarr:0.10.6
+image: ghcr.io/zxibizz/muxarr:0.10.7
 ```
 
 The published tags are:
