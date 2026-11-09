@@ -71,6 +71,11 @@ run() {
 dump() {
     echo "--- logs of $1" >&2
     docker logs "$1" >&2 2>&1 || true
+    # Also as an annotation: it shows on the run page without opening the log.
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+        logs=$(docker logs --tail 60 "$1" 2>&1 | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+        echo "::error title=smoke $1 failed::${logs}"
+    fi
 }
 
 # 1. root, PUID/PGID
