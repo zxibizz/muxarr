@@ -12,6 +12,22 @@ within the same major version.
 
 ## [Unreleased]
 
+### Added
+
+- **The image can run without root.** Started as the library's uid
+  (`docker run --user`, Kubernetes `runAsUser`) it skips the chown and the
+  privilege drop and runs everything as that uid, on a read-only root
+  filesystem with every capability dropped — enough for Kubernetes'
+  `restricted` Pod Security profile. `/run` must be a writable tmpfs. Started as
+  root, nothing changes: `PUID`/`PGID` work as before. See
+  [Running without root](docs/configuration.md#running-without-root).
+
+### Changed
+
+- nginx writes its pid and temp files under `/run` and logs errors to the
+  container log; the URL-base snippet and the `index.html` carrying the URL base
+  are rendered into `/run/muxarr` instead of being edited inside the image.
+
 ## [0.10.7] - 2026-11-08
 
 ### Fixed

@@ -7,4 +7,13 @@ if [ "${MUXARR_MODE:-all}" = "worker" ]; then
     exit 0
 fi
 
-exec nginx -g "daemon off;"
+# pid and temp files live in /run (see /etc/nginx/nginx.conf), so nginx needs
+# nothing writable in the image.
+mkdir -p /run/nginx
+if [ "$(id -u)" = 0 ]; then
+    # Workers drop to www-data and buffer request bodies there.
+    chown www-data:www-data /run/nginx
+    exec nginx -e stderr -g "daemon off; user www-data;"
+fi
+# Started as non-root: workers run as the same user; `user` would only warn.
+exec nginx -e stderr -g "daemon off;"

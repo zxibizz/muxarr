@@ -134,7 +134,7 @@ One image (`Dockerfile`, overlay in `cicd/containers/prod/root/`), processes
 under s6-overlay, picked by `MUXARR_MODE`: `all` (default: api + worker +
 nginx), `web` (api + nginx) or `worker` (worker only). Init hooks: `00-mode`
 validates the mode and warns about SQLite outside `all`; `01-prepare` chowns
-`/config` to `PUID:PGID`; `02-migrations` runs `alembic upgrade head`, except in
+`/config` to `PUID:PGID` (started as non-root it only checks `/config` is writable); `02-migrations` runs `alembic upgrade head`, except in
 worker mode, which runs `python -m src.cli wait-for-schema` instead (the web
 container owns migrations); `03-shims` republishes the \*arr shims into
 `/shims` when mounted, except in worker mode. Then `api` (uvicorn on
@@ -143,6 +143,13 @@ container owns migrations); `03-shims` republishes the \*arr shims into
 and proxying `/v1` and `/healthz`). A service outside the mode runs
 `s6-svc -O .` and exits, so s6 leaves it down. `muxarr-healthcheck` curls
 `/healthz`, or in worker mode runs `python -m src.cli worker-alive`.
+
+The image runs either as root (drops to `PUID:PGID`) or started as non-root on a
+read-only root with no capabilities. Everything that drops privileges goes
+through `muxarr-drop`, which execs directly when not root; anything written at
+start-up (nginx pid/temp files, the URL-base snippet, the rendered `index.html`)
+goes to `/run`, never into the image. `.github/scripts/smoke_image.sh` starts
+both shapes in CI.
 
 Every process that drops to `PUID` exports `HOME=/config`: asyncpg probes
 `~/.postgresql` and raises on root's unreadable home.

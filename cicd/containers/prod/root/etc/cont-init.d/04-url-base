@@ -8,8 +8,11 @@ if [ "${MUXARR_MODE:-all}" = "worker" ]; then
     exit 0
 fi
 
-snippet=/etc/nginx/muxarr/url-base.conf
-index=/static/index.html
+# Generated into /run, not over the image: the image may be read-only and is not
+# writable at all when the container starts as a non-root user.
+mkdir -p /run/muxarr
+snippet=/run/muxarr/url-base.conf
+index=/run/muxarr/index.html
 
 base=$(printf '%s' "${MUXARR_URL_BASE:-}" | sed -e 's#/*$##')
 if [ -n "${base}" ]; then
@@ -35,6 +38,7 @@ location = / {
     if (\$request_uri = /) {
         return 302 ${base}/;
     }
+    root /run/muxarr;
     add_header Cache-Control "no-cache";
     try_files /index.html =404;
 }
@@ -44,5 +48,6 @@ else
     : > "${snippet}"
 fi
 
-# Relative asset and API URLs in the SPA all resolve against this.
-sed -i "s#<base href=\"[^\"]*\"#<base href=\"${base}/\"#" "${index}"
+# Relative asset and API URLs in the SPA all resolve against this. nginx serves
+# index.html from /run/muxarr; the rest of the SPA stays in /static.
+sed "s#<base href=\"[^\"]*\"#<base href=\"${base}/\"#" /static/index.html > "${index}"

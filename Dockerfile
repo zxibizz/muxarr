@@ -87,7 +87,7 @@ RUN python -c "import src.api.app, src.worker, src.db.migrations, asyncpg, psyco
 
 # No s6 `log/` services: each run script folds stderr into stdout so everything
 # lands on `docker logs`, which is where anyone will look first.
-RUN chmod +x /etc/cont-init.d/* /etc/services.d/*/run /usr/local/bin/muxarr-healthcheck \
+RUN chmod +x /etc/cont-init.d/* /etc/services.d/*/run /usr/local/bin/muxarr-healthcheck /usr/local/bin/muxarr-drop \
     && ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 
 # Match the uid/gid that owns your library -- the same values as the *arr

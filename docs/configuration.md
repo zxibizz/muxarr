@@ -52,7 +52,7 @@ variable out to manage that setting from the UI instead.
 | `MUXARR_AI_MAX_ENTRIES` | `200` | ✓ | Skip the call entirely above this many sidecars |
 | `MUXARR_AI_NAME_TRACKS` | `false` | ✓ | Let the provider write the track names — see [Track names](#track-names) |
 | `MUXARR_AI_SYSTEM_PROMPT` | *built-in* | ✓ | Replace the instructions sent to the provider — see [System prompt](#system-prompt) |
-| `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to |
+| `PUID` / `PGID` | `1000` / `1000` | | uid/gid the services drop to; ignored when the container starts as a non-root user — see [Running without root](#running-without-root) |
 | `TZ` | `UTC` | | Time zone for log timestamps, e.g. `Europe/Berlin`; the UI always shows your browser's |
 | `MUXARR_MODE` | `all` | | Container image only: `all`, `web` or `worker` — see [Container modes](#container-modes) |
 | `MUXARR_URL_BASE` | *unset* | | Container image only: serve the UI and API under a sub-path such as `/muxarr` — see [URL base](#url-base) |
@@ -167,6 +167,38 @@ SQLite. [compose.split.example.yaml](../compose.split.example.yaml) runs `web` a
 
 In worker mode nothing listens on `:8710`; the healthcheck reads the worker's
 heartbeat from the database instead.
+
+### Running without root
+
+By default the container starts as root, chowns `/config` and drops every
+service to `PUID:PGID`. It can instead start as the library's uid directly —
+`docker run --user`, or `runAsUser` in Kubernetes — with a read-only root
+filesystem and no capabilities at all, which is what Kubernetes' `restricted`
+Pod Security profile demands. Then:
+
+- `PUID`/`PGID` are ignored: everything runs as the uid it was started with.
+- `/config` must already be writable by that uid; Muxarr cannot chown it and
+  refuses to start otherwise.
+- `/run` must be a writable, executable tmpfs (s6-overlay, nginx's pid and temp
+  files, the rendered `index.html`), and `/tmp` writable.
+- Ownership of the muxed file cannot be changed to anyone else, so it belongs to
+  that uid.
+
+```yaml
+# docker compose
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /run:exec,mode=1777
+      - /tmp
+```
+
+In Kubernetes, the same as `securityContext` (`runAsNonRoot`, `runAsUser`,
+`readOnlyRootFilesystem`, `capabilities: {drop: [ALL]}`,
+`allowPrivilegeEscalation: false`) plus `emptyDir` volumes on `/run` and `/tmp`;
+`fsGroup` makes a fresh `/config` volume writable.
 
 ## Shim
 

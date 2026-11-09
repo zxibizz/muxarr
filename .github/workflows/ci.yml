@@ -148,5 +148,11 @@ jobs:
           context: .
           file: Dockerfile
           push: false
+          load: true
+          tags: muxarr:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Root with PUID/PGID, and non-root on a read-only root with no capabilities.
+      - name: Smoke-test the image
+        run: sh .github/scripts/smoke_image.sh muxarr:ci
