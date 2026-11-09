@@ -12,6 +12,13 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.10.9] - 2026-11-09
+
+### Changed
+
+- Re-release of 0.10.8, whose image was never published: its release run
+  failed before starting, during a GitHub Actions outage. Same code.
+
 ## [0.10.8] - 2026-11-09
 
 ### Added
@@ -355,7 +362,8 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.8...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.9...HEAD
+[0.10.9]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.9
 [0.10.8]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.8
 [0.10.7]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.7
 [0.10.6]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.6
