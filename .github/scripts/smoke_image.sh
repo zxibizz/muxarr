@@ -65,7 +65,7 @@ check_index() {
 run() {
     name="$1"
     shift
-    docker run -d --name "$name" "$@" "$image" >/dev/null
+    docker run -d --name "$name" -e MUXARR_READ_ROOTS=/tmp "$@" "$image" >/dev/null
 }
 
 dump() {
@@ -84,10 +84,12 @@ if wait_healthy root && check_uids root 1234 && check_index root / /; then :; el
     dump root; failed=1
 fi
 
-# 2. non-root, read-only, no capabilities
+# 2. non-root, read-only, no capabilities. s6-overlay insists /run belongs to
+#    the uid it runs as, and cannot chown it here.
 run nonroot \
     --user 1234:1234 --read-only --cap-drop ALL --security-opt no-new-privileges \
-    --tmpfs /run:exec,mode=1777 --tmpfs /tmp:mode=1777 \
+    -e S6_READ_ONLY_ROOT=1 \
+    --tmpfs /run:exec,mode=0755,uid=1234,gid=1234 --tmpfs /tmp:mode=1777 \
     --mount type=tmpfs,destination=/config,tmpfs-mode=1777
 if wait_healthy nonroot && check_uids nonroot 1234 && check_index nonroot / /; then :; else
     dump nonroot; failed=1
@@ -96,7 +98,8 @@ fi
 # 3. non-root with a URL base: the rendered index.html must carry it
 run nonroot-base \
     --user 1234:1234 --read-only --cap-drop ALL --security-opt no-new-privileges \
-    --tmpfs /run:exec,mode=1777 --tmpfs /tmp:mode=1777 \
+    -e S6_READ_ONLY_ROOT=1 \
+    --tmpfs /run:exec,mode=0755,uid=1234,gid=1234 --tmpfs /tmp:mode=1777 \
     --mount type=tmpfs,destination=/config,tmpfs-mode=1777 \
     -e MUXARR_URL_BASE=/muxarr
 if wait_healthy nonroot-base && check_index nonroot-base /muxarr/ /muxarr/; then :; else

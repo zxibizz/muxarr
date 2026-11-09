@@ -179,8 +179,10 @@ Pod Security profile demands. Then:
 - `PUID`/`PGID` are ignored: everything runs as the uid it was started with.
 - `/config` must already be writable by that uid; Muxarr cannot chown it and
   refuses to start otherwise.
-- `/run` must be a writable, executable tmpfs (s6-overlay, nginx's pid and temp
-  files, the rendered `index.html`), and `/tmp` writable.
+- `/run` must be writable, executable and **owned by that uid** — s6-overlay
+  checks, and without root cannot fix it. It holds s6's state, nginx's pid and
+  temp files and the rendered `index.html`. `/tmp` must be writable.
+- With a read-only root, set `S6_READ_ONLY_ROOT=1`.
 - Ownership of the muxed file cannot be changed to anyone else, so it belongs to
   that uid.
 
@@ -190,15 +192,34 @@ Pod Security profile demands. Then:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    environment:
+      S6_READ_ONLY_ROOT: "1"
     tmpfs:
-      - /run:exec,mode=1777
+      - /run:exec,mode=0755,uid=1000,gid=1000
       - /tmp
 ```
 
 In Kubernetes, the same as `securityContext` (`runAsNonRoot`, `runAsUser`,
 `readOnlyRootFilesystem`, `capabilities: {drop: [ALL]}`,
-`allowPrivilegeEscalation: false`) plus `emptyDir` volumes on `/run` and `/tmp`;
-`fsGroup` makes a fresh `/config` volume writable.
+`allowPrivilegeEscalation: false`); `fsGroup` makes a fresh `/config` volume
+writable. An `emptyDir` is created owned by root, so mount a subdirectory of it
+on `/run` that an init container running as the same uid created first:
+
+```yaml
+initContainers:
+  - name: run-dir
+    image: ghcr.io/zxibizz/muxarr:<version>
+    command: [mkdir, -p, /scratch/run]
+    volumeMounts: [{name: scratch, mountPath: /scratch}]
+containers:
+  - name: muxarr
+    env: [{name: S6_READ_ONLY_ROOT, value: "1"}]
+    volumeMounts:
+      - {name: scratch, mountPath: /run, subPath: run}
+      - {name: scratch, mountPath: /tmp, subPath: tmp}
+volumes:
+  - {name: scratch, emptyDir: {}}
+```
 
 ## Shim
 
