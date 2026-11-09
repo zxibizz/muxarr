@@ -39,10 +39,13 @@ jobs:
 
       # Without these, eleven mux/probe tests skip instead of running, which is
       # exactly the set most likely to break.
+      # A stalled mirror once hung this step for 10+ minutes: fail fast instead,
+      # and let apt retry a flaky download.
       - name: Install media tools
+        timeout-minutes: 8
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mkvtoolnix ffmpeg
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y --no-install-recommends mkvtoolnix ffmpeg
 
       - uses: astral-sh/setup-uv@v7
         with:
