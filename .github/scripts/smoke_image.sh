@@ -36,6 +36,8 @@ check_uids() {
     want="$2"
     bad=$(docker exec "$name" sh -c '
         for d in /proc/[0-9]*; do
+            # This very shell has the patterns in its own command line.
+            [ "${d#/proc/}" = "$$" ] && continue
             cmd=$(tr "\0" " " < "$d/cmdline" 2>/dev/null) || continue
             uid=$(awk "/^Uid:/ {print \$2}" "$d/status" 2>/dev/null) || continue
             case "$cmd" in

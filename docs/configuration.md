@@ -209,7 +209,7 @@ on `/run` that an init container running as the same uid created first:
 initContainers:
   - name: run-dir
     image: ghcr.io/zxibizz/muxarr:<version>
-    command: [mkdir, -p, /scratch/run]
+    command: [mkdir, -p, /scratch/run, /scratch/tmp]
     volumeMounts: [{name: scratch, mountPath: /scratch}]
 containers:
   - name: muxarr
