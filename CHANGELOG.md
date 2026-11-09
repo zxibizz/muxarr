@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.10.8] - 2026-11-09
+
 ### Added
 
 - **The image can run without root.** Started as the library's uid
@@ -353,7 +355,8 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.7...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.8...HEAD
+[0.10.8]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.8
 [0.10.7]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.7
 [0.10.6]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.6
 [0.10.5]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.5
