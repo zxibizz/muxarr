@@ -6,7 +6,7 @@
 #   worker - the worker only; muxes, serves nothing
 # web and worker meet at the jobs table, so apart they need a shared database.
 
-FROM node:22-alpine AS frontend
+FROM node:26-alpine AS frontend
 
 WORKDIR /app
 COPY services/frontend/package.json services/frontend/package-lock.json* ./
