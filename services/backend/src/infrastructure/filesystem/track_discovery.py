@@ -10,8 +10,22 @@ folder holding several videos, a sidecar must carry a matching ``SxxEyy``.
 
 All of that assumes the video has a folder of its own. A single-file torrent does
 not: it lands in the download directory itself, next to every other download, and
-being a single file it has no sidecars. A folder that turns out to hold another
-release's video is treated as exactly that, and nothing is taken from it.
+being a single file it has no sidecars. A pack, on the other hand, may ship videos
+named nothing like its episodes -- disc menus, bonus clips, creditless openings --
+in folders named anything at all. Either way the folder holds videos of other
+releases; what tells the two apart is the folder's own name. A release folder is
+named after its release, a download directory (``downloads``, ``tv-sonarr``) is
+not:
+
+* in a folder named after the release, a top-level folder holding another
+  release's video is that video's and is skipped, apart from files naming an
+  episode or one of the release's videos -- a dub folder may hold a stray clip;
+  everything else is searched as usual, and the AI provider is shown the other
+  videos. A file named after one of those videos is never a candidate;
+* in any other folder, nothing loose is taken, nothing from a top-level folder
+  holding a video, and of the rest only what is named after the video
+  (``RUS Sound/<video>.mka``); the AI provider is not asked, since the listing
+  would be other downloads'.
 
 The source folder is only ever read. Nothing here opens a file for writing.
 """
@@ -35,7 +49,14 @@ from src.domain.enums import UNDETERMINED, LogComponent, TrackKind
 from src.domain.errors import MuxarrError
 from src.domain.journal import LogStage
 from src.domain.media import ExternalTrack, Track
-from src.domain.naming import EpisodeRef, belongs_to, same_release
+from src.domain.naming import (
+    EpisodeRef,
+    belongs_to,
+    named_after,
+    names_release,
+    parse_episode_marker,
+    same_release,
+)
 
 log = get_logger(LogComponent.INFRA_DISCOVERY)
 
@@ -83,35 +104,72 @@ class ReleaseFolder:
     candidates: tuple[tuple[Path, tuple[str, ...]], ...]
     # The videos directly in root that are part of the same release, itself included.
     videos: tuple[Path, ...]
-    # Another download's video, when root is a download directory rather than a
-    # folder of the video's own.
-    stranger: Path | None = None
+    # Videos of other releases under root: another download's when root is a
+    # download directory, or the pack's own menus and bonus clips.
+    foreign: tuple[Path, ...] = ()
+    # Whether root is named after the video's release, and so is its folder.
+    own: bool = True
+    # The videos directly in root that a sidecar without an episode marker could
+    # be for: the release's own and any loose menu or bonus clip.
+    loose_videos: int = 0
+
+    @property
+    def ambiguous(self) -> bool:
+        """Whether root may be a download directory rather than the video's folder."""
+        return bool(self.foreign) and not self.own
 
 
 def release_folder(video_path: Path) -> ReleaseFolder | None:
     """Where ``video_path``'s sidecars can be, or ``None`` if its folder is gone.
 
-    Beside another release's video, the video is a single-file download: nothing
-    around it is its own.
+    Beside videos of other releases, a top-level folder holding one is that
+    video's, apart from files naming an episode or a video of the release; when
+    root is not even named after the release, every folder holding a video is
+    another download's, whole, and so is every loose file.
     """
     root = video_path.parent
     if not root.is_dir():
         return None
 
     indexed = sorted(index_candidates(root))
-    stranger = next(
-        (
-            path
-            for path, _context in indexed
-            if _is_video(path) and not same_release(video_path.stem, path.stem)
-        ),
-        None,
+    foreign = frozenset(
+        path
+        for path, _context in indexed
+        if _is_video(path) and not same_release(video_path.stem, path.stem)
     )
-    if stranger is not None:
-        return ReleaseFolder(root, (), (video_path,), stranger)
+    videos = tuple(
+        path for path, context in indexed if not context and _is_video(path) and path not in foreign
+    )
+    if not foreign:
+        return ReleaseFolder(root, tuple(indexed), videos, loose_videos=len(videos))
 
-    videos = tuple(path for path, context in indexed if not context and _is_video(path))
-    return ReleaseFolder(root, tuple(indexed), videos)
+    own = names_release(root.name, video_path.stem)
+    holders = foreign if own else {path for path, _context in indexed if _is_video(path)}
+    # context is nearest-first, so its last entry is the folder directly under root.
+    taken = {root / context[-1] for path, context in indexed if context and path in holders}
+    ours = [path.stem for path, _context in indexed if _is_video(path) and path not in foreign]
+
+    def admitted(path: Path, context: tuple[str, ...]) -> bool:
+        if any(named_after(path.name, other.stem) for other in foreign):
+            return False
+        if not context:
+            return own or path == video_path
+        if not _within(path, taken):
+            return True
+        # A release's folder holding a menu or a stray clip may still hold its dubs:
+        # a file naming its episode or video says whose it is.
+        return own and (
+            parse_episode_marker(path.name) is not None
+            or any(named_after(path.name, stem) for stem in ours)
+        )
+
+    candidates = tuple((path, context) for path, context in indexed if admitted(path, context))
+    loose = sum(1 for path in foreign if path.parent == root)
+    return ReleaseFolder(root, candidates, videos, tuple(sorted(foreign)), own, len(videos) + loose)
+
+
+def _within(path: Path, folders: set[Path]) -> bool:
+    return any(parent in folders for parent in path.parents)
 
 
 def discover(
@@ -125,14 +183,26 @@ def discover(
     if folder is None:
         return []
 
-    if folder.stranger is not None:
+    if folder.ambiguous:
         log.bind(
             stage=LogStage.DISCOVERY.value,
             folder=folder.root,
-            other_download=folder.stranger.relative_to(folder.root).as_posix(),
+            other_video=folder.foreign[0].relative_to(folder.root).as_posix(),
+            other_videos=len(folder.foreign),
         ).info(
-            "the source shares its folder with other downloads, so it is a single-file "
-            "download with no sidecars"
+            "the folder is not named after the release and holds videos of other "
+            "releases, so it may be shared with other downloads: only sidecars named "
+            "after the video, in folders without a video, are taken"
+        )
+    elif folder.foreign:
+        log.bind(
+            stage=LogStage.DISCOVERY.value,
+            folder=folder.root,
+            other_video=folder.foreign[0].relative_to(folder.root).as_posix(),
+            other_videos=len(folder.foreign),
+        ).info(
+            "the release folder also holds videos named unlike the release, such as "
+            "disc menus or bonus clips; the folders holding them are skipped"
         )
     log.bind(folder=folder.root, videos=len(folder.videos), episode=episode).debug(
         "scanning the release folder for sidecars"
@@ -142,10 +212,12 @@ def discover(
     for path, context in folder.candidates:
         if path == video_path:
             continue
+        if folder.ambiguous and not named_after(path.name, video_path.stem):
+            continue
         if not belongs_to(
             path,
             episode=episode,
-            sibling_video_count=len(folder.videos),
+            sibling_video_count=folder.loose_videos,
             video_stem=video_path.stem,
         ):
             log.bind(file=path.name).debug("ignoring a file that belongs to another episode")

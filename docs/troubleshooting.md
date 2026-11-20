@@ -64,10 +64,16 @@ or the track cap (`MUXARR_MAX_TRACKS`). If the reason is that nothing was found
 at all, the layout may be one the filename rules cannot read; try
 [AI mode](configuration.md#ai-mode).
 
-If **What happened** says the source *shares its folder with other downloads*,
-the video had no release folder of its own, so it was taken for a single-file
-torrent with no sidecars. That also happens to a release folder holding another
-release's video; move that video out and import again.
+If **What happened** says the folder *may be shared with other downloads*, it
+holds videos whose names do not match the release and is not itself named
+after the release, so it may be the download directory a single-file torrent
+landed in. Only sidecars named after the video (`<video>.mka`,
+`<video>.rus.ass`) are taken then, from folders without a video of their own,
+and AI mode is not consulted. A release folder named after its release is
+searched as usual, apart from the folders holding those videos (disc menus,
+bonus clips), where only files naming an episode or one of the release's videos
+are taken; if yours is named otherwise, rename it after the release and
+import again.
 
 **AI mode is enabled but nothing changes.**
 In `fallback` mode the model is only consulted when the filename rules came up

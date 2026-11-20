@@ -12,6 +12,23 @@ within the same major version.
 
 ## [Unreleased]
 
+### Changed
+
+- **A video of another release no longer hides a whole folder's sidecars.**
+  Disc menus, bonus clips and creditless openings are named unlike the
+  episodes, in folders named anything, and any one of them made the pack look
+  like a download directory shared with other releases, so every sidecar was
+  dropped unless the deny-list happened to name the folder. The folder's own
+  name now tells the two apart: a release folder is named after its release
+  (bracketed tags aside), a download directory is not. In a release folder the
+  top-level folders holding such videos are skipped, apart from files naming an
+  episode or one of the release's videos, files named after those videos are
+  never taken, and everything else is searched as usual; AI mode is shown the
+  other videos as `videos_of_other_releases`. Elsewhere nothing loose is taken,
+  nothing from a folder holding a video, and of the rest only sidecars named
+  after the video; the AI provider is not asked, as before. A custom AI system
+  prompt should say that those videos' tracks are not the video's.
+
 ## [0.10.10] - 2026-11-20
 
 ### Fixed

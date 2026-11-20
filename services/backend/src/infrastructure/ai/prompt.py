@@ -66,6 +66,10 @@ Reply with JSON only, in exactly this shape:
 Rules:
 - Include only files belonging to THIS video. When the folder holds several \
 episodes, a sidecar belongs to the video whose season/episode marker it shares.
+- "videos_of_other_releases", when present, lists videos whose names do not \
+match this video's release: usually its own disc menus, bonus clips or \
+creditless openings. Their tracks are not this video's. A candidate that \
+plainly belongs to something else (an album, another title) is not either.
 - Copy "file" character for character from the candidate list. Never invent, \
 complete or correct a path. Omit anything you are unsure about.
 - An "excerpt" settles the language: it is the language that text is written \
@@ -168,7 +172,7 @@ def build(
 ) -> DiscoveryPrompt | None:
     """Describe the folder around ``video_path``, or ``None`` if not worth asking."""
     folder = release_folder(video_path)
-    if folder is None:
+    if folder is None or folder.ambiguous:
         return None
 
     index: dict[str, Path] = {}
@@ -200,7 +204,7 @@ def build(
         candidates,
         index,
         episode=episode,
-        videos=len(folder.videos),
+        videos=folder.loose_videos,
         video_stem=video_path.stem,
     ):
         relative = str(entry["file"])
@@ -222,6 +226,10 @@ def build(
         "other_videos_in_folder": siblings[:MAX_SIBLING_VIDEOS],
         "candidates": candidates,
     }
+    if folder.foreign:
+        payload["videos_of_other_releases"] = sorted(
+            path.relative_to(folder.root).as_posix() for path in folder.foreign
+        )[:MAX_SIBLING_VIDEOS]
     if episode is not None:
         payload["episode"] = {"season": episode.season, "episodes": list(episode.episodes)}
 

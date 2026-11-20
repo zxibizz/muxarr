@@ -197,8 +197,8 @@ class TestSharedDownloadFolder:
             discover(video)
 
         [entry] = [e for e in entries if e.stage == "discovery"]
-        assert "shares its folder with other downloads" in entry.message
-        assert entry.context["other_download"] == (
+        assert "may be shared with other downloads" in entry.message
+        assert entry.context["other_video"] == (
             "Other.Movie.2023.1080p-GRP/Other.Movie.2023.1080p-GRP.mkv"
         )
 
@@ -219,8 +219,224 @@ class TestSharedDownloadFolder:
         folder = release_folder(video)
 
         assert folder is not None
-        assert folder.stranger is None
+        assert not folder.ambiguous
         assert len(folder.videos) == 3
+
+
+class TestPackWithVideosOfItsOwn:
+    """Menus and bonus clips are named unlike the episodes, in folders named anything."""
+
+    @pytest.fixture
+    def pack(self, tmp_path: Path) -> Path:
+        pack = tmp_path / "downloads" / "Show [BDRip] [1080p]"
+        for number in ("01", "02"):
+            touch(pack / f"[Group] Show {number} [BDrip 1080p].mkv")
+            touch(pack / "RUS Sound [Studio]" / f"[Group] Show {number} [BDrip 1080p].mka")
+            touch(pack / "RUS Sub" / f"[Group] Show {number} [BDrip 1080p].ass", "x")
+        touch(pack / "Меню диска" / "Disc Menu (Vol 1).mkv")
+        touch(pack / "Меню диска" / "Disc Menu (Vol 1).rus.mka")
+        return pack
+
+    def found(self, pack: Path, number: int) -> list[str]:
+        video = pack / f"[Group] Show {number:02d} [BDrip 1080p].mkv"
+        tracks = discover(video, episode=EpisodeRef(season=1, episodes=(number,)))
+        return sorted(t.path.relative_to(pack).as_posix() for t in tracks)
+
+    def test_sidecars_named_after_the_episode_are_its_own(self, pack: Path) -> None:
+        assert self.found(pack, 1) == [
+            "RUS Sound [Studio]/[Group] Show 01 [BDrip 1080p].mka",
+            "RUS Sub/[Group] Show 01 [BDrip 1080p].ass",
+        ]
+
+    def test_a_loose_menu_does_not_hide_them_either(self, pack: Path) -> None:
+        touch(pack / "Menu.mkv")
+
+        assert len(self.found(pack, 2)) == 2
+
+    def test_the_menu_folder_is_the_menus(self, pack: Path) -> None:
+        folder = release_folder(pack / "[Group] Show 01 [BDrip 1080p].mkv")
+
+        assert folder is not None
+        assert folder.foreign
+        assert not folder.ambiguous
+        assert not any("Меню" in p.as_posix() for p, _context in folder.candidates)
+
+    def test_a_movie_keeps_its_subs_beside_a_making_of(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Some.Movie.2024.1080p.BluRay"
+        video = touch(pack / "Some.Movie.2024.1080p.BluRay.mkv")
+        touch(pack / "Making Of" / "Behind the scenes.mkv")
+        touch(pack / "Making Of" / "Behind the scenes.eng.srt", "1\n")
+        touch(pack / "Subs" / "2_English.srt", "1\n")
+
+        assert [t.path.name for t in discover(video)] == ["2_English.srt"]
+
+    def test_episode_markers_still_pair_a_web_pack(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Show.S01.1080p.WEB-DL"
+        video = touch(pack / "Show.S01E01.1080p.WEB-DL.mkv")
+        touch(pack / "Show.S01E02.1080p.WEB-DL.mkv")
+        touch(pack / "Subs" / "Show.S01E01.rus.srt", "1\n")
+        touch(pack / "Subs" / "Show.S01E02.rus.srt", "1\n")
+        touch(pack / "Меню диска" / "Disc Menu.mkv")
+
+        found = discover(video, episode=EpisodeRef(season=1, episodes=(1,)))
+
+        assert [t.path.name for t in found] == ["Show.S01E01.rus.srt"]
+
+    def test_a_folder_named_otherwise_keeps_tracks_named_after_the_video(
+        self, tmp_path: Path
+    ) -> None:
+        # A pack titled in another script than its files is not recognisably its
+        # release's, so only the strict rule applies -- and still finds the dub.
+        pack = tmp_path / "Одному лишь Богу ведомый мир [BDRip]"
+        video = touch(pack / "[Group] Kami nomi 01 [BD].mkv")
+        touch(pack / "[Group] Kami nomi 02 [BD].mkv")
+        touch(pack / "RUS Sound" / "[Group] Kami nomi 01 [BD].mka")
+        touch(pack / "BD menu (Vol 1).mkv")
+
+        found = discover(video, episode=EpisodeRef(season=1, episodes=(1,)))
+
+        assert [t.path.name for t in found] == ["[Group] Kami nomi 01 [BD].mka"]
+
+
+class TestVideosOfItsOwnKeepTheirTracks:
+    def test_a_loose_trailer_keeps_its_subtitles(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Some.Movie.2024.1080p"
+        video = touch(pack / "Some.Movie.2024.1080p.mkv")
+        touch(pack / "Trailer.mkv")
+        touch(pack / "Trailer.eng.srt", "1\n")
+
+        assert discover(video) == []
+
+    def test_a_loose_opening_makes_unmarked_sidecars_ambiguous(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Show.S01E01.1080p"
+        video = touch(pack / "Show.S01E01.1080p.mkv")
+        touch(pack / "NCOP.mkv")
+        touch(pack / "NCOP.eng.ass", "x")
+        touch(pack / "Subs" / "eng.ass", "x")
+
+        assert discover(video, episode=EpisodeRef(season=1, episodes=(1,))) == []
+
+    def test_only_the_folder_holding_a_clip_is_skipped(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Show.S01.1080p"
+        video = touch(pack / "Show.S01E01.1080p.mkv")
+        touch(pack / "Show.S01E02.1080p.mkv")
+        touch(pack / "RUS" / "Bonus clips" / "clip.mkv")
+        touch(pack / "RUS" / "Bonus clips" / "clip.rus.srt", "1\n")
+        touch(pack / "RUS" / "Subs" / "Show.S01E01.rus.srt", "1\n")
+
+        found = discover(video, episode=EpisodeRef(season=1, episodes=(1,)))
+
+        assert [t.path.name for t in found] == ["Show.S01E01.rus.srt"]
+
+    def test_a_bonus_disc_keeps_its_subtitles(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Some.Movie.2024.1080p"
+        video = touch(pack / "Some.Movie.2024.1080p.mkv")
+        touch(pack / "Bonus Disc" / "Featurette A" / "Featurette A.mkv")
+        touch(pack / "Bonus Disc" / "Subs" / "English.srt", "1\n")
+        touch(pack / "Subs" / "2_English.srt", "1\n")
+
+        assert [t.path.name for t in discover(video)] == ["2_English.srt"]
+
+    def test_a_stray_clip_in_a_dub_folder_does_not_hide_the_dub(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Show [BD]"
+        video = touch(pack / "[G] Show 01 [BD].mkv")
+        touch(pack / "[G] Show 02 [BD].mkv")
+        touch(pack / "RUS Sound" / "[G] Show 01 [BD].mka")
+        touch(pack / "RUS Sound" / "[G] Show 02 [BD].mka")
+        touch(pack / "RUS Sound" / "Opening RUS.mkv")
+
+        found = discover(video, episode=EpisodeRef(season=1, episodes=(1,)))
+
+        assert [t.path.name for t in found] == ["[G] Show 01 [BD].mka"]
+
+    def test_tags_do_not_make_a_release_folder_unrecognisable(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Kimi no Na wa (2016) [BD 1080p]"
+        video = touch(pack / "[Group] Kimi no Na wa [BD 1080p HEVC].mkv")
+        touch(pack / "NC" / "NCED.mkv")
+        touch(pack / "Subs" / "eng.srt", "1\n")
+
+        folder = release_folder(video)
+
+        assert folder is not None
+        assert folder.own
+        assert [t.path.name for t in discover(video)] == ["eng.srt"]
+
+    def test_a_title_containing_sample_is_still_a_release(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Free.Samples.2012.1080p"
+        video = touch(pack / "Free.Samples.2012.1080p.mkv")
+        touch(pack / "Making Of" / "bts.mkv")
+        touch(pack / "Subs" / "eng.srt", "1\n")
+
+        assert [t.path.name for t in discover(video)] == ["eng.srt"]
+
+
+@pytest.mark.parametrize(
+    ("folder", "stem"),
+    [
+        ("[torrents]", "Some.Movie.2024"),
+        ("movies", "Movies.That.Matter.2020"),
+        ("downloads", "Show.S01E01"),
+        ("Sample", "Some.Movie.2024"),
+    ],
+)
+def test_a_download_directory_is_not_taken_for_a_release(
+    tmp_path: Path, folder: str, stem: str
+) -> None:
+    root = tmp_path / folder
+    video = touch(root / f"{stem}.mkv")
+    touch(root / "Other.2023.mkv")
+    touch(root / "Other.2023.eng.srt", "1\n")
+
+    folder_of = release_folder(video)
+
+    assert folder_of is not None
+    assert folder_of.ambiguous
+    assert discover(video) == []
+
+
+class TestSharedDownloadFolderStillGivesNothingAway:
+    def test_an_album_beside_a_single_file_download(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video = touch(downloads / "Some.Movie.2024.mkv")
+        touch(downloads / "Other.Movie.2023" / "Other.Movie.2023.mkv")
+        touch(downloads / "Artist - Album (2020) [FLAC]" / "01 - Track.flac")
+
+        assert discover(video) == []
+
+    def test_another_release_named_like_it_keeps_its_tracks(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video = touch(downloads / "Show.S01E01.mkv")
+        touch(downloads / "Show.S01E01 [Other]" / "Other.Cut.mkv")
+        touch(downloads / "Show.S01E01 [Other]" / "Show.S01E01.rus.mka")
+
+        assert discover(video, episode=EpisodeRef(season=1, episodes=(1,))) == []
+
+    def test_another_cut_of_the_same_title_keeps_its_tracks(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video = touch(downloads / "Show.S01E01.1080p.mkv")
+        touch(downloads / "Other.Movie.2023" / "Other.Movie.2023.mkv")
+        repack = downloads / "Show.S01E01.1080p.REPACK-OTHER"
+        touch(repack / "Show.S01E01.1080p.REPACK-OTHER.mkv")
+        touch(repack / "Show.S01E01.1080p.REPACK-OTHER.rus.srt", "1\n")
+
+        assert discover(video, episode=EpisodeRef(season=1, episodes=(1,))) == []
+
+    def test_loose_files_beside_single_file_episodes(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video = touch(downloads / "Show.S01E01.mkv")
+        touch(downloads / "Show.S01E02.mkv")
+        touch(downloads / "Show.S01E01.rus.srt", "1\n")
+        touch(downloads / "Other.Movie" / "Other.Movie.mkv")
+
+        assert discover(video, episode=EpisodeRef(season=1, episodes=(1,))) == []
+
+    def test_a_dub_pack_for_exactly_this_file_is_taken(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video = touch(downloads / "Some.Movie.2024.1080p.WEB-DL.mkv")
+        touch(downloads / "Other.Movie.2023" / "Other.Movie.2023.mkv")
+        touch(downloads / "Some.Movie RUS dub" / "Some.Movie.2024.1080p.WEB-DL.rus.mka")
+
+        assert [t.path.name for t in discover(video)] == ["Some.Movie.2024.1080p.WEB-DL.rus.mka"]
 
 
 @pytest.mark.parametrize(

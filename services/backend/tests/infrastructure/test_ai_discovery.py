@@ -616,6 +616,34 @@ class TestPrompt:
 
         assert build(video_path) is None
 
+    def test_a_pack_with_videos_of_its_own_is_described_with_them(self, tmp_path: Path) -> None:
+        pack = tmp_path / "Some.Movie.2024.1080p.BluRay"
+        video_path = touch(pack / "Some.Movie.2024.1080p.BluRay.mkv", b"video")
+        touch(pack / "Loose.Notes.srt", "x")
+        touch(pack / "Making Of" / "Behind the scenes.mkv", b"video")
+        touch(pack / "Making Of" / "Behind the scenes.eng.srt", "x")
+        touch(pack / "Subs" / "2_English.srt", "x")
+
+        built = build(video_path)
+
+        assert built is not None
+        payload = json.loads(built.user)
+        assert [c["file"] for c in payload["candidates"]] == [
+            "Loose.Notes.srt",
+            "Subs/2_English.srt",
+        ]
+        assert payload["videos_of_other_releases"] == ["Making Of/Behind the scenes.mkv"]
+        assert "videos_of_other_releases" in built.system
+
+    def test_a_folder_that_may_be_shared_is_not_described(self, tmp_path: Path) -> None:
+        downloads = tmp_path / "downloads"
+        video_path = touch(downloads / "Some.Movie.2024.mkv", b"video")
+        touch(downloads / "Other.Movie.2023" / "Other.Movie.2023.mkv", b"video")
+        touch(downloads / "Artist - Album (2020) [FLAC]" / "01 - Track.flac")
+        touch(downloads / "Another.Show.S02 subs" / "Another.Show.S02E01.srt", "x")
+
+        assert build(video_path) is None
+
     def test_passes_the_episode_marker_through(self, video: Path) -> None:
         built = build(video, episode=EpisodeRef(season=2, episodes=(5,)))
 

@@ -292,8 +292,10 @@ conclusive, the model may take the language that the other episodes' files,
 named the same way, agree on. Audio
 and video content is never sent, and neither is an absolute path, so nothing
 about your library layout above the release folder is disclosed. A video with
-no folder of its own, as a single-file torrent has, sends nothing: it has no
-sidecars. Point
+no folder of its own, as a single-file torrent has, sends nothing: a folder
+holding videos of other releases is only described when it is named after the
+video's release, and then without the folders holding those videos, whose
+names are sent instead. Point
 `MUXARR_AI_BASE_URL` at a local provider if even subtitle text should stay on
 your machine.
 
@@ -356,6 +358,11 @@ A custom prompt is yours to maintain: it no longer picks up improvements to the
 built-in one, so **Restore built-in** after an upgrade whose notes mention the
 prompt. Saving the built-in text unchanged, or an empty box, keeps following
 the built-in prompt.
+
+The request also lists `videos_of_other_releases` when the release folder
+holds videos named unlike the release (disc menus, bonus clips); the built-in
+prompt tells the model their tracks are not the video's, and a custom one
+should too.
 
 Keep the JSON reply shape the built-in prompt describes. Nothing you write
 loosens [what the model is allowed to decide](#what-it-is-allowed-to-decide),

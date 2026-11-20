@@ -17,6 +17,7 @@ _NxNN_RE = re.compile(r"(?<!\d)(?P<season>\d{1,2})x(?P<episode>\d{1,3})(?!\d)", 
 # The "[Group]" tags anime releases open with.
 _LEADING_TAGS_RE = re.compile(r"^(?:\s*\[[^\]]*\])+")
 _WORD_RE = re.compile(r"[^\W_]+")
+_TAGS_RE = re.compile(r"\[[^\]]*\]|\([^)]*\)")
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +61,7 @@ def belongs_to(
     if episode is None:
         return True
 
-    if video_stem and _named_after(path.name, video_stem):
+    if video_stem and named_after(path.name, video_stem):
         return True
 
     marker = parse_episode_marker(path.name)
@@ -70,7 +71,8 @@ def belongs_to(
     return marker.season == episode.season and bool(set(marker.episodes) & set(episode.episodes))
 
 
-def _named_after(name: str, video_stem: str) -> bool:
+def named_after(name: str, video_stem: str) -> bool:
+    """Whether a file is named after the video: ``<video>.mka``, ``<video>.rus.ass``."""
     # The stem must end at a word boundary, or "Show 1" would claim "Show 10.mka".
     if not name.lower().startswith(video_stem.lower()):
         return False
@@ -91,6 +93,23 @@ def same_release(a: str, b: str) -> bool:
     ours, theirs = _title_words(a), _title_words(b)
     shared = min(len(ours), len(theirs))
     return ours[:shared] == theirs[:shared]
+
+
+def names_release(folder_name: str, video_stem: str) -> bool:
+    """Whether a folder is named after a video's release: its whole title, at least.
+
+    ``Show.S01.1080p`` names ``Show.S01E05``'s release and ``Show [BDRip]`` names
+    ``[Group] Show 05``'s, and ``Show (2016) [BD]`` names ``[Group] Show [BD HEVC]``'s;
+    a download directory -- ``downloads``, ``[torrents]``,
+    or ``movies`` beside ``Movies.That.Matter`` -- names nothing.
+    """
+    if _is_sample(folder_name):
+        return False
+    # Tags are bracketed anywhere in either name ("Show (2016) [BD 1080p]"), and
+    # are no part of the title.
+    folder = _title_words(_TAGS_RE.sub(" ", folder_name))
+    title = _title_words(_TAGS_RE.sub(" ", video_stem))
+    return bool(title) and folder[: len(title)] == title
 
 
 def _title_words(stem: str) -> tuple[str, ...]:
