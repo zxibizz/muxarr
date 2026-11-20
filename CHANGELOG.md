@@ -12,6 +12,8 @@ within the same major version.
 
 ## [Unreleased]
 
+## [0.10.11] - 2026-11-20
+
 ### Changed
 
 - **A video of another release no longer hides a whole folder's sidecars.**
@@ -391,7 +393,8 @@ get a soak in the wild; the shim protocol is already considered stable.
 - MIT licence, contribution and security policies, and CI running ruff, mypy,
   pytest and the frontend build.
 
-[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.10...HEAD
+[Unreleased]: https://github.com/zxibizz/muxarr/compare/v0.10.11...HEAD
+[0.10.11]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.11
 [0.10.10]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.10
 [0.10.9]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.9
 [0.10.8]: https://github.com/zxibizz/muxarr/releases/tag/v0.10.8
