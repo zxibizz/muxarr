@@ -224,6 +224,39 @@ class TestSharedDownloadFolder:
 
 
 @pytest.mark.parametrize(
+    "menus",
+    [
+        "BD menu",
+        "BD Menus",
+        "BDMenu",
+        "BD_Menu",
+        "BD-Menu [1080p]",
+        "Menu",
+        "Menus (BD)",
+        "Bonus",
+        "Bonuses",
+        "[Bonus]",
+        "Extras [BD]",
+    ],
+)
+def test_disc_menus_do_not_make_a_pack_look_shared(tmp_path: Path, menus: str) -> None:
+    # A BDRip pack ships the disc menus as videos with names of their own
+    # ("BD menu (Vol 1).mkv"); they must not hide the dubs from every episode.
+    pack = tmp_path / "Show [BDRip] [1080p]"
+    video = touch(pack / "[Group] Show 01 [BDrip 1080p].mkv")
+    touch(pack / "[Group] Show 02 [BDrip 1080p].mkv")
+    touch(pack / menus / "BD menu (Vol 1).mkv")
+    touch(pack / "RUS Sound [Studio]" / "[Group] Show 01 [BDrip 1080p].mka")
+    touch(pack / "RUS Sound [Studio]" / "[Group] Show 02 [BDrip 1080p].mka")
+
+    found = discover(video, episode=EpisodeRef(season=1, episodes=(1,)))
+
+    assert [t.path.relative_to(pack).as_posix() for t in found] == [
+        "RUS Sound [Studio]/[Group] Show 01 [BDrip 1080p].mka"
+    ]
+
+
+@pytest.mark.parametrize(
     ("a", "b"),
     [
         ("Show.S01E01.1080p.WEB-DL-GRP", "Show.S01E02.1080p.WEB-DL-GRP"),

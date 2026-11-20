@@ -12,6 +12,16 @@ within the same major version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Disc menus and bonus clips no longer hide a pack's dubs.** A BDRip pack
+  with a `BD menu/` folder (`BD menu (Vol 1).mkv`) was taken for a download
+  directory shared with another release, because the menu's name has nothing in
+  common with the episodes; every episode was then imported without its
+  external audio and subtitles. `BD menu`, `Menu` and `Bonus` folders (and
+  their plurals) are now skipped like `Extras`. Skipped folders are matched on
+  their bare words, so `BD_Menu`, `Bonus [BD]` or `[Extras]` count too.
+
 ## [0.10.9] - 2026-11-09
 
 ### Changed

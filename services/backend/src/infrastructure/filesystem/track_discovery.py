@@ -18,6 +18,7 @@ The source folder is only ever read. Nothing here opens a file for writing.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -38,17 +39,26 @@ from src.domain.naming import EpisodeRef, belongs_to, same_release
 
 log = get_logger(LogComponent.INFRA_DISCOVERY)
 
-# Folders that contain media which is never part of the main video.
+# Folders that contain media which is never part of the main video. Disc menus
+# and bonus clips matter beyond that: they are videos named unlike the release,
+# so scanned they would pass for another download and hide every sidecar.
 EXCLUDED_DIR_NAMES = frozenset(
     {
         "artwork",
+        "bd menu",
+        "bd menus",
+        "bdmenu",
         "bdmv",
+        "bonus",
+        "bonuses",
         "certificate",
         "covers",
         "extra",
         "extras",
         "featurette",
         "featurettes",
+        "menu",
+        "menus",
         "proof",
         "sample",
         "samples",
@@ -177,7 +187,22 @@ def index_candidates(root: Path) -> list[tuple[Path, tuple[str, ...]]]:
 
 
 def _is_excluded(name: str) -> bool:
-    return name.lower().strip() in EXCLUDED_DIR_NAMES
+    return _folder_key(name) in EXCLUDED_DIR_NAMES
+
+
+def _folder_key(name: str) -> str:
+    # Packs decorate these folders freely ("BD_Menu", "Bonus [BD]", "[Extras]"),
+    # so compare the bare words only.
+    lowered = name.lower()
+    bare = _FOLDER_TAG_RE.sub(" ", lowered)
+    if not bare.strip(" _-."):
+        bare = lowered.translate(_BRACKETS)
+    return " ".join(_FOLDER_SEPARATOR_RE.sub(" ", bare).split())
+
+
+_FOLDER_TAG_RE = re.compile(r"\[[^\]]*\]|\([^)]*\)")
+_FOLDER_SEPARATOR_RE = re.compile(r"[_\-.]+")
+_BRACKETS = str.maketrans("[]()", "    ")
 
 
 def _files_in(directory: Path) -> list[Path]:
